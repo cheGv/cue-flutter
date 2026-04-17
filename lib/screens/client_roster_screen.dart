@@ -284,30 +284,39 @@ class _ClientRow extends StatelessWidget {
             // Communication
             Expanded(
               flex: 2,
-              child: usesAac
-                  ? Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      constraints: const BoxConstraints(maxWidth: 56),
-                      decoration: BoxDecoration(
-                        color: Colors.teal.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.teal.shade200),
-                      ),
-                      child: Text(
-                        'AAC',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.teal.shade700,
-                          fontWeight: FontWeight.w600,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: usesAac
+                    ? ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 120),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.teal.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.teal.shade200),
+                          ),
+                          child: Text(
+                            'AAC',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.teal.shade700,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      )
+                    : ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 120),
+                        child: Text(
+                          modality.isNotEmpty ? modality : '—',
+                          style: const TextStyle(
+                              fontSize: 14, color: Color(0xFF5A6475)),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    )
-                  : Text(
-                      modality.isNotEmpty ? modality : '—',
-                      style: const TextStyle(
-                          fontSize: 14, color: Color(0xFF5A6475)),
-                    ),
+              ),
             ),
             // Actions
             SizedBox(
