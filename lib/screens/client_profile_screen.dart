@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../theme/cue_theme.dart';
-import 'add_session_screen.dart';
-import 'narrator_screen.dart';
+import '../widgets/app_layout.dart';
 import 'report_screen.dart';
+import 'add_session_screen.dart';
+import 'narrate_session_screen.dart';
 
 class ClientProfileScreen extends StatefulWidget {
   final Map<String, dynamic> client;
@@ -34,6 +33,21 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return List<Map<String, dynamic>>.from(response);
   }
 
+  Future<void> _openNarrateSession() async {
+    final added = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NarrateSessionScreen(
+          clientId: widget.client['id'].toString(),
+          clientName: widget.client['name'].toString(),
+        ),
+      ),
+    );
+    if (added == true) {
+      setState(() => _sessionsFuture = _fetchSessions());
+    }
+  }
+
   Future<void> _openAddSession() async {
     final added = await Navigator.push<bool>(
       context,
@@ -51,406 +65,273 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     }
   }
 
-  Future<void> _deleteSession(String sessionId) async {
-    try {
-      await _supabase.from('sessions').delete().eq('id', sessionId);
-      if (mounted) {
-        setState(() {
-          _sessionsFuture = _fetchSessions();
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not delete session: $e')),
-        );
-      }
-    }
-  }
-
-  void _showSessionMenu(Map<String, dynamic> session, String clientName) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: CueColors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetCtx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: CueColors.divider,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            ListTile(
-              leading: const Icon(Icons.auto_awesome_outlined,
-                  color: CueColors.inkPrimary),
-              title: Text(
-                'Generate Report',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: CueColors.inkPrimary,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(sheetCtx);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ReportScreen(
-                      session: Map<String, dynamic>.fromEntries(
-                        (session as Map).entries.map(
-                            (e) => MapEntry(e.key.toString(), e.value)),
-                      ),
-                      clientName: clientName,
-                    ),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline_rounded,
-                  color: CueColors.coral),
-              title: Text(
-                'Delete session',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: CueColors.coral,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(sheetCtx);
-                _confirmDelete(session['id'].toString());
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _confirmDelete(String sessionId) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete this session?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.inter(
-                color: CueColors.inkSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _deleteSession(sessionId);
-            },
-            child: Text(
-              'Delete',
-              style: GoogleFonts.inter(
-                color: CueColors.coral,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final client = widget.client;
-    final name = client['name']?.toString() ?? '';
-    final age = client['age'];
-    final usesAac = client['uses_aac'] == true;
-    final totalSessions = client['total_sessions'] ?? 0;
 
-    final subParts = <String>[];
-    if (age != null) subParts.add('Age $age');
-    if (usesAac) subParts.add('AAC user');
-    final subtitle = subParts.join(' · ');
-
-    return Scaffold(
-      backgroundColor: CueColors.background,
-      appBar: AppBar(
-        title: const Text(''),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.mic_none_rounded),
-            tooltip: 'Narrator',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NarratorScreen()),
-            ),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openAddSession,
-        backgroundColor: CueColors.accent,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        icon: const Icon(Icons.add_rounded, size: 20),
-        label: Text(
-          'Add Session',
-          style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: GoogleFonts.fraunces(
-                      fontSize: 36,
-                      fontWeight: FontWeight.w500,
-                      color: CueColors.inkPrimary,
-                      height: 1.1,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  if (subtitle.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: CueColors.inkSecondary,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 32),
-                  FutureBuilder<List<Map<String, dynamic>>>(
-                    future: _sessionsFuture,
-                    builder: (context, snapshot) {
-                      final count = snapshot.hasData
-                          ? snapshot.data!.length
-                          : totalSessions as int;
-                      final goalsMet = snapshot.hasData
-                          ? snapshot.data!
-                              .where((s) => s['goal_met'] == 'yes')
-                              .length
-                          : 0;
-                      return Row(
-                        children: [
-                          _StatBlock(value: '$count', label: 'Sessions'),
-                          const SizedBox(width: 48),
-                          _StatBlock(value: '$goalsMet', label: 'Goals met'),
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(
-            child: Divider(height: 1, thickness: 1, color: CueColors.divider),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
-              child: CueTheme.eyebrow('Recent Sessions'),
-            ),
-          ),
-          FutureBuilder<List<Map<String, dynamic>>>(
-            future: _sessionsFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: CueColors.accent,
-                        strokeWidth: 2,
-                      ),
-                    ),
-                  ),
-                );
-              }
-              if (snapshot.hasError) {
-                return SliverToBoxAdapter(
-                  child: Center(child: Text('Error: ${snapshot.error}')),
-                );
-              }
-
-              final sessions = snapshot.data!;
-
-              if (sessions.isEmpty) {
-                return SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Center(
-                      child: Text(
-                        'No sessions yet.',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: CueColors.inkSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
-                sliver: SliverList.separated(
-                  itemCount: sessions.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final session = sessions[index];
-                    return _SessionCard(
-                      session: session,
-                      onMenu: () => _showSessionMenu(session, name),
-                    );
-                  },
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatBlock extends StatelessWidget {
-  final String value;
-  final String label;
-
-  const _StatBlock({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          value,
-          style: GoogleFonts.fraunces(
-            fontSize: 28,
-            fontWeight: FontWeight.w500,
-            color: CueColors.inkPrimary,
-            height: 1,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            color: CueColors.inkSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SessionCard extends StatelessWidget {
-  final Map<String, dynamic> session;
-  final VoidCallback onMenu;
-
-  const _SessionCard({required this.session, required this.onMenu});
-
-  @override
-  Widget build(BuildContext context) {
-    final date = session['date']?.toString() ?? '—';
-    final goal = session['target_behaviour']?.toString() ?? '';
-    final duration = session['duration_minutes'];
-    final goalMet = session['goal_met']?.toString();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: CueColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CueColors.divider, width: 1),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 18, 8, 18),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return AppLayout(
+      title: client['name'],
+      activeRoute: 'roster',
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Expanded(
-            child: Column(
+          FloatingActionButton(
+            heroTag: 'narrate_fab',
+            onPressed: _openNarrateSession,
+            backgroundColor: const Color(0xFF00695C),
+            foregroundColor: Colors.white,
+            tooltip: 'Narrate Session',
+            child: const Icon(Icons.mic_rounded),
+          ),
+          const SizedBox(height: 12),
+          FloatingActionButton.extended(
+            heroTag: 'add_session_fab',
+            onPressed: _openAddSession,
+            backgroundColor: const Color(0xFF00897B),
+            foregroundColor: Colors.white,
+            icon: const Icon(Icons.add),
+            label: const Text('Add Session'),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Client info card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 24),
+            color: Colors.white,
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      date,
-                      style: GoogleFonts.fraunces(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w500,
-                        color: CueColors.inkPrimary,
-                      ),
-                    ),
-                    if (goalMet == 'yes') ...[
-                      const SizedBox(width: 10),
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: const BoxDecoration(
-                          color: CueColors.amber,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                if (goal.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    goal,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: CueColors.inkPrimary,
-                      height: 1.4,
+                CircleAvatar(
+                  radius: 32,
+                  backgroundColor: Colors.teal.shade100,
+                  child: Text(
+                    client['name'][0].toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 26,
+                      color: Colors.teal.shade800,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-                const SizedBox(height: 4),
-                Text(
-                  duration != null ? '$duration min' : '—',
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    color: CueColors.inkTertiary,
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        client['name'],
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A2E),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Age ${client['age']} · ${client['uses_aac'] == true ? 'AAC user' : 'No AAC'}',
+                        style: TextStyle(
+                          color: Colors.grey.shade600,
+                          fontSize: 14,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          _statChip('${client['total_sessions']}', 'Sessions'),
+                          if (client['diagnosis'] != null &&
+                              (client['diagnosis'] as String).isNotEmpty) ...[
+                            const SizedBox(width: 12),
+                            _statChip(client['diagnosis'], 'Diagnosis'),
+                          ],
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.more_horiz_rounded,
-                color: CueColors.inkTertiary),
-            onPressed: onMenu,
+
+          // Sessions section
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding:
+                      const EdgeInsets.fromLTRB(48, 24, 48, 12),
+                  child: Text(
+                    'Session History',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: FutureBuilder<List<Map<String, dynamic>>>(
+                    future: _sessionsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState ==
+                          ConnectionState.waiting) {
+                        return const Center(
+                            child: CircularProgressIndicator());
+                      }
+
+                      if (snapshot.hasError) {
+                        return Center(
+                            child: Text('Error: ${snapshot.error}'));
+                      }
+
+                      final sessions = snapshot.data!;
+
+                      if (sessions.isEmpty) {
+                        return const Center(
+                            child: Text('No sessions yet.'));
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 48, vertical: 0),
+                        itemCount: sessions.length,
+                        itemBuilder: (context, index) {
+                          final session = sessions[index];
+                          return Card(
+                            margin:
+                                const EdgeInsets.only(bottom: 12),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                  color: Colors.grey.shade200),
+                            ),
+                            color: Colors.white,
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        session['date'] ?? '',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: Color(0xFF1A1A2E),
+                                        ),
+                                      ),
+                                      if (session['duration_minutes'] !=
+                                          null)
+                                        Container(
+                                          padding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: Colors.teal.shade50,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '${session['duration_minutes']} min',
+                                            style: TextStyle(
+                                              color: Colors.teal.shade700,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  if (session['notes'] != null &&
+                                      (session['notes'] as String)
+                                          .isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      session['notes'],
+                                      style: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        fontSize: 14,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  Align(
+                                    alignment: Alignment.centerRight,
+                                    child: TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ReportScreen(
+                                              session: Map<String,
+                                                  dynamic>.fromEntries(
+                                                (session as Map)
+                                                    .entries
+                                                    .map((e) => MapEntry(
+                                                        e.key.toString(),
+                                                        e.value)),
+                                              ),
+                                              clientName:
+                                                  (widget.client['name'] ??
+                                                          '')
+                                                      .toString(),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(
+                                          Icons.auto_awesome,
+                                          size: 16),
+                                      label:
+                                          const Text('Generate Report'),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.teal,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statChip(String value, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12, color: Colors.grey.shade600)),
         ],
       ),
     );

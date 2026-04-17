@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
+import '../widgets/app_layout.dart';
 import 'add_session_screen.dart';
 import 'narrator_screen.dart';
 
@@ -79,7 +80,8 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen>
         if (_transcript.isNotEmpty) {
           _statusMessage = 'Recording complete — review transcript below.';
         } else {
-          _statusMessage = 'Tap the microphone and speak your session notes';
+          _statusMessage =
+              'Tap the microphone and speak your session notes';
         }
       }
     });
@@ -99,7 +101,6 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen>
       return;
     }
 
-    // Start fresh recording
     setState(() {
       _transcript = '';
       _isListening = true;
@@ -143,7 +144,6 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen>
         final rawText =
             (apiData['content']?[0]?['text'] ?? '').toString().trim();
 
-        // Strip any accidental markdown fences Claude might add
         final jsonText = rawText
             .replaceAll(RegExp(r'^```json\s*', multiLine: false), '')
             .replaceAll(RegExp(r'^```\s*', multiLine: false), '')
@@ -210,190 +210,188 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen>
     final hasTranscript = _transcript.isNotEmpty;
     final showGenerateButton = hasTranscript && !_isListening;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Narrate Session — ${widget.clientName}'),
-        backgroundColor: const Color(0xFF00897B),
-        foregroundColor: Colors.white,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.graphic_eq_rounded),
-            tooltip: 'Narrator',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const NarratorScreen()),
-              );
-            },
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          children: [
-            const SizedBox(height: 36),
+    return AppLayout(
+      title: 'Narrate Session — ${widget.clientName}',
+      activeRoute: 'roster',
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48),
+            child: Column(
+              children: [
+                const SizedBox(height: 40),
 
-            // ── Status message ─────────────────────────────────────────
-            Text(
-              _statusMessage,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.5,
-                color: _isListening
-                    ? const Color(0xFF00897B)
-                    : Colors.grey.shade600,
-                fontWeight:
-                    _isListening ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-
-            const SizedBox(height: 40),
-
-            // ── Microphone button ──────────────────────────────────────
-            ScaleTransition(
-              scale: _isListening
-                  ? _pulseAnimation
-                  : const AlwaysStoppedAnimation(1.0),
-              child: GestureDetector(
-                onTap: _speechAvailable ? _toggleListening : null,
-                child: Container(
-                  width: 104,
-                  height: 104,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: !_speechAvailable
-                        ? Colors.grey.shade300
-                        : _isListening
-                            ? Colors.red.shade400
-                            : const Color(0xFF00897B),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (!_speechAvailable
-                                ? Colors.grey
-                                : _isListening
-                                    ? Colors.red
-                                    : const Color(0xFF00897B))
-                            .withOpacity(0.30),
-                        blurRadius: _isListening ? 24 : 14,
-                        spreadRadius: _isListening ? 6 : 2,
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    _isListening
-                        ? Icons.stop_rounded
-                        : Icons.mic_rounded,
-                    size: 46,
-                    color: Colors.white,
+                // Status message
+                Text(
+                  _statusMessage,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    height: 1.5,
+                    color: _isListening
+                        ? const Color(0xFF00897B)
+                        : Colors.grey.shade600,
+                    fontWeight: _isListening
+                        ? FontWeight.w600
+                        : FontWeight.normal,
                   ),
                 ),
-              ),
-            ),
 
-            const SizedBox(height: 14),
+                const SizedBox(height: 40),
 
-            Text(
-              _isListening
-                  ? 'Tap to stop recording'
-                  : hasTranscript
-                      ? 'Tap to re-record'
-                      : '',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
-            ),
-
-            const SizedBox(height: 28),
-
-            // ── Transcript card ────────────────────────────────────────
-            if (hasTranscript)
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.teal.shade100),
+                // Microphone button
+                ScaleTransition(
+                  scale: _isListening
+                      ? _pulseAnimation
+                      : const AlwaysStoppedAnimation(1.0),
+                  child: GestureDetector(
+                    onTap:
+                        _speechAvailable ? _toggleListening : null,
+                    child: Container(
+                      width: 104,
+                      height: 104,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: !_speechAvailable
+                            ? Colors.grey.shade300
+                            : _isListening
+                                ? Colors.red.shade400
+                                : const Color(0xFF00897B),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (!_speechAvailable
+                                    ? Colors.grey
+                                    : _isListening
+                                        ? Colors.red
+                                        : const Color(0xFF00897B))
+                                .withOpacity(0.30),
+                            blurRadius: _isListening ? 24 : 14,
+                            spreadRadius: _isListening ? 6 : 2,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _isListening
+                            ? Icons.stop_rounded
+                            : Icons.mic_rounded,
+                        size: 46,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                ),
+
+                const SizedBox(height: 14),
+
+                Text(
+                  _isListening
+                      ? 'Tap to stop recording'
+                      : hasTranscript
+                          ? 'Tap to re-record'
+                          : '',
+                  style: TextStyle(
+                      fontSize: 13, color: Colors.grey.shade500),
+                ),
+
+                const SizedBox(height: 28),
+
+                // Transcript card
+                if (hasTranscript)
+                  Expanded(
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.teal.shade100),
+                      ),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.record_voice_over_rounded,
-                              size: 15, color: Colors.teal.shade600),
-                          const SizedBox(width: 6),
-                          Text(
-                            'TRANSCRIPT',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.teal.shade600,
-                              letterSpacing: 1.0,
+                          Row(
+                            children: [
+                              Icon(
+                                  Icons.record_voice_over_rounded,
+                                  size: 15,
+                                  color: Colors.teal.shade600),
+                              const SizedBox(width: 6),
+                              Text(
+                                'TRANSCRIPT',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.teal.shade600,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              child: Text(
+                                _transcript,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  height: 1.65,
+                                  color: Color(0xFF212121),
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          child: Text(
-                            _transcript,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              height: 1.65,
-                              color: Color(0xFF212121),
-                            ),
-                          ),
+                    ),
+                  )
+                else
+                  const Spacer(),
+
+                // Generate button
+                if (showGenerateButton) ...[
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: FilledButton.icon(
+                      onPressed: _isGenerating
+                          ? null
+                          : _generateFromNarration,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF00897B),
+                        disabledBackgroundColor:
+                            const Color(0xFF00897B).withOpacity(0.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              const Spacer(),
-
-            // ── Generate button ────────────────────────────────────────
-            if (showGenerateButton) ...[
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: FilledButton.icon(
-                  onPressed: _isGenerating ? null : _generateFromNarration,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF00897B),
-                    disabledBackgroundColor:
-                        const Color(0xFF00897B).withOpacity(0.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+                      icon: _isGenerating
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Icon(Icons.auto_awesome_rounded),
+                      label: Text(
+                        _isGenerating
+                            ? 'Extracting session data…'
+                            : 'Generate from Narration',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
-                  icon: _isGenerating
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Icon(Icons.auto_awesome_rounded),
-                  label: Text(
-                    _isGenerating
-                        ? 'Extracting session data…'
-                        : 'Generate from Narration',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+                ],
 
-            const SizedBox(height: 28),
-          ],
+                const SizedBox(height: 32),
+              ],
+            ),
+          ),
         ),
       ),
     );

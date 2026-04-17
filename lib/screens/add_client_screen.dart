@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../theme/cue_theme.dart';
+import '../widgets/app_layout.dart';
 
 class AddClientScreen extends StatefulWidget {
   const AddClientScreen({super.key});
@@ -42,6 +41,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
       );
       return;
     }
+
     if (ageText.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Age is required')),
@@ -50,6 +50,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
     }
 
     final userId = _supabase.auth.currentUser?.id;
+
     setState(() => _isSaving = true);
     try {
       await _supabase.from('clients').insert({
@@ -62,7 +63,9 @@ class _AddClientScreenState extends State<AddClientScreen> {
         'total_sessions': 0,
         if (userId != null) 'clinician_id': userId,
       });
-      if (mounted) Navigator.pop(context, true);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -76,106 +79,151 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final fieldStyle =
-        GoogleFonts.inter(fontSize: 16, color: CueColors.inkPrimary);
-
-    return Scaffold(
-      backgroundColor: CueColors.background,
-      appBar: AppBar(
-        title: const Text('New Client'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CueTheme.sectionTitle('Profile'),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _nameController,
-              textCapitalization: TextCapitalization.words,
-              style: fieldStyle,
-              decoration: const InputDecoration(labelText: 'Full name'),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _ageController,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: fieldStyle,
-              decoration: const InputDecoration(labelText: 'Age'),
-            ),
-            const SizedBox(height: 40),
-
-            CueTheme.sectionTitle('Clinical detail'),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _diagnosisController,
-              textCapitalization: TextCapitalization.sentences,
-              style: fieldStyle,
-              decoration: const InputDecoration(labelText: 'Diagnosis'),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _modalityController,
-              style: fieldStyle,
-              decoration: const InputDecoration(
-                labelText: 'Primary communication modality',
-                hintText: 'Verbal, AAC device, PECS, Sign…',
-              ),
-            ),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Uses AAC device',
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        color: CueColors.inkPrimary,
+    return AppLayout(
+      title: 'Add Client',
+      activeRoute: 'roster',
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: SingleChildScrollView(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _sectionLabel('Required'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _nameController,
+                  decoration: _inputDecoration('Full Name *'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _ageController,
+                  decoration: _inputDecoration('Age *'),
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+                const SizedBox(height: 28),
+                _sectionLabel('Clinical Details'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _diagnosisController,
+                  decoration: _inputDecoration('Diagnosis'),
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _modalityController,
+                  decoration: _inputDecoration(
+                    'Primary Communication Modality',
+                    hint: 'e.g. Verbal, AAC device, PECS, Sign',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: SwitchListTile(
+                    title: const Text('Uses AAC Device'),
+                    subtitle: Text(
+                      _usesAac ? 'Yes' : 'No',
+                      style: TextStyle(
+                        color:
+                            _usesAac ? Colors.teal : Colors.grey.shade500,
+                        fontSize: 13,
                       ),
                     ),
-                  ),
-                  Switch(
                     value: _usesAac,
                     onChanged: (v) => setState(() => _usesAac = v),
+                    activeColor: Colors.teal,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 28),
+                _sectionLabel('Additional Notes'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _notesController,
+                  decoration: _inputDecoration('Notes'),
+                  maxLines: 4,
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+                const SizedBox(height: 36),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _isSaving ? null : _save,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.teal,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: _isSaving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Text(
+                              'Save Client',
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
             ),
-            const SizedBox(height: 40),
-
-            CueTheme.sectionTitle('Notes'),
-            const SizedBox(height: 20),
-            TextField(
-              controller: _notesController,
-              maxLines: 4,
-              textCapitalization: TextCapitalization.sentences,
-              style: fieldStyle,
-              decoration: const InputDecoration(
-                labelText: 'Additional notes',
-              ),
-            ),
-            const SizedBox(height: 48),
-
-            SizedBox(
-              height: 52,
-              child: FilledButton(
-                onPressed: _isSaving ? null : _save,
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                    : const Text('Save Client'),
-              ),
-            ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String label) {
+    return Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: Colors.teal.shade600,
+        letterSpacing: 1.1,
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, {String? hint}) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      filled: true,
+      fillColor: Colors.grey.shade50,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: Colors.teal, width: 2),
       ),
     );
   }

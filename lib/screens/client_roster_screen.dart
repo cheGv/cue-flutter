@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../theme/cue_theme.dart';
+import '../widgets/app_layout.dart';
 import 'add_client_screen.dart';
 import 'client_profile_screen.dart';
-import 'login_screen.dart';
-import 'narrator_screen.dart';
 
 class ClientRosterScreen extends StatefulWidget {
   const ClientRosterScreen({super.key});
@@ -14,35 +11,14 @@ class ClientRosterScreen extends StatefulWidget {
   State<ClientRosterScreen> createState() => _ClientRosterScreenState();
 }
 
-class _ClientRosterScreenState extends State<ClientRosterScreen>
-    with SingleTickerProviderStateMixin {
+class _ClientRosterScreenState extends State<ClientRosterScreen> {
   final _supabase = Supabase.instance.client;
   late Future<List<Map<String, dynamic>>> _clientsFuture;
-  late AnimationController _fadeCtrl;
 
   @override
   void initState() {
     super.initState();
-    _fadeCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
     _clientsFuture = _fetchClients();
-    _fadeCtrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _fadeCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchClients() async {
-    final response = await _supabase
-        .from('clients')
-        .select()
-        .order('name', ascending: true);
-    return List<Map<String, dynamic>>.from(response);
   }
 
   Future<void> _openAddClient() async {
@@ -57,135 +33,174 @@ class _ClientRosterScreenState extends State<ClientRosterScreen>
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: CueColors.background,
-      appBar: AppBar(
-        title: Text(
-          'Clients',
-          style: GoogleFonts.fraunces(
-            fontSize: 24,
-            fontWeight: FontWeight.w500,
-            color: CueColors.inkPrimary,
-          ),
+  Future<List<Map<String, dynamic>>> _fetchClients() async {
+    final response = await _supabase
+        .from('clients')
+        .select()
+        .is_('deleted_at', null)
+        .order('name', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<void> _confirmDeleteClient(Map<String, dynamic> client) async {
+    final clientName = client['name'] as String;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove client?'),
+        content: Text(
+          'This will remove $clientName from your roster. '
+          'You can contact support to recover this record.',
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.mic_none_rounded),
-            tooltip: 'Narrator',
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const NarratorScreen()),
-            ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Sign out',
-            onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
-              if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (_) => false,
-                );
-              }
-            },
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Remove'),
           ),
-          const SizedBox(width: 4),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _supabase
+          .from('clients')
+          .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', client['id']);
+
+      setState(() {
+        _clientsFuture = _fetchClients();
+      });
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$clientName removed from roster.')),
+        );
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not remove client. Please try again.'),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppLayout(
+      title: 'My Clients',
+      activeRoute: 'roster',
+      floatingActionButton: FloatingActionButton(
         onPressed: _openAddClient,
-        backgroundColor: CueColors.accent,
+        backgroundColor: Colors.teal,
         foregroundColor: Colors.white,
-        elevation: 0,
-        icon: const Icon(Icons.add_rounded, size: 20),
-        label: Text(
-          'Add Client',
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+        tooltip: 'Add client',
+        child: const Icon(Icons.person_add_outlined),
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _clientsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+
+          final clients = snapshot.data!;
+
+          if (clients.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.people_outline_rounded,
+                      size: 48, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No clients yet',
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add your first client using the + button.',
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return _buildTable(clients);
+        },
+      ),
+    );
+  }
+
+  Widget _buildTable(List<Map<String, dynamic>> clients) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Table header
+        Container(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 48, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border:
+                Border(bottom: BorderSide(color: Colors.grey.shade200)),
+          ),
+          child: Row(
+            children: const [
+              Expanded(flex: 3, child: _HeaderCell('CLIENT')),
+              Expanded(flex: 1, child: _HeaderCell('AGE')),
+              Expanded(flex: 1, child: _HeaderCell('SESSIONS')),
+              Expanded(flex: 2, child: _HeaderCell('COMMUNICATION')),
+              SizedBox(width: 96),
+            ],
           ),
         ),
-      ),
-      body: FadeTransition(
-        opacity: CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeOut),
-        child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _clientsFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(
-                  color: CueColors.accent,
-                  strokeWidth: 2,
-                ),
-              );
-            }
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Error: ${snapshot.error}',
-                  style: GoogleFonts.inter(color: CueColors.inkSecondary),
-                ),
-              );
-            }
-
-            final clients = snapshot.data!;
-
-            if (clients.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'No clients yet',
-                      style: GoogleFonts.fraunces(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w500,
-                        color: CueColors.inkPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Tap  +  to add your first client',
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: CueColors.inkSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return ListView.separated(
-              padding: const EdgeInsets.fromLTRB(0, 32, 0, 120),
-              itemCount: clients.length,
-              separatorBuilder: (_, __) => const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: CueColors.divider,
-                ),
-              ),
-              itemBuilder: (context, index) {
-                final client = clients[index];
-                return _ClientRow(
-                  client: client,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ClientProfileScreen(client: client),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
+        // Table rows
+        Expanded(
+          child: ListView.builder(
+            itemCount: clients.length,
+            itemBuilder: (ctx, i) => _ClientRow(
+              client: clients[i],
+              onDelete: () => _confirmDeleteClient(clients[i]),
+            ),
+          ),
         ),
+      ],
+    );
+  }
+}
+
+class _HeaderCell extends StatelessWidget {
+  final String text;
+  const _HeaderCell(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        color: Color(0xFF8A94A6),
+        letterSpacing: 0.8,
       ),
     );
   }
@@ -193,87 +208,124 @@ class _ClientRosterScreenState extends State<ClientRosterScreen>
 
 class _ClientRow extends StatelessWidget {
   final Map<String, dynamic> client;
-  final VoidCallback onTap;
+  final VoidCallback onDelete;
 
-  const _ClientRow({required this.client, required this.onTap});
+  const _ClientRow({required this.client, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    final name = client['name'] as String? ?? '?';
-    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
-    final age = client['age'];
-    final sessions = client['total_sessions'] ?? 0;
+    final modality = client['communication_modality']?.toString() ?? '';
     final usesAac = client['uses_aac'] == true;
 
-    final subParts = <String>[];
-    if (age != null) subParts.add('Age $age');
-    subParts.add('$sessions ${sessions == 1 ? 'session' : 'sessions'}');
-    final subtitle = subParts.join(' · ');
-
     return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ClientProfileScreen(client: client),
+        ),
+      ),
+      child: Container(
+        padding:
+            const EdgeInsets.symmetric(horizontal: 48, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border:
+              Border(bottom: BorderSide(color: Colors.grey.shade100)),
+        ),
         child: Row(
           children: [
-            SizedBox(
-              width: 40,
-              child: Text(
-                initial,
-                style: GoogleFonts.fraunces(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w400,
-                  color: CueColors.inkPrimary,
-                  height: 1,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
+            // Name + avatar
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              flex: 3,
+              child: Row(
                 children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          name,
-                          style: GoogleFonts.fraunces(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w500,
-                            color: CueColors.inkPrimary,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: Colors.teal.shade100,
+                    child: Text(
+                      client['name'][0].toUpperCase(),
+                      style: TextStyle(
+                        color: Colors.teal.shade800,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
                       ),
-                      if (usesAac) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: const BoxDecoration(
-                            color: CueColors.amber,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ],
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(width: 12),
                   Text(
-                    subtitle,
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      color: CueColors.inkSecondary,
+                    client['name'],
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF1A1A2E),
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: CueColors.inkTertiary,
-              size: 22,
+            // Age
+            Expanded(
+              flex: 1,
+              child: Text(
+                '${client['age']}',
+                style: const TextStyle(
+                    fontSize: 14, color: Color(0xFF5A6475)),
+              ),
+            ),
+            // Sessions
+            Expanded(
+              flex: 1,
+              child: Text(
+                '${client['total_sessions']}',
+                style: const TextStyle(
+                    fontSize: 14, color: Color(0xFF5A6475)),
+              ),
+            ),
+            // Communication
+            Expanded(
+              flex: 2,
+              child: usesAac
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      constraints: const BoxConstraints(maxWidth: 56),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.teal.shade200),
+                      ),
+                      child: Text(
+                        'AAC',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.teal.shade700,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : Text(
+                      modality.isNotEmpty ? modality : '—',
+                      style: const TextStyle(
+                          fontSize: 14, color: Color(0xFF5A6475)),
+                    ),
+            ),
+            // Actions
+            SizedBox(
+              width: 96,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Remove client',
+                    iconSize: 20,
+                    color: Colors.grey.shade400,
+                    onPressed: onDelete,
+                  ),
+                  Icon(Icons.chevron_right,
+                      color: Colors.grey.shade400, size: 20),
+                ],
+              ),
             ),
           ],
         ),

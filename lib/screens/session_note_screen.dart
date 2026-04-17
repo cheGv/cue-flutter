@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/app_layout.dart';
 
 class SessionNoteScreen extends StatefulWidget {
   final String clientId;
@@ -141,23 +142,25 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Session – ${widget.clientName}'),
-        backgroundColor: Colors.teal,
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
-        children: [
-          _buildStepIndicator(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
-              child: _buildCurrentStep(),
-            ),
+    return AppLayout(
+      title: 'Session — ${widget.clientName}',
+      activeRoute: 'roster',
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 800),
+          child: Column(
+            children: [
+              _buildStepIndicator(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(48, 28, 48, 8),
+                  child: _buildCurrentStep(),
+                ),
+              ),
+              _buildNavBar(),
+            ],
           ),
-          _buildNavBar(),
-        ],
+        ),
       ),
     );
   }
@@ -166,8 +169,11 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
 
   Widget _buildStepIndicator() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-      color: Colors.teal.shade50,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 48),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+      ),
       child: Row(
         children: List.generate(_stepLabels.length * 2 - 1, (i) {
           if (i.isOdd) {
@@ -177,7 +183,7 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
                 height: 2,
                 color: stepBefore < _currentStep
                     ? Colors.teal
-                    : Colors.grey.shade300,
+                    : Colors.grey.shade200,
               ),
             );
           }
@@ -187,26 +193,30 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           return Column(
             children: [
               Container(
-                width: 30,
-                height: 30,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: done || active ? Colors.teal : Colors.grey.shade200,
+                  color: done || active
+                      ? Colors.teal
+                      : Colors.grey.shade100,
                   border: Border.all(
-                    color:
-                        done || active ? Colors.teal : Colors.grey.shade400,
+                    color: done || active
+                        ? Colors.teal
+                        : Colors.grey.shade300,
                     width: 1.5,
                   ),
                 ),
                 child: Center(
                   child: done
-                      ? const Icon(Icons.check, color: Colors.white, size: 14)
+                      ? const Icon(Icons.check,
+                          color: Colors.white, size: 14)
                       : Text(
                           '${idx + 1}',
                           style: TextStyle(
                             color: active
                                 ? Colors.white
-                                : Colors.grey.shade500,
+                                : Colors.grey.shade400,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
                           ),
@@ -217,7 +227,7 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
               Text(
                 _stepLabels[idx],
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 11,
                   color: done || active
                       ? Colors.teal.shade700
                       : Colors.grey.shade400,
@@ -263,41 +273,27 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           'Barrier Analysis',
           'Which barriers are present for this client today?',
         ),
-        const SizedBox(height: 12),
-        _barrierTile(
-          'Motor',
-          _barrierMotor,
-          (v) => setState(() => _barrierMotor = v!),
-        ),
-        _barrierTile(
-          'Linguistic',
-          _barrierLinguistic,
-          (v) => setState(() => _barrierLinguistic = v!),
-        ),
-        _barrierTile(
-          'Cognitive',
-          _barrierCognitive,
-          (v) => setState(() => _barrierCognitive = v!),
-        ),
-        _barrierTile(
-          'Sensory',
-          _barrierSensory,
-          (v) => setState(() => _barrierSensory = v!),
-        ),
-        _barrierTile(
-          'Environmental',
-          _barrierEnvironmental,
-          (v) => setState(() => _barrierEnvironmental = v!),
-        ),
-        _barrierTile(
-          'Motivational',
-          _barrierMotivational,
-          (v) => setState(() => _barrierMotivational = v!),
-        ),
-        _barrierTile(
-          'Device Access',
-          _barrierDeviceAccess,
-          (v) => setState(() => _barrierDeviceAccess = v!),
+        const SizedBox(height: 16),
+        // Desktop: 2-column grid of barrier checkboxes
+        Wrap(
+          spacing: 0,
+          runSpacing: 0,
+          children: [
+            _barrierTile('Motor', _barrierMotor,
+                (v) => setState(() => _barrierMotor = v!)),
+            _barrierTile('Linguistic', _barrierLinguistic,
+                (v) => setState(() => _barrierLinguistic = v!)),
+            _barrierTile('Cognitive', _barrierCognitive,
+                (v) => setState(() => _barrierCognitive = v!)),
+            _barrierTile('Sensory', _barrierSensory,
+                (v) => setState(() => _barrierSensory = v!)),
+            _barrierTile('Environmental', _barrierEnvironmental,
+                (v) => setState(() => _barrierEnvironmental = v!)),
+            _barrierTile('Motivational', _barrierMotivational,
+                (v) => setState(() => _barrierMotivational = v!)),
+            _barrierTile('Device Access', _barrierDeviceAccess,
+                (v) => setState(() => _barrierDeviceAccess = v!)),
+          ],
         ),
       ],
     );
@@ -305,14 +301,20 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
 
   Widget _barrierTile(
       String label, bool value, ValueChanged<bool?> onChanged) {
-    return CheckboxListTile(
-      title: Text(label, style: const TextStyle(fontSize: 15)),
-      value: value,
-      onChanged: onChanged,
-      activeColor: Colors.teal,
-      controlAffinity: ListTileControlAffinity.leading,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 0),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    return SizedBox(
+      width: 280,
+      child: CheckboxListTile(
+        title: Text(label,
+            style: const TextStyle(fontSize: 14)),
+        value: value,
+        onChanged: onChanged,
+        activeColor: Colors.teal,
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 0),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8)),
+      ),
     );
   }
 
@@ -387,20 +389,23 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           'Select the prompting approach and the level used.',
         ),
         const SizedBox(height: 20),
-        DropdownButtonFormField<String>(
-          value: _promptApproach,
-          decoration: _inputDecoration('Prompting Approach'),
-          items: const [
-            DropdownMenuItem(
-              value: 'most_to_least',
-              child: Text('Most to Least'),
-            ),
-            DropdownMenuItem(
-              value: 'least_to_most',
-              child: Text('Least to Most'),
-            ),
-          ],
-          onChanged: (v) => setState(() => _promptApproach = v!),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: DropdownButtonFormField<String>(
+            value: _promptApproach,
+            decoration: _inputDecoration('Prompting Approach'),
+            items: const [
+              DropdownMenuItem(
+                value: 'most_to_least',
+                child: Text('Most to Least'),
+              ),
+              DropdownMenuItem(
+                value: 'least_to_most',
+                child: Text('Least to Most'),
+              ),
+            ],
+            onChanged: (v) => setState(() => _promptApproach = v!),
+          ),
         ),
         const SizedBox(height: 28),
         Text(
@@ -412,66 +417,69 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           ),
         ),
         const SizedBox(height: 10),
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.teal.shade200),
-            borderRadius: BorderRadius.circular(12),
-            color: Colors.teal.shade50,
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Level $_promptLevelUsed',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.teal,
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.teal.shade200),
+              borderRadius: BorderRadius.circular(12),
+              color: Colors.teal.shade50,
+            ),
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Level $_promptLevelUsed',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.teal,
+                      ),
                     ),
-                  ),
-                  Text(
-                    _promptDescriptions[_promptLevelUsed] ?? '',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.teal.shade700,
-                      fontWeight: FontWeight.w500,
+                    Text(
+                      _promptDescriptions[_promptLevelUsed] ?? '',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.teal.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              Slider(
-                value: _promptLevelUsed.toDouble(),
-                min: 1,
-                max: 6,
-                divisions: 5,
-                activeColor: Colors.teal,
-                inactiveColor: Colors.teal.shade100,
-                label: '$_promptLevelUsed',
-                onChanged: (v) =>
-                    setState(() => _promptLevelUsed = v.round()),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(
-                  6,
-                  (i) => Text(
-                    '${i + 1}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: _promptLevelUsed == i + 1
-                          ? Colors.teal
-                          : Colors.grey.shade400,
-                      fontWeight: _promptLevelUsed == i + 1
-                          ? FontWeight.bold
-                          : FontWeight.normal,
+                  ],
+                ),
+                Slider(
+                  value: _promptLevelUsed.toDouble(),
+                  min: 1,
+                  max: 6,
+                  divisions: 5,
+                  activeColor: Colors.teal,
+                  inactiveColor: Colors.teal.shade100,
+                  label: '$_promptLevelUsed',
+                  onChanged: (v) =>
+                      setState(() => _promptLevelUsed = v.round()),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: List.generate(
+                    6,
+                    (i) => Text(
+                      '${i + 1}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: _promptLevelUsed == i + 1
+                            ? Colors.teal
+                            : Colors.grey.shade400,
+                        fontWeight: _promptLevelUsed == i + 1
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 20),
@@ -481,19 +489,19 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
             child: Row(
               children: [
                 Container(
-                  width: 24,
-                  height: 24,
+                  width: 26,
+                  height: 26,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: e.key == _promptLevelUsed
                         ? Colors.teal
-                        : Colors.grey.shade200,
+                        : Colors.grey.shade100,
                   ),
                   child: Center(
                     child: Text(
                       '${e.key}',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
                         color: e.key == _promptLevelUsed
                             ? Colors.white
@@ -534,36 +542,51 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           'Record trial data and client affect.',
         ),
         const SizedBox(height: 20),
-        _numberField(
-          controller: _attemptsController,
-          label: 'Total Attempts',
-          hint: '0',
-        ),
-        const SizedBox(height: 16),
-        _numberField(
-          controller: _independentResponsesController,
-          label: 'Independent Responses',
-          hint: '0',
-        ),
-        const SizedBox(height: 16),
-        _numberField(
-          controller: _promptedResponsesController,
-          label: 'Prompted Responses',
-          hint: '0',
+        // Three number fields side by side on desktop
+        Row(
+          children: [
+            Expanded(
+              child: _numberField(
+                controller: _attemptsController,
+                label: 'Total Attempts',
+                hint: '0',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _numberField(
+                controller: _independentResponsesController,
+                label: 'Independent',
+                hint: '0',
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _numberField(
+                controller: _promptedResponsesController,
+                label: 'Prompted',
+                hint: '0',
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 20),
-        DropdownButtonFormField<String>(
-          value: _clientAffect,
-          decoration: _inputDecoration('Client Affect'),
-          items: const [
-            DropdownMenuItem(value: 'regulated', child: Text('Regulated')),
-            DropdownMenuItem(
-              value: 'dysregulated',
-              child: Text('Dysregulated'),
-            ),
-            DropdownMenuItem(value: 'variable', child: Text('Variable')),
-          ],
-          onChanged: (v) => setState(() => _clientAffect = v!),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: DropdownButtonFormField<String>(
+            value: _clientAffect,
+            decoration: _inputDecoration('Client Affect'),
+            items: const [
+              DropdownMenuItem(
+                  value: 'regulated', child: Text('Regulated')),
+              DropdownMenuItem(
+                  value: 'dysregulated',
+                  child: Text('Dysregulated')),
+              DropdownMenuItem(
+                  value: 'variable', child: Text('Variable')),
+            ],
+            onChanged: (v) => setState(() => _clientAffect = v!),
+          ),
         ),
       ],
     );
@@ -580,15 +603,20 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           'Summarise outcomes and plan next steps.',
         ),
         const SizedBox(height: 20),
-        DropdownButtonFormField<String>(
-          value: _goalMet,
-          decoration: _inputDecoration('Goal Met?'),
-          items: const [
-            DropdownMenuItem(value: 'yes', child: Text('Yes')),
-            DropdownMenuItem(value: 'partially', child: Text('Partially')),
-            DropdownMenuItem(value: 'not_yet', child: Text('Not Yet')),
-          ],
-          onChanged: (v) => setState(() => _goalMet = v!),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: DropdownButtonFormField<String>(
+            value: _goalMet,
+            decoration: _inputDecoration('Goal Met?'),
+            items: const [
+              DropdownMenuItem(value: 'yes', child: Text('Yes')),
+              DropdownMenuItem(
+                  value: 'partially', child: Text('Partially')),
+              DropdownMenuItem(
+                  value: 'not_yet', child: Text('Not Yet')),
+            ],
+            onChanged: (v) => setState(() => _goalMet = v!),
+          ),
         ),
         const SizedBox(height: 16),
         _textField(
@@ -605,33 +633,37 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           maxLines: 2,
         ),
         const SizedBox(height: 32),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton(
-            onPressed: _isSaving ? null : _save,
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.teal,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: _isSaving ? null : _save,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.teal,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : const Text(
+                      'Save Session',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
             ),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : const Text(
-                    'Save Session',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
           ),
         ),
         const SizedBox(height: 16),
@@ -643,7 +675,7 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
 
   Widget _buildNavBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.fromLTRB(48, 12, 48, 20),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Colors.grey.shade200)),
@@ -651,36 +683,48 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
       child: Row(
         children: [
           if (_currentStep > 0)
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => setState(() => _currentStep--),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.teal,
-                  side: const BorderSide(color: Colors.teal),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () =>
+                      setState(() => _currentStep--),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.teal,
+                    side: const BorderSide(color: Colors.teal),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
+                  child: const Text('Back'),
                 ),
-                child: const Text('Back'),
               ),
             ),
           if (_currentStep > 0 && _currentStep < 5)
             const SizedBox(width: 12),
           if (_currentStep < 5)
-            Expanded(
-              child: FilledButton(
-                onPressed: () => setState(() => _currentStep++),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.teal,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () =>
+                      setState(() => _currentStep++),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.teal,
+                    padding:
+                        const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
-                ),
-                child: const Text(
-                  'Next',
-                  style: TextStyle(fontSize: 15),
+                  child: const Text(
+                    'Next',
+                    style: TextStyle(fontSize: 15),
+                  ),
                 ),
               ),
             ),
@@ -697,12 +741,14 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
       children: [
         Text(
           title,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: const TextStyle(
+              fontSize: 22, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+          style:
+              TextStyle(fontSize: 14, color: Colors.grey.shade600),
         ),
       ],
     );
@@ -723,7 +769,8 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.teal, width: 2),
+        borderSide:
+            const BorderSide(color: Colors.teal, width: 2),
       ),
     );
   }
@@ -750,6 +797,7 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
       controller: controller,
       keyboardType: TextInputType.number,
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      textAlign: TextAlign.center,
       decoration: _inputDecoration(label).copyWith(hintText: hint),
     );
   }
