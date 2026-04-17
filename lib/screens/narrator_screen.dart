@@ -3,6 +3,7 @@
 
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:record/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -282,7 +283,14 @@ class _NarratorScreenState extends State<NarratorScreen>
     return AppLayout(
       title: 'Cue Narrator',
       activeRoute: 'narrator',
-      body: SingleChildScrollView(
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    // Results view: scrollable column with SOAP cards
+    if (_status == _NarratorStatus.done && _result != null) {
+      return SingleChildScrollView(
         padding:
             const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
         child: Center(
@@ -292,27 +300,130 @@ class _NarratorScreenState extends State<NarratorScreen>
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildRecordingCard(),
-                if (_status == _NarratorStatus.done &&
-                    _result != null) ...[
-                  const SizedBox(height: 24),
-                  _buildClientNameField(),
-                  const SizedBox(height: 24),
-                  _buildSoapCards(_result!.soapNote),
-                  if (_result!.parentSummary != null) ...[
-                    const SizedBox(height: 20),
-                    _buildParentSummaryCard(_result!.parentSummary!),
-                  ],
-                  const SizedBox(height: 24),
-                  _buildActionRow(),
+                const SizedBox(height: 24),
+                _buildClientNameField(),
+                const SizedBox(height: 24),
+                _buildSoapCards(_result!.soapNote),
+                if (_result!.parentSummary != null) ...[
+                  const SizedBox(height: 20),
+                  _buildParentSummaryCard(_result!.parentSummary!),
                 ],
-                if (_status == _NarratorStatus.error) ...[
-                  const SizedBox(height: 24),
-                  _buildErrorCard(),
-                ],
+                const SizedBox(height: 24),
+                _buildActionRow(),
               ],
             ),
           ),
         ),
+      );
+    }
+
+    // Error view: centered error card
+    if (_status == _NarratorStatus.error) {
+      return Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: Padding(
+            padding: const EdgeInsets.all(48),
+            child: _buildErrorCard(),
+          ),
+        ),
+      );
+    }
+
+    // Idle / recording / processing: centered mic button
+    return _buildMicCenter();
+  }
+
+  Widget _buildMicCenter() {
+    final isRecording = _status == _NarratorStatus.recording;
+    final isProcessing = _status == _NarratorStatus.processing;
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isRecording || isProcessing) ...[
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Text(
+                isRecording ? '● RECORDING' : '⟳ PROCESSING',
+                key: ValueKey(_status),
+                style: TextStyle(
+                  color: isRecording
+                      ? NarratorColors.errorRed
+                      : NarratorColors.signalTeal,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+          GestureDetector(
+            onTap: isProcessing
+                ? null
+                : isRecording
+                    ? _stopAndProcess
+                    : _startRecording,
+            child: AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) => Transform.scale(
+                scale: isRecording ? _pulseAnimation.value : 1.0,
+                child: child,
+              ),
+              child: Container(
+                width: 96,
+                height: 96,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isRecording
+                      ? NarratorColors.errorRed
+                      : isProcessing
+                          ? Colors.grey.shade200
+                          : NarratorColors.signalTeal,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (isRecording
+                              ? NarratorColors.errorRed
+                              : NarratorColors.signalTeal)
+                          .withOpacity(0.35),
+                      blurRadius: 28,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+                child: isProcessing
+                    ? Center(
+                        child: SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            color: NarratorColors.signalTeal,
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                      )
+                    : Icon(
+                        isRecording
+                            ? Icons.stop_rounded
+                            : Icons.mic_rounded,
+                        color: Colors.white,
+                        size: 40,
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _statusMessage,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: Colors.grey[600],
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }
