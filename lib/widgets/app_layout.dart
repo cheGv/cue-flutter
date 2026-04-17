@@ -98,47 +98,42 @@ class AppLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-
-    if (width < _kTabletBreak) {
-      return const MobileWall();
-    }
-
-    final collapsed = width < _kDesktopBreak;
-    final sidebarWidth = collapsed ? _kSidebarCollapsed : _kSidebarFull;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _AppSidebar(
-            width: sidebarWidth,
-            collapsed: collapsed,
-            activeRoute: activeRoute,
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TopBar(title: title, actions: actions),
-                Expanded(
-                  child: Stack(
-                    children: [
-                      body,
-                      if (floatingActionButton != null)
-                        Positioned(
-                          right: 24,
-                          bottom: 24,
-                          child: floatingActionButton!,
-                        ),
-                    ],
-                  ),
+      floatingActionButton: floatingActionButton,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < _kTabletBreak) {
+            return const MobileWall();
+          }
+
+          final sidebarWidth = constraints.maxWidth < _kDesktopBreak
+              ? _kSidebarCollapsed
+              : _kSidebarFull;
+          final collapsed = sidebarWidth == _kSidebarCollapsed;
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: sidebarWidth,
+                child: _AppSidebar(
+                  collapsed: collapsed,
+                  activeRoute: activeRoute,
                 ),
-              ],
-            ),
-          ),
-        ],
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _TopBar(title: title, actions: actions),
+                    Expanded(child: body),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -209,12 +204,10 @@ const _kNavItems = [
 ];
 
 class _AppSidebar extends StatelessWidget {
-  final double width;
   final bool collapsed;
   final String activeRoute;
 
   const _AppSidebar({
-    required this.width,
     required this.collapsed,
     required this.activeRoute,
   });
@@ -222,7 +215,6 @@ class _AppSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: width,
       color: const Color(0xFF1B2B4B),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

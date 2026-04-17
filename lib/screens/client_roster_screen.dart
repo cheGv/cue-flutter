@@ -37,7 +37,7 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
     final response = await _supabase
         .from('clients')
         .select()
-        .is_('deleted_at', null)
+        .isFilter('deleted_at', null)
         .order('name', ascending: true);
     return List<Map<String, dynamic>>.from(response);
   }

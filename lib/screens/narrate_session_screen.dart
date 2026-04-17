@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import '../widgets/app_layout.dart';
 import 'add_session_screen.dart';
-import 'narrator_screen.dart';
 
 class NarrateSessionScreen extends StatefulWidget {
   final String clientId;
