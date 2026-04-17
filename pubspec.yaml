@@ -14,6 +14,11 @@ dependencies:
   supabase_flutter: ^2.8.4
   flutter_markdown: ^0.7.4
   http: ^1.2.0
+  pdf: ^3.10.8
+  printing: ^5.13.1
+  speech_to_text: ^6.6.2
+  record: ^5.1.2
+  google_fonts: ^6.1.0
 
 dev_dependencies:
   flutter_test:
