@@ -25,38 +25,30 @@ class ReportScreen extends StatefulWidget {
 class _ReportScreenState extends State<ReportScreen> {
   static const _proxyUrl = 'https://cue-ai-proxy.onrender.com/generate-report';
 
-  bool    _isLoading = false;
+  bool _isLoading = false;
   String? _report;
   String? _error;
-  final List<bool> _soapVisible = List.filled(4, false);
-
-  @override
-  void initState() {
-    super.initState();
-    // Stagger SOAP card entrance: 80 ms apart.
-    for (int i = 0; i < 4; i++) {
-      Future.delayed(Duration(milliseconds: i * 80), () {
-        if (mounted) setState(() => _soapVisible[i] = true);
-      });
-    }
-  }
 
   Future<void> _generateReport() async {
-    setState(() { _isLoading = true; _error = null; _report = null; });
+    setState(() {
+      _isLoading = true;
+      _error = null;
+      _report = null;
+    });
     try {
-      final s           = widget.session;
-      final bodyString  = jsonEncode({
+      final s = widget.session;
+      final bodyString = jsonEncode({
         'clientName': widget.clientName,
         'session': {
-          'date':             '${s['date'] ?? ''}',
-          'goal':             '${s['target_behaviour'] ?? ''}',
-          'activity':         '${s['activity_name'] ?? ''}',
-          'totalTrials':      '${s['attempts'] ?? 0}',
-          'independentTrials':'${s['independent_responses'] ?? 0}',
-          'promptedTrials':   '${s['prompted_responses'] ?? 0}',
-          'goalMet':          '${s['goal_met'] ?? ''}',
-          'affect':           '${s['client_affect'] ?? ''}',
-          'notes':            '${s['next_session_focus'] ?? ''}',
+          'date': '${s['date'] ?? ''}',
+          'goal': '${s['target_behaviour'] ?? ''}',
+          'activity': '${s['activity_name'] ?? ''}',
+          'totalTrials': '${s['attempts'] ?? 0}',
+          'independentTrials': '${s['independent_responses'] ?? 0}',
+          'promptedTrials': '${s['prompted_responses'] ?? 0}',
+          'goalMet': '${s['goal_met'] ?? ''}',
+          'affect': '${s['client_affect'] ?? ''}',
+          'notes': '${s['next_session_focus'] ?? ''}',
         },
       });
 
@@ -68,7 +60,8 @@ class _ReportScreenState extends State<ReportScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final text = data['content']?[0]?['text'] ?? data['report'] ?? response.body;
+        final text =
+            data['content']?[0]?['text'] ?? data['report'] ?? response.body;
         setState(() => _report = text.toString());
       } else {
         setState(() =>
@@ -82,9 +75,9 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _downloadPdf() async {
-    final session       = widget.session;
-    final sessionDate   = '${session['date'] ?? '—'}';
-    final now           = DateTime.now();
+    final session = widget.session;
+    final sessionDate = '${session['date'] ?? '—'}';
+    final now = DateTime.now();
     final generatedDate =
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
     final cleanText = _cleanText(_report ?? '');
@@ -98,16 +91,16 @@ class _ReportScreenState extends State<ReportScreen> {
           pw.Container(
             width: double.infinity,
             color: const PdfColor.fromInt(0xFF1B2B4B),
-            padding: const pw.EdgeInsets.fromLTRB(40, 20, 40, 18),
+            padding: const pw.EdgeInsets.fromLTRB(40, 22, 40, 18),
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('Cue AI',
+                pw.Text('Cue',
                     style: pw.TextStyle(
-                        fontSize: 22,
+                        fontSize: 24,
                         fontWeight: pw.FontWeight.bold,
                         color: PdfColors.white)),
-                pw.SizedBox(height: 3),
+                pw.SizedBox(height: 4),
                 pw.Text('Clinical Session Report',
                     style: const pw.TextStyle(
                         fontSize: 10, color: PdfColors.white)),
@@ -116,8 +109,12 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
           pw.Container(
             width: double.infinity,
-            color: const PdfColor.fromInt(0xFFF8F9FC),
-            padding: const pw.EdgeInsets.fromLTRB(40, 10, 40, 10),
+            padding: const pw.EdgeInsets.fromLTRB(40, 14, 40, 14),
+            decoration: const pw.BoxDecoration(
+              border: pw.Border(
+                bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+              ),
+            ),
             child: pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
@@ -148,36 +145,40 @@ class _ReportScreenState extends State<ReportScreen> {
           child: pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text('Generated by Cue AI | RCI-Certified SLP Documentation',
-                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey)),
+              pw.Text('Generated by Cue | RCI-Certified SLP Documentation',
+                  style:
+                      const pw.TextStyle(fontSize: 9, color: PdfColors.grey)),
               pw.Text(generatedDate,
-                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey)),
+                  style:
+                      const pw.TextStyle(fontSize: 9, color: PdfColors.grey)),
             ],
           ),
         ),
       ),
     );
 
-    final bytes   = await pdf.save();
+    final bytes = await pdf.save();
     final content = base64Encode(bytes);
-    final anchor  = html.AnchorElement(
-        href: 'data:application/pdf;base64,$content')
-      ..setAttribute(
-          'download',
-          '${widget.clientName.replaceAll(' ', '_')}_$sessionDate.pdf')
-      ..style.display = 'none';
+    final anchor =
+        html.AnchorElement(href: 'data:application/pdf;base64,$content')
+          ..setAttribute('download',
+              '${widget.clientName.replaceAll(' ', '_')}_$sessionDate.pdf')
+          ..style.display = 'none';
     html.document.body!.append(anchor);
     anchor.click();
     anchor.remove();
   }
 
   List<pw.Widget> _buildPdfSections(String text) {
-    final widgets   = <pw.Widget>[];
-    final headerRe  = RegExp(r'^([A-Z][A-Z /\-]+):(.*)$');
+    final widgets = <pw.Widget>[];
+    final headerRe = RegExp(r'^([A-Z][A-Z /\-]+):(.*)$');
 
     for (final rawLine in text.split('\n')) {
       final line = rawLine.trim();
-      if (line.isEmpty) { widgets.add(pw.SizedBox(height: 6)); continue; }
+      if (line.isEmpty) {
+        widgets.add(pw.SizedBox(height: 6));
+        continue;
+      }
       final match = headerRe.firstMatch(line);
       if (match != null) {
         if (widgets.isNotEmpty) widgets.add(pw.SizedBox(height: 14));
@@ -185,7 +186,7 @@ class _ReportScreenState extends State<ReportScreen> {
             style: pw.TextStyle(
                 fontSize: 11,
                 fontWeight: pw.FontWeight.bold,
-                color: const PdfColor.fromInt(0xFF00B4A6))));
+                color: const PdfColor.fromInt(0xFF1B2B4B))));
         final inline = match.group(2)?.trim() ?? '';
         if (inline.isNotEmpty) {
           widgets.add(pw.SizedBox(height: 3));
@@ -204,122 +205,106 @@ class _ReportScreenState extends State<ReportScreen> {
   String _cleanText(String text) {
     return text
         .replaceAllMapped(RegExp(r'\*\*(.+?)\*\*'), (m) => m.group(1) ?? '')
-        .replaceAllMapped(RegExp(r'\*(.+?)\*'),     (m) => m.group(1) ?? '')
-        .replaceAllMapped(RegExp(r'__(.+?)__'),     (m) => m.group(1) ?? '')
-        .replaceAllMapped(RegExp(r'_(.+?)_'),       (m) => m.group(1) ?? '')
+        .replaceAllMapped(RegExp(r'\*(.+?)\*'), (m) => m.group(1) ?? '')
+        .replaceAllMapped(RegExp(r'__(.+?)__'), (m) => m.group(1) ?? '')
+        .replaceAllMapped(RegExp(r'_(.+?)_'), (m) => m.group(1) ?? '')
         .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
-        .replaceAll(RegExp(r'^[-*+]\s+',  multiLine: true), '')
-        .replaceAllMapped(RegExp(r'\[(.+?)\]\(.+?\)'), (m) => m.group(1) ?? '')
-        .replaceAllMapped(RegExp(r'`(.+?)`'),       (m) => m.group(1) ?? '')
+        .replaceAll(RegExp(r'^[-*+]\s+', multiLine: true), '')
+        .replaceAllMapped(
+            RegExp(r'\[(.+?)\]\(.+?\)'), (m) => m.group(1) ?? '')
+        .replaceAllMapped(RegExp(r'`(.+?)`'), (m) => m.group(1) ?? '')
         .trim();
   }
 
   @override
   Widget build(BuildContext context) {
-    final session   = widget.session;
-    final goalMet   = _formatGoalMet(session['goal_met'] as String?);
-    final soapRaw   = session['soap_note'];
+    final session = widget.session;
+    final goalMet = _formatGoalMet(session['goal_met'] as String?);
+    final soapRaw = session['soap_note'];
     Map<String, dynamic>? soap;
     if (soapRaw is String && soapRaw.isNotEmpty) {
-      try { soap = jsonDecode(soapRaw) as Map<String, dynamic>; } catch (_) {}
+      try {
+        soap = jsonDecode(soapRaw) as Map<String, dynamic>;
+      } catch (_) {}
     } else if (soapRaw is Map<String, dynamic>) {
       soap = soapRaw;
     }
 
     return Scaffold(
-      backgroundColor: CueColors.softWhite,
+      backgroundColor: CueColors.background,
       appBar: AppBar(
-        title: Text(
-          'Report — ${widget.clientName}',
-          style: GoogleFonts.dmSans(
-              color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: CueColors.inkNavy,
-        foregroundColor: Colors.white,
+        title: const Text('Report'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              widget.clientName,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: CueColors.inkSecondary,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 4),
 
-            // ── Session summary card (inkNavy) ──────────────────────────
+            // ── Summary card ─────────────────────────────────────────────
             Container(
               decoration: BoxDecoration(
-                color: const Color(0xFF243558),
+                color: CueColors.surface,
                 borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF243558).withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                border: Border.all(color: CueColors.divider),
               ),
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.description_outlined,
-                          color: CueColors.signalTeal, size: 18),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Session ${session['date'] ?? '—'}',
-                        style: GoogleFonts.dmSerifDisplay(
-                          fontSize: 18,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    session['date']?.toString() ?? '—',
+                    style: GoogleFonts.fraunces(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w500,
+                      color: CueColors.inkPrimary,
+                      letterSpacing: -0.3,
+                    ),
                   ),
-                  const SizedBox(height: 14),
-                  if ((session['target_behaviour'] as String?) != null &&
-                      (session['target_behaviour'] as String).isNotEmpty)
-                    _SummaryRow(
-                        label: 'Goal',
-                        value: session['target_behaviour'] as String),
-                  if ((session['activity_name'] as String?) != null &&
-                      (session['activity_name'] as String).isNotEmpty)
-                    _SummaryRow(
-                        label: 'Activity',
-                        value: session['activity_name'] as String),
-                  _SummaryRow(
+                  const SizedBox(height: 20),
+                  if ((session['target_behaviour'] as String?)?.isNotEmpty ==
+                      true)
+                    _KV(label: 'Goal', value: session['target_behaviour']),
+                  if ((session['activity_name'] as String?)?.isNotEmpty ==
+                      true)
+                    _KV(label: 'Activity', value: session['activity_name']),
+                  _KV(
                     label: 'Trials',
                     value:
-                        '${session['attempts'] ?? 0} attempts · '
-                        '${session['independent_responses'] ?? 0} independent · '
-                        '${session['prompted_responses'] ?? 0} prompted',
+                        '${session['attempts'] ?? 0} attempts · ${session['independent_responses'] ?? 0} independent · ${session['prompted_responses'] ?? 0} prompted',
                   ),
-                  _SummaryRow(label: 'Goal Met', value: goalMet),
-                  _SummaryRow(
+                  _KV(label: 'Goal met', value: goalMet),
+                  _KV(
                       label: 'Affect',
-                      value: _capitalize(session['client_affect'] as String?)),
+                      value: _capitalize(
+                          session['client_affect'] as String?)),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 32),
 
-            // ── SOAP cards (if session has soap_note) ───────────────────
+            // ── SOAP cards ───────────────────────────────────────────────
             if (soap != null) ...[
-              CueTheme.sectionLabel('SOAP Note'),
+              CueTheme.eyebrow('SOAP Note'),
               const SizedBox(height: 12),
               ..._buildSoapCards(soap),
-              const SizedBox(height: 20),
+              const SizedBox(height: 32),
             ],
 
-            // ── Generate button ─────────────────────────────────────────
+            // ── Generate button ──────────────────────────────────────────
             SizedBox(
-              width: double.infinity,
               height: 52,
               child: FilledButton.icon(
                 onPressed: _isLoading ? null : _generateReport,
-                style: FilledButton.styleFrom(
-                  backgroundColor: CueColors.signalTeal,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
                 icon: _isLoading
                     ? const SizedBox(
                         width: 18,
@@ -327,97 +312,79 @@ class _ReportScreenState extends State<ReportScreen> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : const Icon(Icons.auto_awesome, color: Colors.white),
-                label: Text(
-                  _isLoading ? 'Generating…' : 'Generate Report',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white),
-                ),
+                    : const Icon(Icons.auto_awesome_outlined,
+                        color: Colors.white, size: 18),
+                label: Text(_isLoading ? 'Generating…' : 'Generate Report'),
               ),
             ),
-            const SizedBox(height: 20),
 
-            // ── Error ───────────────────────────────────────────────────
-            if (_error != null)
+            if (_error != null) ...[
+              const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: CueColors.errorRed.withOpacity(0.08),
+                  color: CueColors.coral.withOpacity(0.06),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: CueColors.errorRed.withOpacity(0.3)),
+                  border: Border.all(color: CueColors.coral.withOpacity(0.3)),
                 ),
                 child: Text(
                   _error!,
-                  style: GoogleFonts.dmSans(
-                      color: CueColors.errorRed, fontSize: 14),
+                  style: GoogleFonts.inter(
+                      color: CueColors.coral, fontSize: 14),
                 ),
               ),
+            ],
 
-            // ── Report output ───────────────────────────────────────────
             if (_report != null) ...[
+              const SizedBox(height: 32),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     'AI Report',
-                    style: GoogleFonts.dmSerifDisplay(
-                        fontSize: 18, color: CueColors.inkNavy),
-                  ),
-                  FilledButton.icon(
-                    onPressed: _downloadPdf,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: CueColors.inkNavy,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                    style: GoogleFonts.fraunces(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w500,
+                      color: CueColors.inkPrimary,
                     ),
-                    icon: const Icon(Icons.download_rounded, size: 16,
-                        color: Colors.white),
-                    label: Text('Download PDF',
-                        style: GoogleFonts.dmSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white)),
+                  ),
+                  TextButton.icon(
+                    onPressed: _downloadPdf,
+                    icon: const Icon(Icons.download_outlined, size: 16),
+                    label: const Text('Download PDF'),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: CueColors.surfaceWhite,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                      color: CueColors.inkNavy.withOpacity(0.1)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: CueColors.inkNavy.withOpacity(0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  color: CueColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: CueColors.divider),
                 ),
                 child: MarkdownBody(
                   data: _report!,
                   styleSheet: MarkdownStyleSheet(
-                    p: GoogleFonts.dmSans(
-                        fontSize: 14, height: 1.6, color: CueColors.inkNavy),
-                    h1: GoogleFonts.dmSerifDisplay(
-                        fontSize: 20, color: CueColors.inkNavy),
-                    h2: GoogleFonts.dmSerifDisplay(
-                        fontSize: 17, color: CueColors.inkNavy),
-                    h3: GoogleFonts.dmSans(
+                    p: GoogleFonts.inter(
+                        fontSize: 15,
+                        height: 1.6,
+                        color: CueColors.inkPrimary),
+                    h1: GoogleFonts.fraunces(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w500,
+                        color: CueColors.inkPrimary),
+                    h2: GoogleFonts.fraunces(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        color: CueColors.inkPrimary),
+                    h3: GoogleFonts.inter(
                         fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: CueColors.inkNavy),
+                        fontWeight: FontWeight.w600,
+                        color: CueColors.inkPrimary),
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
             ],
           ],
         ),
@@ -426,56 +393,40 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   List<Widget> _buildSoapCards(Map<String, dynamic> soap) {
-    final keys   = ['subjective', 'objective', 'assessment', 'plan'];
+    final keys = ['subjective', 'objective', 'assessment', 'plan'];
     final labels = CueTheme.soapLabels;
-    final colors = CueTheme.soapColors;
 
     return List.generate(keys.length, (i) {
       final text = soap[keys[i]]?.toString() ?? '';
-      return AnimatedOpacity(
-        opacity: _soapVisible[i] ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOut,
-        child: AnimatedSlide(
-          offset: _soapVisible[i] ? Offset.zero : const Offset(0, 0.15),
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-              color: CueColors.surfaceWhite,
-              borderRadius: BorderRadius.circular(12),
-              border: Border(left: BorderSide(color: colors[i], width: 4)),
-              boxShadow: [
-                BoxShadow(
-                  color: CueColors.inkNavy.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: CueColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: CueColors.divider),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              labels[i],
+              style: GoogleFonts.fraunces(
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: CueColors.inkPrimary,
+              ),
             ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  labels[i].toUpperCase(),
-                  style: GoogleFonts.dmSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: colors[i],
-                    letterSpacing: 0.8,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  text.isNotEmpty ? text : '—',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 14, height: 1.55, color: CueColors.inkNavy),
-                ),
-              ],
+            const SizedBox(height: 8),
+            Text(
+              text.isNotEmpty ? text : '—',
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                height: 1.55,
+                color: CueColors.inkPrimary,
+              ),
             ),
-          ),
+          ],
         ),
       );
     });
@@ -483,10 +434,14 @@ class _ReportScreenState extends State<ReportScreen> {
 
   String _formatGoalMet(String? value) {
     switch (value) {
-      case 'yes':       return 'Yes';
-      case 'partially': return 'Partially';
-      case 'not_yet':   return 'Not Yet';
-      default:          return value ?? '—';
+      case 'yes':
+        return 'Yes';
+      case 'partially':
+        return 'Partially';
+      case 'not_yet':
+        return 'Not yet';
+      default:
+        return value ?? '—';
     }
   }
 
@@ -496,36 +451,37 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-class _SummaryRow extends StatelessWidget {
+class _KV extends StatelessWidget {
   final String label;
-  final String value;
+  final dynamic value;
 
-  const _SummaryRow({required this.label, required this.value});
+  const _KV({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 76,
+            width: 80,
             child: Text(
-              '$label:',
-              style: GoogleFonts.dmSans(
+              label,
+              style: GoogleFonts.inter(
                 fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: CueColors.signalTeal,
+                color: CueColors.inkSecondary,
               ),
             ),
           ),
           Expanded(
             child: Text(
-              value,
-              style: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  color: Colors.white.withOpacity(0.85)),
+              value?.toString() ?? '—',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: CueColors.inkPrimary,
+                height: 1.5,
+              ),
             ),
           ),
         ],

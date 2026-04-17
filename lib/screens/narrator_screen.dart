@@ -1,5 +1,6 @@
 // lib/screens/narrator_screen.dart
-// Cue Narrator — Record audio, transcribe, and generate SOAP notes via Supabase Edge Function
+// Cue Narrator — Record audio, transcribe, and generate SOAP notes
+// via the Supabase Edge Function.
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -26,21 +27,21 @@ class SoapNote {
 
   factory SoapNote.fromJson(Map<String, dynamic> json) => SoapNote(
         subjective: json['subjective'] as String? ?? '',
-        objective:  json['objective']  as String? ?? '',
+        objective: json['objective'] as String? ?? '',
         assessment: json['assessment'] as String? ?? '',
-        plan:       json['plan']       as String? ?? '',
+        plan: json['plan'] as String? ?? '',
       );
 
   Map<String, dynamic> toJson() => {
         'subjective': subjective,
-        'objective':  objective,
+        'objective': objective,
         'assessment': assessment,
-        'plan':       plan,
+        'plan': plan,
       };
 }
 
 class NarratorResult {
-  final String  transcript;
+  final String transcript;
   final SoapNote? soapNote;
   final String? parentSummary;
 
@@ -65,18 +66,18 @@ class _NarratorScreenState extends State<NarratorScreen>
     with SingleTickerProviderStateMixin {
   final AudioRecorder _recorder = AudioRecorder();
   late AnimationController _pulseController;
-  late Animation<double>   _pulseAnimation;
+  late Animation<double> _pulseAnimation;
 
-  _NarratorStatus _status        = _NarratorStatus.idle;
-  String          _statusMessage = 'Tap the microphone to begin recording';
+  _NarratorStatus _status = _NarratorStatus.idle;
+  String _statusMessage = 'Tap the microphone to begin';
   NarratorResult? _result;
-  String?         _clientName;
-  bool            _isSaving = false;
-  bool            _saved    = false;
+  String? _clientName;
+  bool _isSaving = false;
+  bool _saved = false;
 
-  String?   _recordingPath;
+  String? _recordingPath;
   DateTime? _recordingStart;
-  int       _durationSeconds = 0;
+  int _durationSeconds = 0;
 
   SupabaseClient get _supabase => Supabase.instance.client;
 
@@ -85,9 +86,9 @@ class _NarratorScreenState extends State<NarratorScreen>
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1100),
     )..repeat(reverse: true);
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.14).animate(
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
     _pulseController.stop();
@@ -100,24 +101,24 @@ class _NarratorScreenState extends State<NarratorScreen>
     super.dispose();
   }
 
-  // ── Recording ───────────────────────────────────────────────────────────────
   Future<void> _startRecording() async {
     final hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
-      _setError('Microphone permission denied. Please allow access and try again.');
+      _setError('Microphone permission denied.');
       return;
     }
     try {
       const config = RecordConfig(encoder: AudioEncoder.opus, numChannels: 1);
-      _recordingPath = 'session_${DateTime.now().millisecondsSinceEpoch}.webm';
+      _recordingPath =
+          'session_${DateTime.now().millisecondsSinceEpoch}.webm';
       await _recorder.start(config, path: _recordingPath!);
 
       _recordingStart = DateTime.now();
       setState(() {
-        _status        = _NarratorStatus.recording;
-        _statusMessage = 'Recording in progress — tap to stop';
-        _result        = null;
-        _saved         = false;
+        _status = _NarratorStatus.recording;
+        _statusMessage = 'Recording — tap to stop';
+        _result = null;
+        _saved = false;
       });
       _pulseController.repeat(reverse: true);
     } catch (e) {
@@ -137,12 +138,12 @@ class _NarratorScreenState extends State<NarratorScreen>
         : 0;
 
     if (_durationSeconds < 3) {
-      _setError('Recording was too short. Please record at least a few seconds of speech.');
+      _setError('Recording was too short.');
       return;
     }
 
     setState(() {
-      _status        = _NarratorStatus.processing;
+      _status = _NarratorStatus.processing;
       _statusMessage = 'Transcribing and analysing…';
     });
 
@@ -159,11 +160,14 @@ class _NarratorScreenState extends State<NarratorScreen>
       }
 
       final httpResponse = await http.post(
-        Uri.parse('https://cgnjbjbargkxtcnafxaa.supabase.co/functions/v1/narrator'),
+        Uri.parse(
+            'https://cgnjbjbargkxtcnafxaa.supabase.co/functions/v1/narrator'),
         headers: {
           'Content-Type': 'application/octet-stream',
-          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnbmpiamJhcmdreHRjbmFmeGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODQyNzcsImV4cCI6MjA5MDg2MDI3N30.AWmyJoSuXUi7X74vBN2E1Jv7mStsjepKqRFyA6iFfmE',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnbmpiamJhcmdreHRjbmFmeGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODQyNzcsImV4cCI6MjA5MDg2MDI3N30.AWmyJoSuXUi7X74vBN2E1Jv7mStsjepKqRFyA6iFfmE',
+          'Authorization':
+              'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnbmpiamJhcmdreHRjbmFmeGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODQyNzcsImV4cCI6MjA5MDg2MDI3N30.AWmyJoSuXUi7X74vBN2E1Jv7mStsjepKqRFyA6iFfmE',
+          'apikey':
+              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnbmpiamJhcmdreHRjbmFmeGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODQyNzcsImV4cCI6MjA5MDg2MDI3N30.AWmyJoSuXUi7X74vBN2E1Jv7mStsjepKqRFyA6iFfmE',
         },
         body: audioBytes,
       );
@@ -177,7 +181,7 @@ class _NarratorScreenState extends State<NarratorScreen>
 
       if (data['error'] == 'no_speech_detected') {
         _setError(
-          'No speech detected. Make sure your microphone is working and speak clearly during the session.',
+          'No speech detected. Check your microphone and try again.',
         );
         return;
       }
@@ -185,16 +189,17 @@ class _NarratorScreenState extends State<NarratorScreen>
 
       SoapNote? soapNote;
       if (data['soap_note'] is Map) {
-        soapNote = SoapNote.fromJson(data['soap_note'] as Map<String, dynamic>);
+        soapNote =
+            SoapNote.fromJson(data['soap_note'] as Map<String, dynamic>);
       }
 
       setState(() {
         _result = NarratorResult(
-          transcript:    data['transcript'] as String? ?? '',
-          soapNote:      soapNote,
+          transcript: data['transcript'] as String? ?? '',
+          soapNote: soapNote,
           parentSummary: data['parent_summary'] as String?,
         );
-        _status        = _NarratorStatus.done;
+        _status = _NarratorStatus.done;
         _statusMessage = 'Session note ready';
       });
     } catch (e) {
@@ -203,16 +208,16 @@ class _NarratorScreenState extends State<NarratorScreen>
   }
 
   void _setError(String message) => setState(() {
-        _status        = _NarratorStatus.error;
+        _status = _NarratorStatus.error;
         _statusMessage = message;
       });
 
   void _reset() => setState(() {
-        _status        = _NarratorStatus.idle;
-        _statusMessage = 'Tap the microphone to begin recording';
-        _result        = null;
-        _saved         = false;
-        _clientName    = null;
+        _status = _NarratorStatus.idle;
+        _statusMessage = 'Tap the microphone to begin';
+        _result = null;
+        _saved = false;
+        _clientName = null;
       });
 
   Future<void> _saveSession() async {
@@ -223,14 +228,14 @@ class _NarratorScreenState extends State<NarratorScreen>
       if (userId == null) throw Exception('Not authenticated');
 
       await _supabase.from('sessions').insert({
-        'user_id':     userId,
+        'user_id': userId,
         'client_name': _clientName ??
             'Session ${DateTime.now().toString().substring(0, 10)}',
-        'transcript':      _result!.transcript,
-        'soap_note':       _result!.soapNote?.toJson(),
-        'parent_summary':  _result!.parentSummary,
+        'transcript': _result!.transcript,
+        'soap_note': _result!.soapNote?.toJson(),
+        'parent_summary': _result!.parentSummary,
         'duration_seconds': _durationSeconds,
-        'status':          'complete',
+        'status': 'complete',
       });
       setState(() => _saved = true);
 
@@ -250,42 +255,35 @@ class _NarratorScreenState extends State<NarratorScreen>
     }
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: CueColors.softWhite,
+      backgroundColor: CueColors.background,
       appBar: AppBar(
-        title: Text('Narrator',
-            style: GoogleFonts.dmSans(
-                color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
-        backgroundColor: CueColors.inkNavy,
-        foregroundColor: Colors.white,
+        title: const Text('Narrator'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildRecordingCard(),
-
+            _buildRecordingBlock(),
             if (_status == _NarratorStatus.done && _result != null) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: 40),
               _buildClientNameField(),
               if (_result!.soapNote != null) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
                 _buildSoapCards(_result!.soapNote!),
               ],
               if (_result!.parentSummary != null) ...[
-                const SizedBox(height: 24),
+                const SizedBox(height: 32),
                 _buildParentSummaryCard(_result!.parentSummary!),
               ],
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               _buildActionRow(),
             ],
-
             if (_status == _NarratorStatus.error) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               _buildErrorCard(),
             ],
           ],
@@ -294,72 +292,21 @@ class _NarratorScreenState extends State<NarratorScreen>
     );
   }
 
-  // ── Recording card (inkNavy, matching brand) ──────────────────────────────
-  Widget _buildRecordingCard() {
-    final isRecording  = _status == _NarratorStatus.recording;
+  // ── Recording block: just mic + status, no heavy card ────────────────────────
+  Widget _buildRecordingBlock() {
+    final isRecording = _status == _NarratorStatus.recording;
     final isProcessing = _status == _NarratorStatus.processing;
-    final isDone       = _status == _NarratorStatus.done;
 
     final micColor = isRecording
-        ? CueColors.errorRed
+        ? CueColors.coral
         : isProcessing
-            ? Colors.white.withOpacity(0.2)
-            : CueColors.signalTeal;
+            ? CueColors.inkTertiary
+            : CueColors.accent;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: CueColors.inkNavy,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: CueColors.inkNavy.withOpacity(0.35),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
       child: Column(
         children: [
-          // Status chip
-          if (isRecording || isProcessing)
-            Container(
-              margin: const EdgeInsets.only(bottom: 20),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: (isRecording ? CueColors.errorRed : CueColors.signalTeal)
-                      .withOpacity(0.5),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isRecording
-                        ? Icons.fiber_manual_record
-                        : Icons.hourglass_top_rounded,
-                    size: 11,
-                    color: isRecording
-                        ? CueColors.errorRed
-                        : CueColors.signalTeal,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    isRecording ? 'Recording' : 'Processing…',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isRecording ? CueColors.errorRed : CueColors.signalTeal,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Mic button
           ScaleTransition(
             scale: isRecording
                 ? _pulseAnimation
@@ -371,259 +318,203 @@ class _NarratorScreenState extends State<NarratorScreen>
                       ? _stopAndProcess
                       : _startRecording,
               child: Container(
-                width: 100,
-                height: 100,
+                width: 88,
+                height: 88,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   color: micColor,
-                  boxShadow: [
-                    BoxShadow(
-                      color: micColor.withOpacity(0.45),
-                      blurRadius: isRecording ? 28 : 16,
-                      spreadRadius: isRecording ? 4 : 2,
-                    ),
-                  ],
                 ),
                 child: isProcessing
                     ? const Center(
                         child: SizedBox(
-                          width: 28,
-                          height: 28,
+                          width: 24,
+                          height: 24,
                           child: CircularProgressIndicator(
-                              color: Colors.white, strokeWidth: 2.5),
+                              color: Colors.white, strokeWidth: 2),
                         ),
                       )
                     : Icon(
                         isRecording ? Icons.stop_rounded : Icons.mic_rounded,
                         color: Colors.white,
-                        size: 44,
+                        size: 36,
                       ),
               ),
             ),
           ),
-
-          const SizedBox(height: 18),
-
+          const SizedBox(height: 24),
           Text(
             _statusMessage,
             textAlign: TextAlign.center,
-            style: GoogleFonts.dmSans(
-              fontSize: 14,
+            style: GoogleFonts.inter(
+              fontSize: 15,
               height: 1.5,
-              color: isDone
-                  ? CueColors.signalTeal
-                  : isRecording
-                      ? CueColors.errorRed
-                      : Colors.white.withOpacity(0.65),
+              color: CueColors.inkSecondary,
               fontWeight:
-                  isRecording ? FontWeight.w600 : FontWeight.normal,
+                  isRecording ? FontWeight.w500 : FontWeight.w400,
             ),
           ),
-
-          if (!isRecording && !isProcessing && !isDone) ...[
-            const SizedBox(height: 6),
-            Text(
-              'Session audio is processed by Cue AI',
-              style: GoogleFonts.dmSans(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.35)),
-            ),
-          ],
         ],
       ),
     );
   }
 
-  // ── Client name field ────────────────────────────────────────────────────────
   Widget _buildClientNameField() {
     return TextField(
       onChanged: (val) => _clientName = val,
       textCapitalization: TextCapitalization.words,
-      style: GoogleFonts.dmSans(fontSize: 15, color: CueColors.inkNavy),
-      decoration: CueTheme.inputDecoration(
-        'Client name (optional)',
-        hint: 'e.g. Arjun, Session 12',
-        prefixIcon: const Icon(Icons.person_outline,
-            color: CueColors.signalTeal, size: 20),
+      style: GoogleFonts.inter(fontSize: 16, color: CueColors.inkPrimary),
+      decoration: const InputDecoration(
+        labelText: 'Client name (optional)',
+        hintText: 'e.g. Arjun, Session 12',
       ),
     );
   }
 
-  // ── SOAP cards (S/O/A/P with coloured left borders) ──────────────────────────
   Widget _buildSoapCards(SoapNote soap) {
     final values = [soap.subjective, soap.objective, soap.assessment, soap.plan];
     final labels = CueTheme.soapLabels;
-    final colors = CueTheme.soapColors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CueTheme.sectionLabel('SOAP Note'),
+        CueTheme.eyebrow('SOAP Note'),
         const SizedBox(height: 12),
         ...List.generate(values.length, (i) => Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          decoration: BoxDecoration(
-            color: CueColors.surfaceWhite,
-            borderRadius: BorderRadius.circular(12),
-            border: Border(left: BorderSide(color: colors[i], width: 4)),
-            boxShadow: [
-              BoxShadow(
-                color: CueColors.inkNavy.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: CueColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: CueColors.divider),
               ),
-            ],
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                labels[i].toUpperCase(),
-                style: GoogleFonts.dmSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: colors[i],
-                  letterSpacing: 0.8,
-                ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    labels[i],
+                    style: GoogleFonts.fraunces(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: CueColors.inkPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    values[i].isNotEmpty ? values[i] : '—',
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      height: 1.55,
+                      color: CueColors.inkPrimary,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 6),
-              Text(
-                values[i].isNotEmpty ? values[i] : '—',
-                style: GoogleFonts.dmSans(
-                    fontSize: 14, height: 1.55, color: CueColors.inkNavy),
-              ),
-            ],
-          ),
-        )),
+            )),
       ],
     );
   }
 
-  // ── Parent summary ────────────────────────────────────────────────────────────
   Widget _buildParentSummaryCard(String summary) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CueTheme.sectionLabel('Parent Summary'),
+        CueTheme.eyebrow('Parent Summary'),
         const SizedBox(height: 12),
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: CueColors.signalTeal.withOpacity(0.07),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: CueColors.signalTeal.withOpacity(0.25)),
+            color: CueColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: CueColors.divider),
           ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.family_restroom_rounded,
-                  size: 18, color: CueColors.signalTeal),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  summary,
-                  style: GoogleFonts.dmSans(
-                      fontSize: 14, height: 1.55, color: CueColors.inkNavy),
-                ),
-              ),
-            ],
+          child: Text(
+            summary,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              height: 1.55,
+              color: CueColors.inkPrimary,
+            ),
           ),
         ),
       ],
     );
   }
 
-  // ── Action row ────────────────────────────────────────────────────────────────
   Widget _buildActionRow() {
     return Row(children: [
       Expanded(
-        child: OutlinedButton.icon(
-          onPressed: _reset,
-          icon: const Icon(Icons.refresh_rounded, size: 18),
-          label: Text('New Session',
-              style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: CueColors.inkNavy,
-            side: BorderSide(color: CueColors.inkNavy.withOpacity(0.35)),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+        child: SizedBox(
+          height: 52,
+          child: OutlinedButton.icon(
+            onPressed: _reset,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('New'),
           ),
         ),
       ),
       const SizedBox(width: 12),
       Expanded(
         flex: 2,
-        child: FilledButton.icon(
-          onPressed: _saved || _isSaving ? null : _saveSession,
-          icon: _isSaving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2),
-                )
-              : Icon(_saved ? Icons.check_rounded : Icons.save_rounded,
-                  size: 18, color: Colors.white),
-          label: Text(
-            _saved ? 'Saved to Records' : 'Save to Records',
-            style: GoogleFonts.dmSans(
-                fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
-          ),
-          style: FilledButton.styleFrom(
-            backgroundColor:
-                _saved ? Colors.green.shade600 : CueColors.inkNavy,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12)),
+        child: SizedBox(
+          height: 52,
+          child: FilledButton.icon(
+            onPressed: _saved || _isSaving ? null : _saveSession,
+            icon: _isSaving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : Icon(_saved ? Icons.check_rounded : Icons.save_outlined,
+                    size: 18, color: Colors.white),
+            label: Text(_saved ? 'Saved' : 'Save to Records'),
+            style: FilledButton.styleFrom(
+              backgroundColor:
+                  _saved ? CueColors.success : CueColors.accent,
+            ),
           ),
         ),
       ),
     ]);
   }
 
-  // ── Error card ────────────────────────────────────────────────────────────────
   Widget _buildErrorCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: CueColors.errorRed.withOpacity(0.07),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: CueColors.errorRed.withOpacity(0.3)),
+        color: CueColors.coral.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CueColors.coral.withOpacity(0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Icon(Icons.warning_amber_rounded,
-                color: CueColors.errorRed, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              'Unable to process session',
-              style: GoogleFonts.dmSans(
-                  fontWeight: FontWeight.w700,
-                  color: CueColors.errorRed,
-                  fontSize: 14),
+          Text(
+            'Unable to process session',
+            style: GoogleFonts.fraunces(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: CueColors.coral,
             ),
-          ]),
+          ),
           const SizedBox(height: 8),
           Text(
             _statusMessage,
-            style: GoogleFonts.dmSans(
-                color: CueColors.errorRed, fontSize: 13, height: 1.5),
+            style: GoogleFonts.inter(
+              color: CueColors.inkPrimary,
+              fontSize: 14,
+              height: 1.5,
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           OutlinedButton(
             onPressed: _reset,
             style: OutlinedButton.styleFrom(
-              foregroundColor: CueColors.errorRed,
-              side: BorderSide(color: CueColors.errorRed.withOpacity(0.4)),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+              foregroundColor: CueColors.coral,
+              side: BorderSide(color: CueColors.coral.withOpacity(0.4)),
             ),
-            child: Text('Try Again',
-                style: GoogleFonts.dmSans(fontWeight: FontWeight.w600)),
+            child: const Text('Try Again'),
           ),
         ],
       ),

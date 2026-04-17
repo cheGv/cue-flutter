@@ -32,13 +32,12 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   late final TextEditingController _promptedController;
   late final TextEditingController _nextFocusController;
 
-  late bool   _goalMet;
+  late bool _goalMet;
   late String _clientAffect;
-  bool _isSaving       = false;
+  bool _isSaving = false;
   bool _isSavingRecord = false;
-  bool _isPrefilled    = false;
+  bool _isPrefilled = false;
 
-  // Affect options: value → label/colour
   static const _affectOptions = ['Regulated', 'Mixed', 'Dysregulated'];
 
   @override
@@ -47,24 +46,33 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     final p = widget.prefillData;
     _isPrefilled = p != null;
 
-    _selectedDate       = _parseDate(p?['date']) ?? DateTime.now();
-    _goalController     = TextEditingController(text: p?['target_behaviour']?.toString() ?? '');
-    _activityController = TextEditingController(text: p?['activity_name']?.toString() ?? '');
+    _selectedDate = _parseDate(p?['date']) ?? DateTime.now();
+    _goalController = TextEditingController(
+        text: p?['target_behaviour']?.toString() ?? '');
+    _activityController =
+        TextEditingController(text: p?['activity_name']?.toString() ?? '');
     _attemptsController = TextEditingController(
         text: p?['attempts'] != null ? '${p!['attempts']}' : '');
     _independentController = TextEditingController(
-        text: p?['independent_responses'] != null ? '${p!['independent_responses']}' : '');
+        text: p?['independent_responses'] != null
+            ? '${p!['independent_responses']}'
+            : '');
     _promptedController = TextEditingController(
-        text: p?['prompted_responses'] != null ? '${p!['prompted_responses']}' : '');
-    _nextFocusController =
-        TextEditingController(text: p?['next_session_focus']?.toString() ?? '');
+        text: p?['prompted_responses'] != null
+            ? '${p!['prompted_responses']}'
+            : '');
+    _nextFocusController = TextEditingController(
+        text: p?['next_session_focus']?.toString() ?? '');
 
     final gm = p?['goal_met'];
     _goalMet = gm == true || gm == 'yes';
 
     final affect = p?['client_affect']?.toString() ?? 'Regulated';
-    final normalised = affect[0].toUpperCase() + affect.substring(1);
-    _clientAffect = _affectOptions.contains(normalised) ? normalised : 'Regulated';
+    final normalised = affect.isNotEmpty
+        ? affect[0].toUpperCase() + affect.substring(1)
+        : 'Regulated';
+    _clientAffect =
+        _affectOptions.contains(normalised) ? normalised : 'Regulated';
   }
 
   @override
@@ -92,7 +100,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: CueColors.inkNavy,
+            primary: CueColors.accent,
             onPrimary: Colors.white,
           ),
         ),
@@ -107,7 +115,9 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     if (raw == null) return null;
     if (raw is Map<String, dynamic>) return raw;
     if (raw is String) {
-      try { return jsonDecode(raw) as Map<String, dynamic>; } catch (_) {}
+      try {
+        return jsonDecode(raw) as Map<String, dynamic>;
+      } catch (_) {}
     }
     return null;
   }
@@ -134,8 +144,10 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
         'target_behaviour': _goalController.text.trim(),
         'activity_name': _activityController.text.trim(),
         'attempts': int.tryParse(_attemptsController.text.trim()) ?? 0,
-        'independent_responses': int.tryParse(_independentController.text.trim()) ?? 0,
-        'prompted_responses': int.tryParse(_promptedController.text.trim()) ?? 0,
+        'independent_responses':
+            int.tryParse(_independentController.text.trim()) ?? 0,
+        'prompted_responses':
+            int.tryParse(_promptedController.text.trim()) ?? 0,
         'goal_met': _goalMet ? 'yes' : 'not_yet',
         'client_affect': _clientAffect.toLowerCase(),
         'next_session_focus': _nextFocusController.text.trim(),
@@ -160,9 +172,9 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   Future<void> _saveToRecords() async {
     setState(() => _isSavingRecord = true);
     try {
-      final p       = widget.prefillData;
-      final userId  = _supabase.auth.currentUser?.id;
-      final soap    = _parsedSoap();
+      final p = widget.prefillData;
+      final userId = _supabase.auth.currentUser?.id;
+      final soap = _parsedSoap();
       final soapJson = soap != null ? jsonEncode(soap) : null;
 
       await _supabase.from('sessions').insert({
@@ -189,142 +201,120 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     }
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final soap    = _parsedSoap();
+    final soap = _parsedSoap();
     final summary = _parentSummaryText();
 
     return Scaffold(
-      backgroundColor: CueColors.softWhite,
+      backgroundColor: CueColors.background,
       appBar: AppBar(
-        title: Text(
-          'New Session — ${widget.clientName}',
-          style: GoogleFonts.dmSans(
-              color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
-        ),
-        backgroundColor: CueColors.inkNavy,
-        foregroundColor: Colors.white,
+        title: const Text('New Session'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              widget.clientName,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: CueColors.inkSecondary,
+                letterSpacing: 0.3,
+              ),
+            ),
+            const SizedBox(height: 8),
 
-            // ── Pre-fill banner ─────────────────────────────────────────
             if (_isPrefilled) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: CueColors.signalTeal.withOpacity(0.08),
+                  color: CueColors.accent.withOpacity(0.04),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: CueColors.signalTeal.withOpacity(0.3)),
+                  border: Border.all(color: CueColors.divider),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.auto_awesome,
-                        size: 16, color: CueColors.signalTeal),
-                    const SizedBox(width: 8),
+                    const Icon(Icons.auto_awesome_outlined,
+                        size: 16, color: CueColors.accent),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Fields pre-filled from your narration — please review before saving.',
-                        style: GoogleFonts.dmSans(
-                            fontSize: 13, color: CueColors.inkNavy),
+                        'Fields pre-filled from narration — please review.',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: CueColors.inkPrimary,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
             ],
 
-            // ── SOAP note (pre-fill) ────────────────────────────────────
             if (_isPrefilled && soap != null) ...[
               _buildSoapNote(soap),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
 
-            // ── Parent summary (pre-fill) ──────────────────────────────
             if (_isPrefilled && summary != null && summary.isNotEmpty) ...[
-              CueTheme.sectionLabel('Parent Summary'),
+              CueTheme.eyebrow('Parent Summary'),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: CueColors.surfaceWhite,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: CueColors.inkNavy.withOpacity(0.15)),
+                  color: CueColors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: CueColors.divider),
                 ),
-                child: Text(summary,
-                    style: GoogleFonts.dmSans(
-                        fontSize: 14, height: 1.55, color: CueColors.inkNavy)),
+                child: Text(
+                  summary,
+                  style: GoogleFonts.inter(
+                      fontSize: 15, height: 1.55, color: CueColors.inkPrimary),
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
 
-            // ── Date ───────────────────────────────────────────────────
-            CueTheme.sectionLabel('Session Date'),
-            const SizedBox(height: 10),
-            GestureDetector(
-              onTap: _pickDate,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: CueColors.surfaceWhite,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: CueColors.inkNavy.withOpacity(0.2)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.calendar_today,
-                        size: 18, color: CueColors.signalTeal),
-                    const SizedBox(width: 12),
-                    Text(
-                      '${_selectedDate.day.toString().padLeft(2, '0')} '
-                      '${_monthName(_selectedDate.month)} '
-                      '${_selectedDate.year}',
-                      style: GoogleFonts.dmSans(
-                          fontSize: 15, color: CueColors.inkNavy),
-                    ),
-                    const Spacer(),
-                    Icon(Icons.edit, size: 16, color: CueColors.textMid),
-                  ],
-                ),
-              ),
-            ),
+            // ── Session Date ──────────────────────────────────────────────
+            _dateRow(),
 
-            const SizedBox(height: 24),
-            CueTheme.sectionLabel('Goals & Activity'),
-            const SizedBox(height: 12),
-            _textField(_goalController, 'Goal / Target Behaviour',
+            const SizedBox(height: 40),
+
+            // ── Goals ─────────────────────────────────────────────────────
+            CueTheme.sectionTitle('Goals'),
+            const SizedBox(height: 20),
+            _textField(_goalController, 'Goal / target behaviour',
                 hint: 'e.g. Request items using core vocabulary', maxLines: 2),
-            const SizedBox(height: 16),
-            _textField(_activityController, 'Activity Name',
+            const SizedBox(height: 20),
+            _textField(_activityController, 'Activity name',
                 hint: 'e.g. Snack time, cause & effect toy play'),
 
-            // ── Trial data cards ────────────────────────────────────────
-            const SizedBox(height: 24),
-            CueTheme.sectionLabel('Trial Data'),
-            const SizedBox(height: 12),
+            const SizedBox(height: 40),
+
+            // ── Trial data ────────────────────────────────────────────────
+            CueTheme.sectionTitle('Trial data'),
+            const SizedBox(height: 20),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: _TrialCard(
+                  child: _TrialNumber(
                     controller: _attemptsController,
                     label: 'Attempts',
                   ),
                 ),
-                const SizedBox(width: 10),
                 Expanded(
-                  child: _TrialCard(
+                  child: _TrialNumber(
                     controller: _independentController,
                     label: 'Independent',
                   ),
                 ),
-                const SizedBox(width: 10),
                 Expanded(
-                  child: _TrialCard(
+                  child: _TrialNumber(
                     controller: _promptedController,
                     label: 'Prompted',
                   ),
@@ -332,70 +322,74 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
               ],
             ),
 
-            // ── Outcomes ───────────────────────────────────────────────
-            const SizedBox(height: 24),
-            CueTheme.sectionLabel('Outcomes'),
-            const SizedBox(height: 12),
+            const SizedBox(height: 40),
 
-            // Goal met toggle
-            Container(
-              decoration: BoxDecoration(
-                color: CueColors.surfaceWhite,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: CueColors.inkNavy.withOpacity(0.2)),
-              ),
-              child: SwitchListTile(
-                title: Text('Goal Met',
-                    style: GoogleFonts.dmSans(
-                        fontSize: 15, color: CueColors.inkNavy)),
-                subtitle: Text(
-                  _goalMet ? 'Yes' : 'Not yet',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    color: _goalMet ? CueColors.warmAmber : CueColors.textMid,
-                    fontWeight: _goalMet ? FontWeight.w600 : FontWeight.normal,
+            // ── Outcomes ──────────────────────────────────────────────────
+            CueTheme.sectionTitle('Outcomes'),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Goal met',
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            color: CueColors.inkPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _goalMet ? 'Yes' : 'Not yet',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: CueColors.inkSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                value: _goalMet,
-                onChanged: (v) => setState(() => _goalMet = v),
-                activeColor: CueColors.warmAmber,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  Switch(
+                    value: _goalMet,
+                    onChanged: (v) => setState(() => _goalMet = v),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
 
-            // Affect — segmented buttons
-            Text('Client Affect',
-                style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: CueColors.textMid)),
-            const SizedBox(height: 8),
+            Text(
+              'Client affect',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: CueColors.inkSecondary,
+                letterSpacing: 0.2,
+              ),
+            ),
+            const SizedBox(height: 12),
             _AffectSelector(
               selected: _clientAffect,
               onChanged: (v) => setState(() => _clientAffect = v),
             ),
 
-            const SizedBox(height: 24),
-            CueTheme.sectionLabel('Next Steps'),
-            const SizedBox(height: 12),
-            _textField(_nextFocusController, 'Next Session Focus',
+            const SizedBox(height: 40),
+
+            // ── Next steps ────────────────────────────────────────────────
+            CueTheme.sectionTitle('Next steps'),
+            const SizedBox(height: 20),
+            _textField(_nextFocusController, 'Next session focus',
                 hint: 'What to prioritise next session', maxLines: 2),
 
-            const SizedBox(height: 36),
+            const SizedBox(height: 48),
 
-            // ── Save button ─────────────────────────────────────────────
             SizedBox(
-              width: double.infinity,
               height: 52,
               child: FilledButton(
                 onPressed: _isSaving ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: CueColors.inkNavy,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
                 child: _isSaving
                     ? const SizedBox(
                         width: 20,
@@ -403,48 +397,27 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : Text(
-                        'Save Session',
-                        style: GoogleFonts.dmSans(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white),
-                      ),
+                    : const Text('Save Session'),
               ),
             ),
-            const SizedBox(height: 16),
 
-            // Save to Records (narrated sessions only)
             if (_isPrefilled) ...[
+              const SizedBox(height: 12),
               SizedBox(
-                width: double.infinity,
+                height: 52,
                 child: OutlinedButton.icon(
                   onPressed: _isSavingRecord ? null : _saveToRecords,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: CueColors.inkNavy,
-                    side: BorderSide(
-                        color: CueColors.inkNavy.withOpacity(0.4)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                  ),
                   icon: _isSavingRecord
                       ? const SizedBox(
                           width: 18,
                           height: 18,
                           child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: CueColors.inkNavy),
+                              strokeWidth: 2, color: CueColors.inkPrimary),
                         )
-                      : const Icon(Icons.save_rounded, size: 18),
-                  label: Text(
-                    _isSavingRecord ? 'Saving…' : 'Save to Records',
-                    style: GoogleFonts.dmSans(
-                        fontSize: 15, fontWeight: FontWeight.w600),
-                  ),
+                      : const Icon(Icons.save_outlined, size: 18),
+                  label: Text(_isSavingRecord ? 'Saving…' : 'Save to Records'),
                 ),
               ),
-              const SizedBox(height: 24),
             ],
           ],
         ),
@@ -452,63 +425,95 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     );
   }
 
-  // ── SOAP note display (for pre-filled narrated sessions) ─────────────────────
+  Widget _dateRow() {
+    return InkWell(
+      onTap: _pickDate,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: const BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: CueColors.divider, width: 1),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Session date',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: CueColors.inkSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${_selectedDate.day.toString().padLeft(2, '0')} '
+                    '${_monthName(_selectedDate.month)} '
+                    '${_selectedDate.year}',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      color: CueColors.inkPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.calendar_today_outlined,
+                size: 18, color: CueColors.inkTertiary),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSoapNote(Map<String, dynamic> soap) {
     final sections = [
-      ('SUBJECTIVE', soap['subjective']?.toString() ?? ''),
-      ('OBJECTIVE',  soap['objective']?.toString() ?? ''),
-      ('ASSESSMENT', soap['assessment']?.toString() ?? ''),
-      ('PLAN',       soap['plan']?.toString() ?? ''),
+      ('Subjective', soap['subjective']?.toString() ?? ''),
+      ('Objective', soap['objective']?.toString() ?? ''),
+      ('Assessment', soap['assessment']?.toString() ?? ''),
+      ('Plan', soap['plan']?.toString() ?? ''),
     ];
-    final colors = CueTheme.soapColors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CueTheme.sectionLabel('SOAP Note'),
+        CueTheme.eyebrow('SOAP Note'),
         const SizedBox(height: 12),
-        ...List.generate(sections.length, (i) {
-          final label = sections[i].$1;
-          final text  = sections[i].$2;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            decoration: BoxDecoration(
-              color: CueColors.surfaceWhite,
-              borderRadius: BorderRadius.circular(12),
-              border: Border(left: BorderSide(color: colors[i], width: 4)),
-              boxShadow: [
-                BoxShadow(
-                  color: CueColors.inkNavy.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: colors[i],
-                    letterSpacing: 0.8,
+        ...sections.map((s) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              decoration: BoxDecoration(
+                color: CueColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: CueColors.divider),
+              ),
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    s.$1,
+                    style: GoogleFonts.fraunces(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: CueColors.inkPrimary,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  text.isNotEmpty ? text : '—',
-                  style: GoogleFonts.dmSans(
-                      fontSize: 14,
+                  const SizedBox(height: 8),
+                  Text(
+                    s.$2.isNotEmpty ? s.$2 : '—',
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
                       height: 1.55,
-                      color: CueColors.inkNavy),
-                ),
-              ],
-            ),
-          );
-        }),
+                      color: CueColors.inkPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            )),
       ],
     );
   }
@@ -523,8 +528,11 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       controller: controller,
       maxLines: maxLines,
       textCapitalization: TextCapitalization.sentences,
-      style: GoogleFonts.dmSans(fontSize: 15, color: CueColors.inkNavy),
-      decoration: CueTheme.inputDecoration(label, hint: hint),
+      style: GoogleFonts.inter(fontSize: 16, color: CueColors.inkPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+      ),
     );
   }
 
@@ -537,18 +545,18 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   }
 }
 
-// ── Trial data card ────────────────────────────────────────────────────────────
-class _TrialCard extends StatefulWidget {
+// ── Trial data: large Fraunces number + Inter label ────────────────────────────
+class _TrialNumber extends StatefulWidget {
   final TextEditingController controller;
   final String label;
 
-  const _TrialCard({required this.controller, required this.label});
+  const _TrialNumber({required this.controller, required this.label});
 
   @override
-  State<_TrialCard> createState() => _TrialCardState();
+  State<_TrialNumber> createState() => _TrialNumberState();
 }
 
-class _TrialCardState extends State<_TrialCard> {
+class _TrialNumberState extends State<_TrialNumber> {
   @override
   void initState() {
     super.initState();
@@ -557,26 +565,20 @@ class _TrialCardState extends State<_TrialCard> {
 
   @override
   Widget build(BuildContext context) {
-    final value = widget.controller.text;
-    return Container(
-      decoration: BoxDecoration(
-        color: CueColors.surfaceWhite,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: CueColors.inkNavy.withOpacity(0.2)),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      child: Column(
-        children: [
-          // Large editable number
-          TextField(
+    return Column(
+      children: [
+        SizedBox(
+          height: 48,
+          child: TextField(
             controller: widget.controller,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             textAlign: TextAlign.center,
-            style: GoogleFonts.dmSans(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: CueColors.inkNavy,
+            style: GoogleFonts.fraunces(
+              fontSize: 32,
+              fontWeight: FontWeight.w500,
+              color: CueColors.inkPrimary,
+              height: 1,
             ),
             decoration: const InputDecoration(
               border: InputBorder.none,
@@ -588,70 +590,68 @@ class _TrialCardState extends State<_TrialCard> {
               hintText: '0',
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            widget.label,
-            style: GoogleFonts.dmSans(
-              fontSize: 11,
-              color: CueColors.textMid,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          widget.label.toUpperCase(),
+          style: GoogleFonts.inter(
+            fontSize: 11,
+            color: CueColors.inkSecondary,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 1.2,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-// ── Affect segmented selector ──────────────────────────────────────────────────
+// ── Affect selector: text + underline indicator ────────────────────────────────
 class _AffectSelector extends StatelessWidget {
   final String selected;
   final ValueChanged<String> onChanged;
 
-  static const _options = [
-    ('Regulated',    CueColors.signalTeal),
-    ('Mixed',        CueColors.warmAmber),
-    ('Dysregulated', CueColors.errorRed),
-  ];
+  static const _options = ['Regulated', 'Mixed', 'Dysregulated'];
 
   const _AffectSelector({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: List.generate(_options.length, (i) {
-        final label   = _options[i].$1;
-        final color   = _options[i].$2;
+      children: _options.map((label) {
         final isSelected = selected == label;
-        final isLast  = i == _options.length - 1;
-
         return Expanded(
-          child: GestureDetector(
+          child: InkWell(
             onTap: () => onChanged(label),
-            child: Container(
-              margin: EdgeInsets.only(right: isLast ? 0 : 8),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
-                color: isSelected ? color : CueColors.surfaceWhite,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isSelected ? color : CueColors.inkNavy.withOpacity(0.2),
+                border: Border(
+                  bottom: BorderSide(
+                    color: isSelected
+                        ? CueColors.accent
+                        : CueColors.divider,
+                    width: isSelected ? 2 : 1,
+                  ),
                 ),
               ),
               child: Text(
                 label,
                 textAlign: TextAlign.center,
-                style: GoogleFonts.dmSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : CueColors.textMid,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: isSelected
+                      ? CueColors.inkPrimary
+                      : CueColors.inkSecondary,
                 ),
               ),
             ),
           ),
         );
-      }),
+      }).toList(),
     );
   }
 }

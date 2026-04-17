@@ -12,14 +12,14 @@ class AddClientScreen extends StatefulWidget {
 }
 
 class _AddClientScreenState extends State<AddClientScreen> {
-  final _supabase            = Supabase.instance.client;
-  final _nameController      = TextEditingController();
-  final _ageController       = TextEditingController();
+  final _supabase = Supabase.instance.client;
+  final _nameController = TextEditingController();
+  final _ageController = TextEditingController();
   final _diagnosisController = TextEditingController();
-  final _modalityController  = TextEditingController();
-  final _notesController     = TextEditingController();
+  final _modalityController = TextEditingController();
+  final _notesController = TextEditingController();
 
-  bool _usesAac  = false;
+  bool _usesAac = false;
   bool _isSaving = false;
 
   @override
@@ -33,7 +33,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
   }
 
   Future<void> _save() async {
-    final name    = _nameController.text.trim();
+    final name = _nameController.text.trim();
     final ageText = _ageController.text.trim();
 
     if (name.isEmpty) {
@@ -76,106 +76,94 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final fieldStyle =
+        GoogleFonts.inter(fontSize: 16, color: CueColors.inkPrimary);
+
     return Scaffold(
-      backgroundColor: CueColors.softWhite,
+      backgroundColor: CueColors.background,
       appBar: AppBar(
-        title: Text('Add Client',
-            style: GoogleFonts.dmSans(
-                color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
-        backgroundColor: CueColors.inkNavy,
-        foregroundColor: Colors.white,
+        title: const Text('New Client'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 32, 24, 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            CueTheme.sectionLabel('Required'),
-            const SizedBox(height: 12),
+            CueTheme.sectionTitle('Profile'),
+            const SizedBox(height: 20),
             TextField(
               controller: _nameController,
-              decoration: CueTheme.inputDecoration('Full Name *'),
               textCapitalization: TextCapitalization.words,
-              style: GoogleFonts.dmSans(fontSize: 15, color: CueColors.inkNavy),
+              style: fieldStyle,
+              decoration: const InputDecoration(labelText: 'Full name'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextField(
               controller: _ageController,
-              decoration: CueTheme.inputDecoration('Age *'),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: GoogleFonts.dmSans(fontSize: 15, color: CueColors.inkNavy),
+              style: fieldStyle,
+              decoration: const InputDecoration(labelText: 'Age'),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 40),
 
-            CueTheme.sectionLabel('Clinical Details'),
-            const SizedBox(height: 12),
+            CueTheme.sectionTitle('Clinical detail'),
+            const SizedBox(height: 20),
             TextField(
               controller: _diagnosisController,
-              decoration: CueTheme.inputDecoration('Diagnosis'),
               textCapitalization: TextCapitalization.sentences,
-              style: GoogleFonts.dmSans(fontSize: 15, color: CueColors.inkNavy),
+              style: fieldStyle,
+              decoration: const InputDecoration(labelText: 'Diagnosis'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             TextField(
               controller: _modalityController,
-              decoration: CueTheme.inputDecoration(
-                'Primary Communication Modality',
-                hint: 'e.g. Verbal, AAC device, PECS, Sign',
+              style: fieldStyle,
+              decoration: const InputDecoration(
+                labelText: 'Primary communication modality',
+                hintText: 'Verbal, AAC device, PECS, Sign…',
               ),
-              style: GoogleFonts.dmSans(fontSize: 15, color: CueColors.inkNavy),
             ),
-            const SizedBox(height: 12),
-
-            // AAC toggle
-            Container(
-              decoration: BoxDecoration(
-                color: CueColors.surfaceWhite,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                    color: CueColors.inkNavy.withOpacity(0.2)),
-              ),
-              child: SwitchListTile(
-                title: Text('Uses AAC Device',
-                    style: GoogleFonts.dmSans(
-                        fontSize: 15, color: CueColors.inkNavy)),
-                subtitle: Text(
-                  _usesAac ? 'Yes' : 'No',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    color: _usesAac ? CueColors.signalTeal : CueColors.textMid,
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Uses AAC device',
+                      style: GoogleFonts.inter(
+                        fontSize: 15,
+                        color: CueColors.inkPrimary,
+                      ),
+                    ),
                   ),
-                ),
-                value: _usesAac,
-                onChanged: (v) => setState(() => _usesAac = v),
-                activeColor: CueColors.signalTeal,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
+                  Switch(
+                    value: _usesAac,
+                    onChanged: (v) => setState(() => _usesAac = v),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 28),
+            const SizedBox(height: 40),
 
-            CueTheme.sectionLabel('Additional Notes'),
-            const SizedBox(height: 12),
+            CueTheme.sectionTitle('Notes'),
+            const SizedBox(height: 20),
             TextField(
               controller: _notesController,
-              decoration: CueTheme.inputDecoration('Notes'),
               maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
-              style: GoogleFonts.dmSans(fontSize: 15, color: CueColors.inkNavy),
+              style: fieldStyle,
+              decoration: const InputDecoration(
+                labelText: 'Additional notes',
+              ),
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 48),
 
             SizedBox(
-              width: double.infinity,
               height: 52,
               child: FilledButton(
                 onPressed: _isSaving ? null : _save,
-                style: FilledButton.styleFrom(
-                  backgroundColor: CueColors.inkNavy,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
                 child: _isSaving
                     ? const SizedBox(
                         width: 20,
@@ -183,16 +171,9 @@ class _AddClientScreenState extends State<AddClientScreen> {
                         child: CircularProgressIndicator(
                             color: Colors.white, strokeWidth: 2),
                       )
-                    : Text(
-                        'Save Client',
-                        style: GoogleFonts.dmSans(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white),
-                      ),
+                    : const Text('Save Client'),
               ),
             ),
-            const SizedBox(height: 24),
           ],
         ),
       ),

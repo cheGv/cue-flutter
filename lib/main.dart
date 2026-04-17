@@ -9,7 +9,8 @@ Future<void> main() async {
 
   await Supabase.initialize(
     url: 'https://cgnjbjbargkxtcnafxaa.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnbmpiamJhcmdreHRjbmFmeGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODQyNzcsImV4cCI6MjA5MDg2MDI3N30.AWmyJoSuXUi7X74vBN2E1Jv7mStsjepKqRFyA6iFfmE',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnbmpiamJhcmdreHRjbmFmeGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODQyNzcsImV4cCI6MjA5MDg2MDI3N30.AWmyJoSuXUi7X74vBN2E1Jv7mStsjepKqRFyA6iFfmE',
   );
 
   final session = Supabase.instance.client.auth.currentSession;
@@ -27,24 +28,9 @@ class CueApp extends StatelessWidget {
       title: 'Cue AI',
       debugShowCheckedModeBanner: false,
       theme: CueTheme.theme,
+      // Global fade page transitions are configured in CueTheme.theme
+      // via pageTransitionsTheme — no custom onGenerateRoute needed.
       home: hasSession ? const ClientRosterScreen() : const LoginScreen(),
-      onGenerateRoute: (settings) => PageRouteBuilder<dynamic>(
-        settings: settings,
-        transitionDuration: const Duration(milliseconds: 280),
-        reverseTransitionDuration: const Duration(milliseconds: 280),
-        pageBuilder: (_, __, ___) => const SizedBox.shrink(),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) =>
-            SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(1.0, 0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeOutCubic,
-              )),
-              child: child,
-            ),
-      ),
     );
   }
 }
