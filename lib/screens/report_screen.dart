@@ -44,16 +44,21 @@ class _ReportScreenState extends State<ReportScreen> {
       List<Map<String, dynamic>> goals = [];
       if (widget.clientId != null) {
         try {
+          final cid = widget.clientId!.toString();
+          print('[ReportScreen] Fetching goals for clientId: $cid');
           final goalsResponse = await _supabase
               .from('goals')
               .select('goal_text, domain, target_accuracy')
-              .eq('client_id', widget.clientId!)
-              .eq('status', 'active')
-              .isFilter('deleted_at', null);
+              .eq('client_id', cid)
+              .eq('status', 'active');
           goals = List<Map<String, dynamic>>.from(goalsResponse);
-        } catch (_) {
-          // Goals fetch failure is non-blocking
+          print('[ReportScreen] Goals fetched: $goals');
+        } catch (e) {
+          // Non-blocking — report still generates without goals
+          print('[ReportScreen] Goals fetch failed: $e');
         }
+      } else {
+        print('[ReportScreen] clientId is null — goals skipped');
       }
 
       final s = widget.session;
