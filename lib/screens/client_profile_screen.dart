@@ -19,12 +19,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   final _supabase = Supabase.instance.client;
   late Future<List<Map<String, dynamic>>> _sessionsFuture;
   late Future<List<Map<String, dynamic>>> _goalsFuture;
+  late Future<List<Map<String, dynamic>>> _achievedGoalsFuture;
+  bool _showAchievedGoals = false;
 
   @override
   void initState() {
     super.initState();
     _sessionsFuture = _fetchSessions();
     _goalsFuture = _fetchGoals();
+    _achievedGoalsFuture = _fetchAchievedGoals();
   }
 
   Future<List<Map<String, dynamic>>> _fetchSessions() async {
@@ -44,6 +47,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         .eq('status', 'active')
         .isFilter('deleted_at', null)
         .order('created_at', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAchievedGoals() async {
+    final response = await _supabase
+        .from('goals')
+        .select()
+        .eq('client_id', widget.client['id'].toString())
+        .eq('status', 'achieved')
+        .isFilter('deleted_at', null)
+        .order('created_at', ascending: false);
     return List<Map<String, dynamic>>.from(response);
   }
 
@@ -68,7 +82,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           .from('goals')
           .update({'status': 'achieved'})
           .eq('id', goalId);
-      setState(() => _goalsFuture = _fetchGoals());
+      setState(() {
+        _goalsFuture = _fetchGoals();
+        _achievedGoalsFuture = _fetchAchievedGoals();
+      });
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -202,12 +219,180 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             ),
           ),
 
-          // Goals section
+          // Active Goals section
           _GoalsSection(
             goalsFuture: _goalsFuture,
             onAddGoal: () => _openAddGoal(),
             onEditGoal: (goal) => _openAddGoal(goal: goal),
             onMarkAchieved: (id) => _markGoalAchieved(id),
+          ),
+
+          // Achieved Goals section
+          FutureBuilder<List<Map<String, dynamic>>>(
+            future: _achievedGoalsFuture,
+            builder: (context, snapshot) {
+              final goals = snapshot.data ?? [];
+              final count = goals.length;
+              // Hide entirely while loading and if there are none
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  count == 0) {
+                return const SizedBox.shrink();
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header row
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(48, 4, 40, 4),
+                    child: Row(
+                      children: [
+                        Text(
+                          'Achieved Goals',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => setState(
+                              () => _showAchievedGoals = !_showAchievedGoals),
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF00897B),
+                          ),
+                          child: Text(
+                            _showAchievedGoals
+                                ? 'Hide'
+                                : 'Show${count > 0 ? ' ($count)' : ''}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Expanded list (only when toggled open)
+                  if (_showAchievedGoals) ...[
+                    if (snapshot.connectionState ==
+                        ConnectionState.waiting)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child:
+                            Center(child: CircularProgressIndicator()),
+                      )
+                    else if (goals.isEmpty)
+                      Padding(
+                        padding:
+                            const EdgeInsets.fromLTRB(48, 4, 48, 8),
+                        child: Text(
+                          'No achieved goals yet.',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 13,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    else
+                      ListView.builder(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 48),
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: goals.length,
+                        itemBuilder: (context, i) {
+                          final goal = goals[i];
+                          final domain =
+                              goal['domain'] as String? ?? '';
+                          final accuracy =
+                              goal['target_accuracy'] ?? 80;
+                          final goalText =
+                              goal['goal_text'] as String? ?? '';
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                  color: Colors.grey.shade200),
+                            ),
+                            color: Colors.white,
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  // Domain chip (grey) + accuracy
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade400,
+                                          borderRadius:
+                                              BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          domain,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      const Spacer(),
+                                      Text(
+                                        '$accuracy% target',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  // Goal text + achieved badge
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          goalText,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            color: Color(0xFF1A1A2E),
+                                            height: 1.5,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        '✓ Achieved',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.green.shade600,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                  ],
+                  const SizedBox(height: 8),
+                ],
+              );
+            },
           ),
 
           // Sessions section
