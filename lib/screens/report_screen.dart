@@ -5,16 +5,19 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
 
 class ReportScreen extends StatefulWidget {
   final Map<String, dynamic> session;
   final String clientName;
+  final String? clientId;
 
   const ReportScreen({
     super.key,
     required this.session,
     required this.clientName,
+    this.clientId,
   });
 
   @override
@@ -25,6 +28,7 @@ class _ReportScreenState extends State<ReportScreen> {
   static const _proxyUrl =
       'https://cue-ai-proxy.onrender.com/generate-report';
 
+  final _supabase = Supabase.instance.client;
   bool _isLoading = false;
   String? _report;
   String? _error;
@@ -36,6 +40,22 @@ class _ReportScreenState extends State<ReportScreen> {
       _report = null;
     });
     try {
+      // Fetch active goals to enrich the report prompt
+      List<Map<String, dynamic>> goals = [];
+      if (widget.clientId != null) {
+        try {
+          final goalsResponse = await _supabase
+              .from('goals')
+              .select('goal_text, domain, target_accuracy')
+              .eq('client_id', widget.clientId!)
+              .eq('status', 'active')
+              .isFilter('deleted_at', null);
+          goals = List<Map<String, dynamic>>.from(goalsResponse);
+        } catch (_) {
+          // Goals fetch failure is non-blocking
+        }
+      }
+
       final s = widget.session;
       final date = '${s['date'] ?? ''}';
       final goal = '${s['target_behaviour'] ?? ''}';
@@ -48,13 +68,34 @@ class _ReportScreenState extends State<ReportScreen> {
       final notes = '${s['next_session_focus'] ?? ''}';
       final name = widget.clientName;
 
-      final bodyString =
-          '{"clientName":"$name","session":{"date":"$date","goal":"$goal","activity":"$activity","totalTrials":"$attempts","independentTrials":"$independent","promptedTrials":"$prompted","goalMet":"$goalMet","affect":"$affect","notes":"$notes"}}';
+      final goalsList = goals
+          .map((g) => {
+                'domain': g['domain'],
+                'goal': g['goal_text'],
+                'target': '${g['target_accuracy']}%',
+              })
+          .toList();
+
+      final bodyMap = {
+        'clientName': name,
+        'session': {
+          'date': date,
+          'goal': goal,
+          'activity': activity,
+          'totalTrials': attempts,
+          'independentTrials': independent,
+          'promptedTrials': prompted,
+          'goalMet': goalMet,
+          'affect': affect,
+          'notes': notes,
+        },
+        'goals': goalsList,
+      };
 
       final response = await http.post(
         Uri.parse(_proxyUrl),
         headers: {'Content-Type': 'application/json'},
-        body: bodyString,
+        body: jsonEncode(bodyMap),
       );
 
       if (response.statusCode == 200) {
