@@ -99,7 +99,10 @@ A row in `stg_evidence` represents one session's measurable contribution to an S
 ---
 
 ## 7. Database Schema — Target State
-
+> ⚠️ Schema drift note (confirmed 19 Apr 2026):
+> Prototype uses `clients` (not `patients`) and `sessions.id` is `bigint` (not `uuid`).
+> `short_term_goals` uses `long_term_goal_id`, `client_id`, `user_id` as FK column names.
+> Flutter data layer must match actual Supabase column names, not §7 canonical names.
 > DDL below is the canonical target. Run it via Supabase MCP `apply_migration`.
 > For the immediate additive migration (STG + evidence + attestation), see §8.
 
