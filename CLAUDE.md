@@ -5,6 +5,24 @@
 
 ---
 
+## 0. The Interface Motto
+
+> "You have one user. The SLP. What is the one thing she needs to
+> feel when she opens this? Until you know that feeling, you're
+> just building features. Start over from the feeling, not the
+> features."
+> — Steve Jobs lens on Cue
+
+The feeling Cue must produce:
+"This system knows my client better than my paper notes ever
+could, and it took me no extra work to get there."
+
+Every UI decision passes this filter before any other.
+The enemy of that feeling: clutter, ambiguity, anything that
+makes the SLP hunt for a number or re-read a label.
+
+---
+
 ## 1. Product Identity
 
 **Cue** is India's first Clinical Operating System for Speech-Language Pathologists (SLPs). It is not a telehealth platform, not a note-taker, not an EMR. It is the **memory and intelligence layer** for an SLP's full caseload.
@@ -77,12 +95,14 @@ Every STG has:
 - A **target behavior** (what)
 - A **context** (where/how: structured drill, play-based, natural routine)
 - A **mastery criterion** (accuracy %, consecutive sessions, trials)
-- A **cue level** (current + initial, on the cue hierarchy)
+- A **support level** (current + initial, see §6.3)
 - A **domain** and **framework** tag
 
-### 6.3 Cue Hierarchy (controlled vocabulary)
-From least to most support:
+### 6.3 Support Level (controlled vocabulary)
+From least to most scaffolding:
 `independent` → `minimal` → `moderate` → `maximal` → `hand_over_hand`
+
+> **Neurodiversity-affirming framing:** the support level describes the degree of scaffolding the clinician brings to a communicative moment, not a behaviorist prompt hierarchy. "Maximal support" is not a failure state — it reflects the current level of co-regulation the client needs to access a target skill.
 
 ### 6.4 Domain (controlled vocabulary)
 `articulation`, `phonology`, `expressive_language`, `receptive_language`, `pragmatics`, `fluency`, `voice`, `motor_speech`, `feeding_swallowing`, `AAC_operational`, `AAC_linguistic`, `AAC_social`, `literacy`, `cognitive_communication`
@@ -387,7 +407,7 @@ create trigger trg_ltg_updated before update on long_term_goals
 ### 9.1 Anti-hallucination (applies to ALL clinical generation)
 - Never invent clinical observations not grounded in the Narrator transcript or session note input.
 - If data is missing, say "not documented" — never fabricate.
-- Structured fields (trials, accuracy, cue level) must be `null` if unextractable from source.
+- Structured fields (trials, accuracy, support level) must be `null` if unextractable from source.
 - `ai_confidence` must be populated for every `stg_evidence` row with `source = 'ai_extracted_*'`.
 
 ### 9.2 Clinician attestation (liability gate)
