@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/pre_session_brief.dart';
 import 'report_screen.dart';
 import 'add_session_screen.dart';
 import 'narrate_session_screen.dart';
@@ -219,6 +220,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 child: CustomScrollView(
                   slivers: [
                     SliverToBoxAdapter(child: _buildClientHeader(hPad)),
+                    SliverToBoxAdapter(child: _buildPreSessionBrief(hPad)),
                     SliverToBoxAdapter(child: _buildStgSpine(hPad)),
                     SliverToBoxAdapter(child: _buildSessionsSection(hPad)),
                     const SliverToBoxAdapter(child: SizedBox(height: 96)),
@@ -368,6 +370,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  // ── Pre-session brief ─────────────────────────────────────────────────────────
+
+  Widget _buildPreSessionBrief(double hPad) {
+    return Padding(
+      padding: EdgeInsets.fromLTRB(hPad, 20, hPad, 0),
+      child: PreSessionBrief(client: widget.client),
     );
   }
 
