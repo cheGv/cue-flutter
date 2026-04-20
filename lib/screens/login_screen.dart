@@ -83,7 +83,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 // Logo
                 const Text(
-                  'Cue AI',
+                  'Cue',
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/client_roster_screen.dart';
 import '../screens/narrator_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/settings_screen.dart';
 
 const double _kSidebarFull = 220;
 const double _kSidebarCollapsed = 56;
@@ -43,7 +44,7 @@ class MobileWall extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Cue AI',
+                'Cue',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 28,
@@ -201,6 +202,7 @@ const _kNavItems = [
   _NavItem(
       icon: Icons.people_outline_rounded, label: 'Clients', route: 'roster'),
   _NavItem(icon: Icons.mic_rounded, label: 'Narrator', route: 'narrator'),
+  _NavItem(icon: Icons.settings_outlined, label: 'Settings', route: 'settings'),
 ];
 
 class _AppSidebar extends StatelessWidget {
@@ -260,7 +262,7 @@ class _AppSidebar extends StatelessWidget {
               ),
             )
           : const Text(
-              'Cue AI',
+              'Cue',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -385,6 +387,12 @@ class _AppSidebar extends StatelessWidget {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const NarratorScreen()),
+        (_) => false,
+      );
+    } else if (item.route == 'settings') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const SettingsScreen()),
         (_) => false,
       );
     }

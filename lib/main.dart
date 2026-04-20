@@ -25,7 +25,7 @@ class CueApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Cue AI',
+      title: 'Cue',
       debugShowCheckedModeBanner: false,
       theme: CueTheme.theme,
       // Global fade page transitions are configured in CueTheme.theme

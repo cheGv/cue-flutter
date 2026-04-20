@@ -1,5 +1,5 @@
 // lib/theme/cue_theme.dart
-// Cue AI — Apple-inspired minimalist clinical design system.
+// Cue — Apple-inspired minimalist clinical design system.
 // Restraint is the design. Type-driven hierarchy. Hairlines over shadows.
 
 import 'package:flutter/material.dart';

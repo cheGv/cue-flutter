@@ -95,7 +95,7 @@ class _SignupScreenState extends State<SignupScreen> {
               children: [
                 // Logo
                 const Text(
-                  'Cue AI',
+                  'Cue',
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.bold,
