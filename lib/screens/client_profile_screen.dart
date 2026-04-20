@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
-import 'add_goal_screen.dart';
 import 'report_screen.dart';
 import 'add_session_screen.dart';
 import 'narrate_session_screen.dart';
@@ -44,10 +43,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // Secondary: session history
   late Future<List<Map<String, dynamic>>> _sessionsFuture;
 
-  // Legacy accordion: old goals table
-  late Future<List<Map<String, dynamic>>> _goalsFuture;
-  late Future<List<Map<String, dynamic>>> _achievedGoalsFuture;
-
   // Edit drawer state
   Map<String, dynamic>? _editingStg;
   Map<String, dynamic>? _editingLtg;
@@ -55,16 +50,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // LTG collapse state (ltg_id → expanded); default open
   final Map<String, bool> _ltgExpanded = {};
 
-  bool _showLtgs = false;
-  bool _showAchievedGoals = false;
-
   @override
   void initState() {
     super.initState();
-    _spineFuture         = _fetchSpine();
-    _sessionsFuture      = _fetchSessions();
-    _goalsFuture         = _fetchGoals();
-    _achievedGoalsFuture = _fetchAchievedGoals();
+    _spineFuture    = _fetchSpine();
+    _sessionsFuture = _fetchSessions();
   }
 
   // ── Data fetchers ────────────────────────────────────────────────────────────
@@ -98,28 +88,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return List<Map<String, dynamic>>.from(response);
   }
 
-  Future<List<Map<String, dynamic>>> _fetchGoals() async {
-    final response = await _supabase
-        .from('goals')
-        .select()
-        .eq('client_id', widget.client['id'].toString())
-        .eq('status', 'active')
-        .isFilter('deleted_at', null)
-        .order('created_at', ascending: true);
-    return List<Map<String, dynamic>>.from(response);
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchAchievedGoals() async {
-    final response = await _supabase
-        .from('goals')
-        .select()
-        .eq('client_id', widget.client['id'].toString())
-        .eq('status', 'achieved')
-        .isFilter('deleted_at', null)
-        .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
-  }
-
   // ── Navigation ───────────────────────────────────────────────────────────────
 
   void _openGoalAuthoring() {
@@ -133,40 +101,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         ),
       ),
     );
-  }
-
-  Future<void> _openAddGoal({Map<String, dynamic>? goal}) async {
-    final added = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddGoalScreen(
-          clientId: widget.client['id'].toString(),
-          goal: goal,
-        ),
-      ),
-    );
-    if (added == true) {
-      setState(() => _goalsFuture = _fetchGoals());
-    }
-  }
-
-  Future<void> _markGoalAchieved(String goalId) async {
-    try {
-      await _supabase
-          .from('goals')
-          .update({'status': 'achieved'})
-          .eq('id', goalId);
-      setState(() {
-        _goalsFuture         = _fetchGoals();
-        _achievedGoalsFuture = _fetchAchievedGoals();
-      });
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update goal. Please try again.')),
-        );
-      }
-    }
   }
 
   Future<void> _openNarrateSession() async {
@@ -287,7 +221,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     SliverToBoxAdapter(child: _buildClientHeader(hPad)),
                     SliverToBoxAdapter(child: _buildStgSpine(hPad)),
                     SliverToBoxAdapter(child: _buildSessionsSection(hPad)),
-                    SliverToBoxAdapter(child: _buildLtgAccordion(hPad)),
                     const SliverToBoxAdapter(child: SizedBox(height: 96)),
                   ],
                 ),
@@ -412,7 +345,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 Text(
                   [
                     if (age != null) 'Age $age',
-                    usesAac ? 'AAC user' : 'No AAC',
+                    if (usesAac) 'AAC user',
                   ].join(' · '),
                   style: GoogleFonts.dmSans(fontSize: 13, color: _ghost),
                 ),
@@ -627,146 +560,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     );
   }
 
-  // ── Prior goals accordion (legacy goals table) ───────────────────────────────
-
-  Widget _buildLtgAccordion(double hPad) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(height: 1, color: _line),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => setState(() => _showLtgs = !_showLtgs),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'Prior Goals',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _ghost,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      _showLtgs ? Icons.expand_less : Icons.expand_more,
-                      size: 16,
-                      color: _ghost,
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              _HeaderButton(
-                icon: Icons.add,
-                label: 'Add',
-                onTap: () => _openAddGoal(),
-              ),
-            ],
-          ),
-          if (_showLtgs) ...[
-            const SizedBox(height: 12),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: _goalsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(
-                      child: CircularProgressIndicator(strokeWidth: 1.5),
-                    ),
-                  );
-                }
-                final goals = snapshot.data ?? [];
-                if (goals.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      'No prior goals.',
-                      style: GoogleFonts.dmSans(
-                        color: _ghost,
-                        fontSize: 13,
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  );
-                }
-                return Column(
-                  children: goals
-                      .map((g) => _LtgRow(
-                            goal: g,
-                            onEdit: () => _openAddGoal(goal: g),
-                            onMarkAchieved: () =>
-                                _markGoalAchieved(g['id'].toString()),
-                          ))
-                      .toList(),
-                );
-              },
-            ),
-            FutureBuilder<List<Map<String, dynamic>>>(
-              future: _achievedGoalsFuture,
-              builder: (context, snapshot) {
-                final achieved = snapshot.data ?? [];
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    achieved.isEmpty) {
-                  return const SizedBox.shrink();
-                }
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Text(
-                          'Achieved',
-                          style: GoogleFonts.dmSans(
-                            fontSize: 12,
-                            color: _ghost,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const Spacer(),
-                        GestureDetector(
-                          onTap: () => setState(
-                              () => _showAchievedGoals = !_showAchievedGoals),
-                          child: Text(
-                            _showAchievedGoals
-                                ? 'Hide'
-                                : 'Show (${achieved.length})',
-                            style:
-                                GoogleFonts.dmSans(fontSize: 12, color: _teal),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (_showAchievedGoals && achieved.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Column(
-                        children: achieved
-                            .map((g) => _LtgRow(
-                                  goal: g,
-                                  isAchieved: true,
-                                  onEdit: () {},
-                                  onMarkAchieved: () {},
-                                ))
-                            .toList(),
-                      ),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ],
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
 }
 
 // ── LTG group: collapsible header + STG ladder ────────────────────────────────
@@ -791,9 +584,8 @@ class _LtgGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Actual column is goal_text (not description) — confirmed from schema
-    final goalText  = ltg['goal_text'] as String? ?? '';
-    final domain    = ltg['domain'] as String? ?? ltg['category'] as String?;
-    final framework = ltg['framework'] as String?;
+    final goalText = ltg['goal_text'] as String? ?? '';
+    final domain   = ltg['domain'] as String? ?? ltg['category'] as String?;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
@@ -814,10 +606,6 @@ class _LtgGroup extends StatelessWidget {
                     children: [
                       if (domain != null) ...[
                         _Tag(domain),
-                        const SizedBox(width: 8),
-                      ],
-                      if (framework != null) ...[
-                        _Tag(framework),
                         const SizedBox(width: 8),
                       ],
                       Expanded(
@@ -954,7 +742,7 @@ class _StgLadderStep extends StatelessWidget {
     final double borderWidth = isActive ? 1.5 : 1.0;
 
     final behavior = _truncated();
-    final cueLevelRaw     = stg['current_cue_level'] as String?;
+    final supportLevelRaw = stg['current_cue_level'] as String?;
     final currentAccuracy = (stg['current_accuracy'] as num?)?.toDouble();
 
     final mc = stg['mastery_criterion'];
@@ -1033,23 +821,15 @@ class _StgLadderStep extends StatelessWidget {
                               ),
                             ),
                           ),
-                          if (isMastered) ...[
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.check_circle_outline,
-                              size: 15,
-                              color: _green,
-                            ),
-                          ],
                         ],
                       ),
 
-                      // Cue level (skip for mastered)
-                      if (!isMastered && cueLevelRaw != null) ...[
+                      // Support level (skip for mastered)
+                      if (!isMastered && supportLevelRaw != null) ...[
                         const SizedBox(height: 6),
                         _DataChip(
                           icon: Icons.touch_app_outlined,
-                          label: _cueLabel(cueLevelRaw),
+                          label: _supportLabel(supportLevelRaw),
                         ),
                       ],
 
@@ -1114,11 +894,11 @@ class _StgLadderStep extends StatelessWidget {
     return raw.length > 72 ? '${raw.substring(0, 72)}…' : raw;
   }
 
-  static String _cueLabel(String raw) => switch (raw) {
+  static String _supportLabel(String raw) => switch (raw) {
         'independent'    => 'Independent',
-        'minimal'        => 'Minimal cue',
-        'moderate'       => 'Moderate cue',
-        'maximal'        => 'Maximal cue',
+        'minimal'        => 'Minimal support',
+        'moderate'       => 'Moderate support',
+        'maximal'        => 'Maximal support',
         'hand_over_hand' => 'Hand-over-hand',
         _                => raw,
       };
@@ -1168,14 +948,14 @@ class _EditPanel extends StatefulWidget {
 class _EditPanelState extends State<_EditPanel> {
   late TextEditingController _behaviorCtrl;
   late TextEditingController _contextCtrl;
-  late String? _cueLevel;
+  late String? _supportLevel;
   late String _status;
   late TextEditingController _accuracyCtrl;
   late TextEditingController _consecutiveCtrl;
   late TextEditingController _trialsCtrl;
   bool _saving = false;
 
-  static const _cueLevels = <String?>[
+  static const _supportLevels = <String?>[
     null,
     'independent',
     'minimal',
@@ -1204,7 +984,7 @@ class _EditPanelState extends State<_EditPanel> {
             : (stg['specific'] as String? ?? ''));
     _contextCtrl =
         TextEditingController(text: stg['context'] as String? ?? '');
-    _cueLevel = stg['current_cue_level'] as String?;
+    _supportLevel = stg['current_cue_level'] as String?;
     _status   = stg['status'] as String? ?? 'active';
 
     final mc = stg['mastery_criterion'];
@@ -1290,10 +1070,10 @@ class _EditPanelState extends State<_EditPanel> {
                   _multiLineField(_contextCtrl, minLines: 2, maxLines: 4),
                   const SizedBox(height: 18),
 
-                  // Cue level (§6.3)
-                  _fieldLabel('Current cue level (§6.3)'),
+                  // Support level (§6.3)
+                  _fieldLabel('Current support level (§6.3)'),
                   const SizedBox(height: 6),
-                  _buildCueLevelDropdown(),
+                  _buildSupportLevelDropdown(),
                   const SizedBox(height: 18),
 
                   // Mastery criterion
@@ -1420,7 +1200,7 @@ class _EditPanelState extends State<_EditPanel> {
     final updates = <String, dynamic>{
       'target_behavior': _behaviorCtrl.text.trim(),
       'context': _contextCtrl.text.trim(),
-      'current_cue_level': _cueLevel,
+      'current_cue_level': _supportLevel,
       'status': _status,
       'mastery_criterion': {
         'accuracy_pct':
@@ -1516,11 +1296,11 @@ class _EditPanelState extends State<_EditPanel> {
 
   // Use DropdownButton (not DropdownButtonFormField) to avoid the deprecated
   // FormField.value parameter introduced in Flutter 3.33.
-  Widget _buildCueLevelDropdown() => _styledDropdown<String?>(
-        value: _cueLevel,
-        items: _cueLevels,
-        labelOf: (v) => v == null ? '— not set —' : _cueLevelLabel(v),
-        onChanged: (v) => setState(() => _cueLevel = v),
+  Widget _buildSupportLevelDropdown() => _styledDropdown<String?>(
+        value: _supportLevel,
+        items: _supportLevels,
+        labelOf: (v) => v == null ? '— not set —' : _supportLevelLabel(v),
+        onChanged: (v) => setState(() => _supportLevel = v),
       );
 
   Widget _buildStatusDropdown() => _styledDropdown<String>(
@@ -1564,11 +1344,11 @@ class _EditPanelState extends State<_EditPanel> {
         ),
       );
 
-  static String _cueLevelLabel(String v) => switch (v) {
+  static String _supportLevelLabel(String v) => switch (v) {
         'independent'    => 'Independent',
-        'minimal'        => 'Minimal cue',
-        'moderate'       => 'Moderate cue',
-        'maximal'        => 'Maximal cue',
+        'minimal'        => 'Minimal support',
+        'moderate'       => 'Moderate support',
+        'maximal'        => 'Maximal support',
         'hand_over_hand' => 'Hand-over-hand',
         _                => v,
       };
@@ -2109,9 +1889,8 @@ class _SessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dateStr  = session['date'] as String? ?? '';
-    final duration = session['duration_minutes'];
-    final notes    = session['notes'] as String?;
+    final dateStr = session['date'] as String? ?? '';
+    final notes   = session['notes'] as String?;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -2136,21 +1915,6 @@ class _SessionCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                if (duration != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 9, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _paper2,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _line),
-                    ),
-                    child: Text(
-                      '$duration min',
-                      style: GoogleFonts.dmSans(
-                          fontSize: 12, color: _ghost),
-                    ),
-                  ),
               ],
             ),
             if (notes != null && notes.isNotEmpty) ...[
@@ -2207,83 +1971,3 @@ class _SessionCard extends StatelessWidget {
   }
 }
 
-class _LtgRow extends StatelessWidget {
-  final Map<String, dynamic> goal;
-  final bool isAchieved;
-  final VoidCallback onEdit;
-  final VoidCallback onMarkAchieved;
-  const _LtgRow({
-    required this.goal,
-    this.isAchieved = false,
-    required this.onEdit,
-    required this.onMarkAchieved,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final goalText = goal['goal_text'] as String? ?? '';
-    final domain   = goal['domain'] as String? ?? '';
-    final accuracy = goal['target_accuracy'];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isAchieved ? _paper2 : Colors.white,
-        border: Border.all(color: _line),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              if (domain.isNotEmpty) _Tag(domain),
-              const Spacer(),
-              if (accuracy != null)
-                Text(
-                  '$accuracy% target',
-                  style: GoogleFonts.dmSans(fontSize: 11, color: _ghost),
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            goalText,
-            style: GoogleFonts.dmSans(
-              fontSize: 13,
-              color: isAchieved ? _ghost : _ink,
-              height: 1.5,
-            ),
-          ),
-          if (!isAchieved) ...[
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                GestureDetector(
-                  onTap: onEdit,
-                  child: Text('Edit',
-                      style: GoogleFonts.dmSans(
-                          fontSize: 12, color: _ghost)),
-                ),
-                const SizedBox(width: 16),
-                GestureDetector(
-                  onTap: onMarkAchieved,
-                  child: Text('Mark achieved',
-                      style: GoogleFonts.dmSans(
-                          fontSize: 12, color: _teal)),
-                ),
-              ],
-            ),
-          ] else ...[
-            const SizedBox(height: 4),
-            Text('✓ Achieved',
-                style: GoogleFonts.dmSans(
-                    fontSize: 12, color: _green)),
-          ],
-        ],
-      ),
-    );
-  }
-}
