@@ -24,7 +24,9 @@ const String _systemPrompt =
     'Never invent observations, scores, or recommendations not grounded '
     'in the data. If a field is missing, say "not documented". '
     'Be precise, brief, and clinically accurate. '
-    'Respond in plain text only. No markdown. No bullet points. '
+    'Respond in plain text only. No markdown formatting whatsoever. '
+    'No asterisks, no bold, no headers, no bullet points, no dashes. '
+    'Use plain sentences only. '
     'Maximum 8 lines total.';
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
@@ -77,6 +79,9 @@ class _TodayScreenState extends State<TodayScreen> {
         if (mounted) setState(() => _loading = false);
         return;
       }
+
+      // Clear stale in-memory rows before fetch so UI shows fresh state
+      if (mounted) setState(() => _rosterRows = []);
 
       final today     = _todayStr();
       final yesterday = _yesterdayStr();
@@ -250,6 +255,20 @@ class _TodayScreenState extends State<TodayScreen> {
       if (briefText.isEmpty) {
         briefText = (data['brief'] ?? data['text'] ?? '').toString().trim();
       }
+      if (briefText.isEmpty) return;
+
+      // Strip markdown the model occasionally emits despite instructions.
+      // replaceAllMapped handles **bold** → bold; subsequent passes remove
+      // any stray *, #, or leading-dash list markers.
+      briefText = briefText
+          .replaceAllMapped(
+            RegExp(r'\*\*(.*?)\*\*', dotAll: true),
+            (m) => m.group(1) ?? '',
+          )
+          .replaceAll('**', '')
+          .replaceAll('*', '')
+          .replaceAll(RegExp(r'^#+\s*', multiLine: true), '')
+          .trim();
       if (briefText.isEmpty) return;
 
       // Step 5: persist to daily_roster cache
