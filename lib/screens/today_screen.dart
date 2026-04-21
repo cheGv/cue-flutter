@@ -122,15 +122,28 @@ class _TodayScreenState extends State<TodayScreen> {
         });
       }
 
-      // Fire brief generation for rows without a cached brief
+      // Fire brief generation for rows that have no cached brief,
+      // or that have stale/malformed data (raw JSON blob, prompt echo).
       for (final row in rosterRows) {
-        if (row['brief_text'] == null) {
+        if (_needsBriefGeneration(row['brief_text'] as String?)) {
           _generateBrief(row); // intentionally un-awaited — runs in parallel
         }
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  // Returns true if the stored brief_text is absent or malformed
+  // (raw Anthropic JSON blob or prompt context echo from earlier bug).
+  bool _needsBriefGeneration(String? stored) {
+    if (stored == null || stored.isEmpty) return true;
+    final t = stored.trimLeft();
+    // Raw API response JSON starts with '{'
+    if (t.startsWith('{')) return true;
+    // Prompt echo starts with the client context header
+    if (t.startsWith('CLIENT:')) return true;
+    return false;
   }
 
   // ── Brief generation ────────────────────────────────────────────────────────
@@ -219,11 +232,24 @@ class _TodayScreenState extends State<TodayScreen> {
 
       if (response.statusCode != 200) return;
 
-      final data      = jsonDecode(response.body) as Map<String, dynamic>;
-      final briefText = (data['content']?[0]?['text']
-          ?? data['brief']
-          ?? data['text']
-          ?? '').toString().trim();
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // Explicit extraction — never store raw JSON or fallback blobs.
+      // Mirrors the canonical path: response.content[0].text
+      String briefText = '';
+      try {
+        final content = data['content'];
+        if (content is List && content.isNotEmpty) {
+          final first = content.first;
+          if (first is Map) {
+            briefText = (first['text'] ?? '').toString().trim();
+          }
+        }
+      } catch (_) {}
+      // Secondary fallbacks for alternate proxy shapes
+      if (briefText.isEmpty) {
+        briefText = (data['brief'] ?? data['text'] ?? '').toString().trim();
+      }
       if (briefText.isEmpty) return;
 
       // Step 5: persist to daily_roster cache
@@ -728,14 +754,20 @@ class _TodayScreenState extends State<TodayScreen> {
     final rosterId = row['id'].toString();
     final briefText = row['brief_text'] as String?;
 
-    // First non-empty line of brief as preview
-    final previewLine = briefText
-        ?.split('\n')
-        .where((l) => l.trim().isNotEmpty)
-        .map((l) => l.trim())
-        .firstWhere((_) => true, orElse: () => '');
-    final hasPreview =
-        previewLine != null && previewLine.isNotEmpty;
+    // First non-empty line of the AI brief, truncated to 100 chars
+    String? previewLine;
+    if (briefText != null) {
+      final lines = briefText
+          .split('\n')
+          .where((l) => l.trim().isNotEmpty)
+          .toList();
+      if (lines.isNotEmpty) {
+        final first = lines.first.trim();
+        previewLine =
+            first.length > 100 ? '${first.substring(0, 100)}…' : first;
+      }
+    }
+    final hasPreview = previewLine != null && previewLine.isNotEmpty;
 
     final metaLine = [
       if (cl['age'] != null) 'Age ${cl['age']}',
