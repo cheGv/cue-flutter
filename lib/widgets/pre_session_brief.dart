@@ -56,54 +56,69 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
   // ── Data + AI orchestration ─────────────────────────────────────────────────
 
   Future<void> _load() async {
-    final clientId = widget.client['id'].toString();
-
     try {
-      // Parallel: last session, active STGs, LTGs
-      final results = await Future.wait([
-        _supabase
-            .from('sessions')
-            .select('date, soap_note')
-            .eq('client_id', clientId)
-            .order('date', ascending: false)
-            .limit(1),
-        _supabase
-            .from('short_term_goals')
-            .select()
-            .eq('client_id', clientId)
-            .eq('status', 'active')
-            .order('created_at', ascending: true),
-        _supabase
-            .from('long_term_goals')
-            .select('goal_text, domain')
-            .eq('client_id', clientId),
-      ]);
+      // ── Step 1: sessions existence check ───────────────────────────────────
+      // Isolated query — not bundled with other futures so a column-name
+      // mismatch or schema difference in other tables can't silently kill it.
+      // Uses widget.client['id'] raw (matches _fetchSessions() in profile screen).
+      // select() fetches all columns — avoids breaking on prototype vs canonical
+      // column names (prototype uses 'notes'; canonical schema uses 'soap_note').
+      final sessionRows = await _supabase
+          .from('sessions')
+          .select()
+          .eq('client_id', widget.client['id'])
+          .order('date', ascending: false)
+          .limit(1);
 
-      final sessions  = results[0] as List;
-      final stgRows   = results[1] as List;
-      final ltgRows   = results[2] as List;
-
-      if (sessions.isEmpty) {
+      if (sessionRows.isEmpty) {
         if (mounted) setState(() => _phase = _Phase.noSessions);
         return;
       }
 
-      // Evidence fetch only when there are STG rows to query.
-      // If stgRows is empty or all rows have null target_behavior (legacy),
-      // we still proceed to the AI call with whatever data is available.
-      List<List<dynamic>> evidenceLists = [];
-      if (stgRows.isNotEmpty) {
-        evidenceLists = await Future.wait(
-          stgRows.map((stg) => _supabase
-              .from('stg_evidence')
-              .select('created_at, accuracy_pct, cue_level_used')
-              .eq('stg_id', (stg as Map)['id'].toString())
-              .order('created_at', ascending: false)
-              .limit(5)),
-        );
+      final lastSession = Map<String, dynamic>.from(sessionRows.first as Map);
+      final clientId = widget.client['id'].toString();
+
+      // ── Step 2: STGs + LTGs (non-fatal) ────────────────────────────────────
+      // Failures here do not kill the brief — it still renders from session data.
+      // select() on LTGs avoids errors if 'domain' column not yet migrated.
+      List stgRows = [];
+      List ltgRows = [];
+      try {
+        final goalResults = await Future.wait([
+          _supabase
+              .from('short_term_goals')
+              .select()
+              .eq('client_id', clientId)
+              .eq('status', 'active')
+              .order('created_at', ascending: true),
+          _supabase
+              .from('long_term_goals')
+              .select()
+              .eq('client_id', clientId),
+        ]);
+        stgRows = goalResults[0] as List;
+        ltgRows = goalResults[1] as List;
+      } catch (_) {
+        // Non-fatal — brief still fires with session data only
       }
 
-      // Attach evidence to each STG map; use available fields even if some are null
+      // ── Step 3: evidence per active STG (non-fatal) ─────────────────────────
+      List<List<dynamic>> evidenceLists = [];
+      if (stgRows.isNotEmpty) {
+        try {
+          evidenceLists = await Future.wait(
+            stgRows.map((stg) => _supabase
+                .from('stg_evidence')
+                .select('created_at, accuracy_pct, cue_level_used')
+                .eq('stg_id', (stg as Map)['id'].toString())
+                .order('created_at', ascending: false)
+                .limit(5)),
+          );
+        } catch (_) {
+          // Non-fatal
+        }
+      }
+
       final stgsWithEvidence = List.generate(stgRows.length, (i) {
         final stg = Map<String, dynamic>.from(stgRows[i] as Map);
         stg['_evidence'] = i < evidenceLists.length ? evidenceLists[i] : [];
@@ -111,8 +126,8 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
       });
 
       final brief = await _callProxy(
-        clientId:   clientId,
-        lastSession: Map<String, dynamic>.from(sessions.first as Map),
+        clientId:    clientId,
+        lastSession: lastSession,
         activeStgs:  stgsWithEvidence,
         ltgs: ltgRows
             .map((l) => Map<String, dynamic>.from(l as Map))
@@ -189,14 +204,18 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
       sb.writeln();
     }
 
-    // Last session
+    // Last session — handles both canonical schema (soap_note jsonb) and
+    // prototype schema (notes text) so neither throws a null-read error.
     sb.writeln('LAST SESSION DATE: ${lastSession['date'] ?? 'not documented'}');
-    final soap = lastSession['soap_note'];
+    final soap  = lastSession['soap_note'];
+    final notes = lastSession['notes'] as String?;
     if (soap is Map && soap.isNotEmpty) {
       if (soap['s'] != null) sb.writeln('S: ${soap['s']}');
       if (soap['o'] != null) sb.writeln('O: ${soap['o']}');
       if (soap['a'] != null) sb.writeln('A: ${soap['a']}');
       if (soap['p'] != null) sb.writeln('P: ${soap['p']}');
+    } else if (notes != null && notes.isNotEmpty) {
+      sb.writeln('Notes: $notes');
     } else {
       sb.writeln('SOAP note: not documented');
     }
