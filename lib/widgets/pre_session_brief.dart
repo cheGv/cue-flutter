@@ -29,7 +29,7 @@ const String _systemPrompt =
     'Maximum 8 lines total.';
 
 // ── State machine ──────────────────────────────────────────────────────────────
-enum _Phase { loading, noSessions, noStgs, loaded, error }
+enum _Phase { loading, noSessions, loaded, error }
 
 // ── Widget ─────────────────────────────────────────────────────────────────────
 
@@ -87,25 +87,26 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
         if (mounted) setState(() => _phase = _Phase.noSessions);
         return;
       }
-      if (stgRows.isEmpty) {
-        if (mounted) setState(() => _phase = _Phase.noStgs);
-        return;
+
+      // Evidence fetch only when there are STG rows to query.
+      // If stgRows is empty or all rows have null target_behavior (legacy),
+      // we still proceed to the AI call with whatever data is available.
+      List<List<dynamic>> evidenceLists = [];
+      if (stgRows.isNotEmpty) {
+        evidenceLists = await Future.wait(
+          stgRows.map((stg) => _supabase
+              .from('stg_evidence')
+              .select('created_at, accuracy_pct, cue_level_used')
+              .eq('stg_id', (stg as Map)['id'].toString())
+              .order('created_at', ascending: false)
+              .limit(5)),
+        );
       }
 
-      // Fetch last 5 evidence rows per active STG (parallel)
-      final evidenceLists = await Future.wait(
-        stgRows.map((stg) => _supabase
-            .from('stg_evidence')
-            .select('created_at, accuracy_pct, cue_level_used')
-            .eq('stg_id', (stg as Map)['id'].toString())
-            .order('created_at', ascending: false)
-            .limit(5)),
-      );
-
-      // Attach evidence to each STG map
+      // Attach evidence to each STG map; use available fields even if some are null
       final stgsWithEvidence = List.generate(stgRows.length, (i) {
         final stg = Map<String, dynamic>.from(stgRows[i] as Map);
-        stg['_evidence'] = evidenceLists[i] as List;
+        stg['_evidence'] = i < evidenceLists.length ? evidenceLists[i] : [];
         return stg;
       });
 
@@ -314,12 +315,6 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
           'No sessions documented yet. Run your first Narrator session'
           ' to activate clinical intelligence.',
           style: GoogleFonts.dmSans(fontSize: 14, color: _ink, height: 1.5),
-        );
-
-      case _Phase.noStgs:
-        return Text(
-          'No active goals. Add STGs to unlock session briefing.',
-          style: GoogleFonts.dmSans(fontSize: 14, color: _ink),
         );
 
       case _Phase.error:
