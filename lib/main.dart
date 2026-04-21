@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'screens/client_roster_screen.dart';
+import 'screens/today_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme/cue_theme.dart';
 
@@ -30,7 +30,7 @@ class CueApp extends StatelessWidget {
       theme: CueTheme.theme,
       // Global fade page transitions are configured in CueTheme.theme
       // via pageTransitionsTheme — no custom onGenerateRoute needed.
-      home: hasSession ? const ClientRosterScreen() : const LoginScreen(),
+      home: hasSession ? const TodayScreen() : const LoginScreen(),
     );
   }
 }

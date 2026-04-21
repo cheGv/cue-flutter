@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../screens/today_screen.dart';
 import '../screens/client_roster_screen.dart';
 import '../screens/narrator_screen.dart';
 import '../screens/login_screen.dart';
@@ -199,10 +200,10 @@ class _NavItem {
 }
 
 const _kNavItems = [
-  _NavItem(
-      icon: Icons.people_outline_rounded, label: 'Clients', route: 'roster'),
-  _NavItem(icon: Icons.mic_rounded, label: 'Narrator', route: 'narrator'),
-  _NavItem(icon: Icons.settings_outlined, label: 'Settings', route: 'settings'),
+  _NavItem(icon: Icons.today_rounded,         label: 'Today',    route: 'today'),
+  _NavItem(icon: Icons.people_outline_rounded, label: 'Clients', route: 'roster'),
+  _NavItem(icon: Icons.mic_rounded,            label: 'Narrator', route: 'narrator'),
+  _NavItem(icon: Icons.settings_outlined,      label: 'Settings', route: 'settings'),
 ];
 
 class _AppSidebar extends StatelessWidget {
@@ -377,7 +378,13 @@ class _AppSidebar extends StatelessWidget {
 
   void _navigate(BuildContext context, _NavItem item) {
     if (item.route == activeRoute) return;
-    if (item.route == 'roster') {
+    if (item.route == 'today') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const TodayScreen()),
+        (_) => false,
+      );
+    } else if (item.route == 'roster') {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const ClientRosterScreen()),
