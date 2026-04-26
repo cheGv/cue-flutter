@@ -28,6 +28,21 @@ const List<String> _timelineOptions = [
   '4 weeks', '6 weeks', '8 weeks', '12 weeks', '16 weeks', '24 weeks', 'custom',
 ];
 
+/// Cue Study Mode 5 system prompt.
+/// Entry point lives in report_screen.dart (post-session observation panel).
+/// Exported at module level so report_screen.dart can import it directly.
+const String kCsProgressPrompt =
+    "You are Cue Study, the clinical reasoning companion inside Cue. "
+    "The SLP has described a session observation. Help her interpret it through an evidence-based lens. "
+    "Respond in 3 short paragraphs: "
+    "Para 1: what the observation likely reflects developmentally or neurologically — name the mechanism. "
+    "Para 2: what it suggests about where the child is in their trajectory — is this consolidation, "
+    "generalization, emergence, or plateau? "
+    "Para 3: one question for the SLP to hold going into next session — start with "
+    "'Something to notice next session:'. "
+    "Rules: use the child's name. Never evaluate the SLP's technique. Never say 'you should'. "
+    "Neurodiversity-affirming throughout. Plain text only. 80-110 words.";
+
 // ── screen ────────────────────────────────────────────────────────────────────
 
 class LtgEditScreen extends StatefulWidget {
@@ -101,18 +116,8 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
       "Never say 'reward' — say 'communicative payoff'. "
       "Format: 2 paragraphs. Plain text only. 80-100 words.";
 
-  // Mode 5 (_csProgressPrompt) belongs in report_screen.dart.
-  // TODO(report_screen): Add Cue Study Mode 5 — progress interpretation.
-  // System prompt: "You are Cue Study, the clinical reasoning companion inside Cue. "
-  // "The SLP has described a session observation. Help her interpret it through an evidence-based lens. "
-  // "Respond in 3 short paragraphs: "
-  // "Para 1: what the observation likely reflects developmentally or neurologically — name the mechanism. "
-  // "Para 2: what it suggests about where the child is in their trajectory — is this consolidation, "
-  // "generalization, emergence, or plateau? "
-  // "Para 3: one question for the SLP to hold going into next session — start with 'Something to notice next session:'. "
-  // "Rules: use the child's name. Never evaluate the SLP's technique. Never say 'you should'. "
-  // "Neurodiversity-affirming throughout. Plain text only. 80-110 words."
-  // Entry point: after session documentation, below the SOAP note, with the observation as input.
+  // Mode 5 (_csProgressPrompt / kCsProgressPrompt) — see top-level const above.
+  // UI entry point belongs in report_screen.dart, not here.
 
   // ── form controllers ──────────────────────────────────────────────────────
 
@@ -348,10 +353,7 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
       try {
         await _supabase
             .from('long_term_goals')
-            .update({
-              'goal_text':  goalText,
-              'updated_at': DateTime.now().toUtc().toIso8601String(),
-            })
+            .update({'goal_text': goalText})
             .eq('id', id);
       } catch (_) {}
     }
@@ -406,10 +408,12 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
       );
       if (mounted) { setState(() { _tagText = text; _tagLoading = false; }); }
     } catch (_) {
-      if (mounted) setState(() {
-        _tagError   = 'Cue Study is unavailable. Try again.';
-        _tagLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _tagError   = 'Cue Study is unavailable. Try again.';
+          _tagLoading = false;
+        });
+      }
     }
   }
 
@@ -424,10 +428,12 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
       );
       if (mounted) { setState(() { _reviewText = text; _reviewLoading = false; }); }
     } catch (_) {
-      if (mounted) setState(() {
-        _reviewError   = 'Cue Study is unavailable. Try again.';
-        _reviewLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _reviewError   = 'Cue Study is unavailable. Try again.';
+          _reviewLoading = false;
+        });
+      }
     }
   }
 
@@ -442,10 +448,12 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
       );
       if (mounted) { setState(() { _sessionText = text; _sessionLoading = false; }); }
     } catch (_) {
-      if (mounted) setState(() {
-        _sessionError   = 'Cue Study is unavailable. Try again.';
-        _sessionLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _sessionError   = 'Cue Study is unavailable. Try again.';
+          _sessionLoading = false;
+        });
+      }
     }
   }
 
@@ -913,24 +921,6 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Subject — read-only, muted. The SLP never changes who the goal is for.
-              _sectionLabel('SUBJECT'),
-              const SizedBox(height: 6),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  border: Border.all(color: _line),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  widget.clientName,
-                  style: GoogleFonts.dmSans(fontSize: 14, color: _ghost, height: 1.5),
-                ),
-              ),
-              const SizedBox(height: 16),
-
               _textField(
                 label: 'FUNCTIONAL SKILL TARGET',
                 ctrl: _actionCtrl,
@@ -1020,12 +1010,14 @@ class _StuckSheetState extends State<_StuckSheet> {
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       final text = data['content']?[0]?['text'] as String? ?? '';
-      if (mounted) setState(() { _text = text; _loading = false; });
+      if (mounted) { setState(() { _text = text; _loading = false; }); }
     } catch (_) {
-      if (mounted) setState(() {
-        _error   = 'Cue Study is unavailable. Try again.';
-        _loading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error   = 'Cue Study is unavailable. Try again.';
+          _loading = false;
+        });
+      }
     }
   }
 
