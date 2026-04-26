@@ -12,7 +12,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const Color _ink        = Color(0xFF0E1C36);
-const Color _inkSoft    = Color(0xFF2A3754);
 const Color _ghost      = Color(0xFF6B7690);
 const Color _paper      = Color(0xFFFAF6EE);
 const Color _teal       = Color(0xFF2A8F84);
@@ -22,6 +21,10 @@ const Color _tealFill2  = Color(0xFFE6FAF5);
 const Color _navyDark   = Color(0xFF0A1A2F);
 const Color _line       = Color(0xFFE6DDCA);
 const Color _red        = Color(0xFFDC2626);
+
+// ── Cue Study amber tokens — own the AI panel, teal owns the form ─────────────
+const Color _csAmber     = Color(0xFFF59E0B); // label, outlined text
+const Color _csAmberDark = Color(0xFFD97706); // filled button bg, borders, mic
 
 const String _proxyBase = 'https://cue-ai-proxy.onrender.com';
 
@@ -42,7 +45,8 @@ const String kCsProgressPrompt =
     "Para 3: one question for the SLP to hold going into next session — start with "
     "'Something to notice next session:'. "
     "Rules: use the child's name. Never evaluate the SLP's technique. Never say 'you should'. "
-    "Neurodiversity-affirming throughout. Plain text only. 80-110 words.";
+    "Neurodiversity-affirming throughout. Plain text only. 80-110 words. "
+    "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
 
 // ── screen ────────────────────────────────────────────────────────────────────
 
@@ -77,7 +81,8 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Para 2: Why this framework directly justifies this specific goal — connect the framework's core mechanism "
       "to what the goal is targeting. Be specific to the goal text provided. Never give a generic answer. "
       "Para 3: One concrete implication for session design — start with 'One thing to consider:'. "
-      "Tone: warm, precise, never condescending. Length: 80-100 words. Plain paragraphs only. No bullets. No headers. No markdown.";
+      "Tone: warm, precise, never condescending. Length: 80-100 words. Plain paragraphs only. No bullets. No headers. No markdown. "
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
 
   static const String _csStuckPrompt =
       "You are Cue Study, the clinical reasoning companion inside Cue. "
@@ -94,7 +99,8 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Goals must be neurodiversity-affirming — frame around participation, never deficits or compliance. "
       "Never use 'appropriate' or 'normal'. "
       "If too vague, ask one clarifying question. "
-      "Number each direction. Plain text only.";
+      "Number each direction. Plain text only. "
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
 
   static const String _csCritiquePrompt =
       "You are Cue Study, the clinical reasoning companion inside Cue. "
@@ -104,7 +110,8 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Neurodiversity alignment: does the goal frame strengths and participation or deficits and compliance? "
       "Feasibility: is the timeline and criterion realistic for this diagnosis/profile? "
       "End with one sentence: either 'This goal is clinically sound.' or 'Consider revisiting [specific dimension].' "
-      "Tone: honest, collegial, specific. Never vague praise. Never harsh criticism. Plain text only.";
+      "Tone: honest, collegial, specific. Never vague praise. Never harsh criticism. Plain text only. "
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
 
   static const String _csSessionPrompt =
       "You are Cue Study, the clinical reasoning companion inside Cue. "
@@ -116,7 +123,8 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Rules: use the child's name. Never suggest strategies requiring compliance or correction. "
       "Strategies must be embeddable in naturalistic or semi-structured activity. "
       "Never say 'reward' — say 'communicative payoff'. "
-      "Format: 2 paragraphs. Plain text only. 80-100 words.";
+      "Format: 2 paragraphs. Plain text only. 80-100 words. "
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
 
   // Multilingual suffix — appended to _csFrameworkPrompt for the voice narrator only.
   static const String _csMultilingualSuffix =
@@ -450,7 +458,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
               width: 8,
               height: 8,
               decoration: const BoxDecoration(
-                color: _signalTeal,
+                color: _csAmberDark,
                 shape: BoxShape.circle,
               ),
             ),
@@ -468,7 +476,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
           _passiveInsight,
           style: GoogleFonts.dmSans(
             fontSize: 13,
-            color: _signalTeal,
+            color: _csAmberDark,
             fontStyle: FontStyle.italic,
             height: 1.55,
           ),
@@ -864,7 +872,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     );
   }
 
-  /// Generic Cue Study response card — shared by all four in-screen modes.
+  /// Generic Cue Study response card — amber-themed, shared by all in-screen modes.
   Widget _csCard({
     required String modeName,
     required bool loading,
@@ -872,10 +880,10 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     String? error,
   }) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: _navyDark,
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-        border: Border(bottom: BorderSide(color: _signalTeal, width: 2)),
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+        border: Border(left: BorderSide(color: _csAmberDark, width: 2)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -885,7 +893,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
             'CUE STUDY',
             style: GoogleFonts.dmSans(
               fontSize: 10, fontWeight: FontWeight.w600,
-              color: _signalTeal, letterSpacing: 1.2,
+              color: _csAmber, letterSpacing: 1.2,
             ),
           ),
           const SizedBox(height: 4),
@@ -901,7 +909,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: CircularProgressIndicator(strokeWidth: 2, color: _signalTeal),
+                child: CircularProgressIndicator(strokeWidth: 2, color: _csAmberDark),
               ),
             )
           else if (error != null)
@@ -909,14 +917,168 @@ class _LtgEditScreenState extends State<LtgEditScreen>
           else if (text != null && text.isNotEmpty)
             Text(
               text,
-              style: GoogleFonts.dmSans(fontSize: 13, color: Colors.white, height: 1.6),
+              style: GoogleFonts.dmSans(
+                fontSize: 13,
+                color: Colors.white.withValues(alpha: 0.82),
+                height: 1.75,
+              ),
             ),
         ],
       ),
     );
   }
 
-  Widget _cueStudySection() {
+  // ── Cue Study: intelligence panel (fixed header in wide layout) ──────────────
+
+  Widget _cueStudyPanel() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _navyDark,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header row: CUE STUDY label + mic button
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  'CUE STUDY',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: _csAmber,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: _toggleNarratorMic,
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: _narratorListening
+                        ? const Color(0xFFEF4444)
+                        : _csAmberDark,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _narratorListening ? Icons.stop : Icons.mic,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+
+          // ── Description
+          Text(
+            'A clinical reasoning companion grounded in evidence.',
+            style: GoogleFonts.dmSans(
+              fontSize: 12,
+              color: Colors.white.withValues(alpha: 0.38),
+              height: 1.4,
+            ),
+          ),
+
+          // ── Live transcript while mic is active
+          if (_narratorListening && _narratorText.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              _narratorText,
+              style: GoogleFonts.dmSans(
+                fontSize: 12,
+                color: _csAmber,
+                fontStyle: FontStyle.italic,
+                height: 1.4,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 12),
+
+          // ── Mode 2: Explore goal directions — filled amber
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _showStuckSheet,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _csAmberDark,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Explore goal directions',
+                style: GoogleFonts.dmSans(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // ── Mode 3: Check against EBP — outlined amber
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _reviewLoading ? null : _fetchReview,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _csAmber,
+                side: BorderSide(color: _csAmber.withValues(alpha: 0.4)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'Check against EBP',
+                style: GoogleFonts.dmSans(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: _csAmber,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // ── Mode 4: Session strategies — outlined amber
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _sessionLoading ? null : _fetchSession,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _csAmber,
+                side: BorderSide(color: _csAmber.withValues(alpha: 0.4)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: Text(
+                'What does this mean for my session?',
+                style: GoogleFonts.dmSans(
+                  fontSize: 14, fontWeight: FontWeight.w500, color: _csAmber,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Cue Study: scrollable response cards + frameworks ─────────────────────
+
+  Widget _cueStudyScrollContent() {
     final tagCardVisible      = _openTagName != null;
     final reviewCardVisible   = _reviewLoading  || _reviewText  != null || _reviewError  != null;
     final sessionCardVisible  = _sessionLoading || _sessionText != null || _sessionError != null;
@@ -925,159 +1087,6 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-
-        // ══════════════════════════════════════════════════════════
-        // Intelligence panel — teal-tinted container
-        // ══════════════════════════════════════════════════════════
-        Container(
-          decoration: BoxDecoration(
-            color: _tealFill,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-
-              // ── Header row: CUE STUDY label + mic button
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      'CUE STUDY',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _signalTeal,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: _toggleNarratorMic,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: _narratorListening
-                            ? const Color(0xFFEF4444)
-                            : _signalTeal,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _narratorListening ? Icons.stop : Icons.mic,
-                        color: Colors.white,
-                        size: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-
-              // ── Description
-              Text(
-                'A clinical reasoning companion grounded in evidence.',
-                style: GoogleFonts.dmSans(
-                  fontSize: 12,
-                  color: const Color(0xFF6B7280),
-                  height: 1.4,
-                ),
-              ),
-
-              // ── Live transcript while mic is active
-              if (_narratorListening && _narratorText.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _narratorText,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 12,
-                    color: _signalTeal,
-                    fontStyle: FontStyle.italic,
-                    height: 1.4,
-                  ),
-                ),
-              ],
-
-              const SizedBox(height: 12),
-
-              // ── Mode 2: Explore goal directions — filled teal
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _showStuckSheet,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _teal,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    'Explore goal directions',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // ── Mode 3: Check against EBP — outlined teal
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _reviewLoading ? null : _fetchReview,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _teal,
-                    side: const BorderSide(color: _teal),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    'Check against EBP',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14, fontWeight: FontWeight.w500, color: _teal,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // ── Mode 4: Session strategies — outlined teal
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: _sessionLoading ? null : _fetchSession,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _teal,
-                    side: const BorderSide(color: _teal),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: Text(
-                    'What does this mean for my session?',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 14, fontWeight: FontWeight.w500, color: _teal,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // ══════════════════════════════════════════════════════════
-        // Response cards — outside the panel, expand below it
-        // ══════════════════════════════════════════════════════════
-
         // ── Narrator response
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
@@ -1132,9 +1141,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
               : const SizedBox.shrink(),
         ),
 
-        // ══════════════════════════════════════════════════════════
-        // Frameworks — separate, outside the intelligence panel
-        // ══════════════════════════════════════════════════════════
+        // ── Frameworks — separate, outside the intelligence panel
         if (_tags.isNotEmpty) ...[
           const SizedBox(height: 20),
           Container(height: 1, color: _line),
@@ -1153,15 +1160,21 @@ class _LtgEditScreenState extends State<LtgEditScreen>
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isOpen ? _teal : Colors.white,
-                    border: Border.all(color: isOpen ? _teal : _line),
+                    color: isOpen
+                        ? _csAmberDark
+                        : _csAmber.withValues(alpha: 0.08),
+                    border: Border.all(
+                      color: isOpen
+                          ? _csAmberDark
+                          : _csAmber.withValues(alpha: 0.2),
+                    ),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     name,
                     style: GoogleFonts.dmSans(
                       fontSize: 12, fontWeight: FontWeight.w500,
-                      color: isOpen ? Colors.white : _inkSoft,
+                      color: isOpen ? Colors.white : _csAmber,
                     ),
                   ),
                 ),
@@ -1188,6 +1201,16 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       ],
     );
   }
+
+  // ── Narrow-mode: panel + scroll content stacked ───────────────────────────
+
+  Widget _cueStudySection() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cueStudyPanel(),
+          _cueStudyScrollContent(),
+        ],
+      );
 
   // ── build ─────────────────────────────────────────────────────────────────
 
@@ -1234,9 +1257,11 @@ class _LtgEditScreenState extends State<LtgEditScreen>
         ],
       ),
       body: LayoutBuilder(
-        builder: (context, constraints) => SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
-          child: Column(
+        builder: (context, constraints) {
+          final isWide = constraints.maxWidth >= 700;
+
+          // ── Form fields — shared by both layouts ─────────────────
+          Widget formContent = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _textField(
@@ -1246,14 +1271,12 @@ class _LtgEditScreenState extends State<LtgEditScreen>
                 hasError: _actionError,
               ),
               const SizedBox(height: 16),
-
               _textField(
                 label: 'PARTICIPATION CONTEXT',
                 ctrl: _conditionCtrl,
                 hint: 'In what context or setting?',
               ),
               const SizedBox(height: 16),
-
               _textField(
                 label: 'EVIDENCE OF MASTERY',
                 ctrl: _criterionCtrl,
@@ -1261,19 +1284,64 @@ class _LtgEditScreenState extends State<LtgEditScreen>
                 hasError: _criterionError,
               ),
               const SizedBox(height: 16),
-
               _timelineField(),
               const SizedBox(height: 28),
-
               _previewCard(),
               _passiveInsightWidget(),
-              const SizedBox(height: 28),
-
-              _cueStudySection(),
-              const SizedBox(height: 40),
             ],
-          ),
-        ),
+          );
+
+          if (isWide) {
+            // ── Wide (>= 700px): left form | right Cue Study ──────
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left: scrollable form
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 16, 60),
+                    child: formContent,
+                  ),
+                ),
+                // Right: 360px fixed-width Cue Study column
+                SizedBox(
+                  width: 360,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Fixed header: intelligence panel (always visible)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: _cueStudyPanel(),
+                      ),
+                      // Scrollable: response cards + frameworks
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
+                          child: _cueStudyScrollContent(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }
+
+          // ── Narrow (< 700px): single scrolling column ──────────
+          return SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                formContent,
+                const SizedBox(height: 28),
+                _cueStudySection(),
+                const SizedBox(height: 40),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -1445,11 +1513,11 @@ class _StuckSheetState extends State<_StuckSheet> {
                   ? Padding(
                       padding: const EdgeInsets.only(top: 16),
                       child: Container(
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: _navyDark,
-                          borderRadius: BorderRadius.all(Radius.circular(10)),
+                          borderRadius: const BorderRadius.all(Radius.circular(10)),
                           border: Border(
-                            bottom: BorderSide(color: _signalTeal, width: 2),
+                            left: BorderSide(color: _csAmberDark, width: 2),
                           ),
                         ),
                         padding: const EdgeInsets.all(16),
@@ -1460,7 +1528,7 @@ class _StuckSheetState extends State<_StuckSheet> {
                               'CUE STUDY',
                               style: GoogleFonts.dmSans(
                                 fontSize: 10, fontWeight: FontWeight.w600,
-                                color: _signalTeal, letterSpacing: 1.2,
+                                color: _csAmber, letterSpacing: 1.2,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -1475,7 +1543,7 @@ class _StuckSheetState extends State<_StuckSheet> {
                             if (_loading)
                               Center(
                                 child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: _signalTeal,
+                                  strokeWidth: 2, color: _csAmberDark,
                                 ),
                               )
                             else if (_error != null)
@@ -1487,7 +1555,9 @@ class _StuckSheetState extends State<_StuckSheet> {
                               Text(
                                 _text!,
                                 style: GoogleFonts.dmSans(
-                                  fontSize: 13, color: Colors.white, height: 1.6,
+                                  fontSize: 13,
+                                  color: Colors.white.withValues(alpha: 0.82),
+                                  height: 1.75,
                                 ),
                               ),
                           ],
