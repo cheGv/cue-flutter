@@ -4,6 +4,7 @@
 // Includes all five Cue Study interaction modes (Mode 5 is a TODO — see report_screen.dart).
 
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -67,7 +68,7 @@ class LtgEditScreen extends StatefulWidget {
 }
 
 class _LtgEditScreenState extends State<LtgEditScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
 
   // ── Cue Study system prompts (Modes 1–5) ─────────────────────────────────
@@ -177,6 +178,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   bool   _insightVisible = false;
   late final AnimationController _pulseController;
   late final Animation<double>   _pulseAnim;
+  late final AnimationController _orbitController;
 
   // Cue Study — Voice narrator (multilingual mic in CUE STUDY header)
   final SpeechToText _narratorSpeech   = SpeechToText();
@@ -211,9 +213,14 @@ class _LtgEditScreenState extends State<LtgEditScreen>
 
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.3, end: 1.0).animate(_pulseController);
+    _pulseAnim = Tween<double>(begin: 0.4, end: 1.0).animate(_pulseController);
+
+    _orbitController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    )..repeat();
 
     // Fire passive insight immediately — silent fail, no loading indicator on error
     _fetchPassiveInsight();
@@ -244,6 +251,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   @override
   void dispose() {
     _pulseController.dispose();
+    _orbitController.dispose();
     _narratorSpeech.stop();
     _actionCtrl.dispose();
     _conditionCtrl.dispose();
@@ -450,17 +458,48 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     if (_passiveLoading) {
       return Padding(
         padding: const EdgeInsets.only(top: 10),
-        child: AnimatedBuilder(
-          animation: _pulseAnim,
-          builder: (context2, child2) => Opacity(
-            opacity: _pulseAnim.value,
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: _csAmberDark,
-                shape: BoxShape.circle,
-              ),
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: Center(
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                // Orbiting dot — rotates around the stack center
+                RotationTransition(
+                  turns: _orbitController,
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Align(
+                      alignment: const Alignment(0.625, 0), // 10px right in 32px box
+                      child: Container(
+                        width: 5,
+                        height: 5,
+                        decoration: const BoxDecoration(
+                          color: _csAmberDark,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Center dot — pulses opacity
+                AnimatedBuilder(
+                  animation: _pulseAnim,
+                  builder: (context2, child2) => Opacity(
+                    opacity: _pulseAnim.value,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: _csAmber,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -915,12 +954,25 @@ class _LtgEditScreenState extends State<LtgEditScreen>
           else if (error != null)
             Text(error, style: GoogleFonts.dmSans(fontSize: 12, color: _red))
           else if (text != null && text.isNotEmpty)
-            Text(
-              text,
-              style: GoogleFonts.dmSans(
-                fontSize: 13,
-                color: Colors.white.withValues(alpha: 0.82),
-                height: 1.75,
+            TweenAnimationBuilder<double>(
+              key: ValueKey(text),
+              tween: Tween<double>(begin: 0.0, end: 1.0),
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeIn,
+              builder: (context2, value, child2) => Opacity(
+                opacity: value,
+                child: Transform.translate(
+                  offset: Offset(0, (1.0 - value) * 8),
+                  child: child2,
+                ),
+              ),
+              child: Text(
+                text,
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.82),
+                  height: 1.75,
+                ),
               ),
             ),
         ],
@@ -940,10 +992,12 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Header row: CUE STUDY label + mic button
+          // ── Header row: icon + CUE STUDY label + mic button
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              const _CueStudyIcon(),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'CUE STUDY',
@@ -1414,10 +1468,10 @@ class _StuckSheetState extends State<_StuckSheet> {
 
     return Container(
       decoration: const BoxDecoration(
-        color: _paper,
+        color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + keyboardInset),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + keyboardInset),
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1428,24 +1482,62 @@ class _StuckSheetState extends State<_StuckSheet> {
               child: Container(
                 width: 40, height: 4,
                 decoration: BoxDecoration(
-                  color: _line, borderRadius: BorderRadius.circular(2),
+                  color: const Color(0xFFD3D1C7),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
             const SizedBox(height: 20),
 
+            // Title row: icon + "Cue Study" + "Goal directions"
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const _CueStudyIcon(),
+                const SizedBox(width: 8),
+                Text(
+                  'Cue Study',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: _csAmberDark,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Goal directions',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    color: const Color(0xFF9CA3AF),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Subtitle
             Text(
-              'Think with Cue',
+              'Describe what you want to work on with ${widget.clientName}. '
+              'Any language — Hindi, Telugu, English, anything.',
               style: GoogleFonts.dmSans(
-                fontSize: 18, fontWeight: FontWeight.w600, color: _ink,
+                fontSize: 13,
+                color: const Color(0xFF6B7280),
+                height: 1.5,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Describe your clinical intuition — Cue will translate it into goal directions.',
-              style: GoogleFonts.dmSans(fontSize: 13, color: _ghost, height: 1.4),
-            ),
             const SizedBox(height: 16),
+
+            // Field label
+            Text(
+              'YOUR CLINICAL THINKING',
+              style: GoogleFonts.dmSans(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF9CA3AF),
+                letterSpacing: 0.6,
+              ),
+            ),
+            const SizedBox(height: 6),
 
             // Free-text input
             TextField(
@@ -1453,58 +1545,64 @@ class _StuckSheetState extends State<_StuckSheet> {
               maxLines: 4,
               style: GoogleFonts.dmSans(fontSize: 14, color: _ink, height: 1.5),
               decoration: InputDecoration(
-                hintText:
-                    'Describe what you want to work on with ${widget.clientName}...',
+                hintText: 'Type or speak freely...',
                 hintStyle: GoogleFonts.dmSans(
-                  fontSize: 14, color: _ghost.withValues(alpha: 0.55),
+                  fontSize: 14,
+                  color: const Color(0xFF9CA3AF),
                 ),
                 filled: true,
                 fillColor: Colors.white,
                 contentPadding: const EdgeInsets.all(12),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: _line),
+                  borderSide: const BorderSide(color: Color(0xFFD3D1C7)),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: _line),
+                  borderSide: const BorderSide(color: Color(0xFFD3D1C7)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: _teal, width: 1.5),
+                  borderSide: const BorderSide(color: _csAmberDark, width: 1.5),
                 ),
               ),
             ),
             const SizedBox(height: 12),
 
-            // Submit button
+            // Submit button — amber bg, white text
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _loading ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _teal,
+                  backgroundColor: _csAmberDark,
                   foregroundColor: Colors.white,
-                  disabledBackgroundColor: _teal.withValues(alpha: 0.4),
+                  disabledBackgroundColor: _csAmberDark.withValues(alpha: 0.4),
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   elevation: 0,
                 ),
                 child: _loading
                     ? const SizedBox(
                         width: 18, height: 18,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2,
+                        ),
                       )
                     : Text(
-                        'Think with Cue →',
+                        'Get goal directions →',
                         style: GoogleFonts.dmSans(
-                          fontSize: 14, fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
                         ),
                       ),
               ),
             ),
 
-            // Response card — animates in below the button
+            // Response card — light amber bg, left amber border
             AnimatedSize(
               duration: const Duration(milliseconds: 300),
               curve: Curves.easeInOut,
@@ -1514,10 +1612,13 @@ class _StuckSheetState extends State<_StuckSheet> {
                       padding: const EdgeInsets.only(top: 16),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: _navyDark,
+                          color: const Color(0xFFFFFBEB),
                           borderRadius: const BorderRadius.all(Radius.circular(10)),
                           border: Border(
-                            left: BorderSide(color: _csAmberDark, width: 2),
+                            left: const BorderSide(color: _csAmberDark, width: 2),
+                            top: BorderSide(color: const Color(0xFFD97706).withValues(alpha: 0.15)),
+                            right: BorderSide(color: const Color(0xFFD97706).withValues(alpha: 0.15)),
+                            bottom: BorderSide(color: const Color(0xFFD97706).withValues(alpha: 0.15)),
                           ),
                         ),
                         padding: const EdgeInsets.all(16),
@@ -1527,16 +1628,10 @@ class _StuckSheetState extends State<_StuckSheet> {
                             Text(
                               'CUE STUDY',
                               style: GoogleFonts.dmSans(
-                                fontSize: 10, fontWeight: FontWeight.w600,
-                                color: _csAmber, letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Goal directions',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 12,
-                                color: Colors.white.withValues(alpha: 0.6),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _csAmberDark,
+                                letterSpacing: 1.2,
                               ),
                             ),
                             const SizedBox(height: 12),
@@ -1552,12 +1647,25 @@ class _StuckSheetState extends State<_StuckSheet> {
                                 style: GoogleFonts.dmSans(fontSize: 12, color: _red),
                               )
                             else if (_text != null && _text!.isNotEmpty)
-                              Text(
-                                _text!,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 13,
-                                  color: Colors.white.withValues(alpha: 0.82),
-                                  height: 1.75,
+                              TweenAnimationBuilder<double>(
+                                key: ValueKey(_text),
+                                tween: Tween<double>(begin: 0.0, end: 1.0),
+                                duration: const Duration(milliseconds: 400),
+                                curve: Curves.easeIn,
+                                builder: (context2, value, child2) => Opacity(
+                                  opacity: value,
+                                  child: Transform.translate(
+                                    offset: Offset(0, (1.0 - value) * 8),
+                                    child: child2,
+                                  ),
+                                ),
+                                child: Text(
+                                  _text!,
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 13,
+                                    color: _navyDark,
+                                    height: 1.7,
+                                  ),
                                 ),
                               ),
                           ],
@@ -1572,4 +1680,69 @@ class _StuckSheetState extends State<_StuckSheet> {
       ),
     );
   }
+}
+
+// ── CUE STUDY ICON — radiant point, sun-like ──────────────────────────────────
+
+class _CueStudyIcon extends StatelessWidget {
+  const _CueStudyIcon();
+
+  @override
+  Widget build(BuildContext context) => CustomPaint(
+        size: const Size(22, 22),
+        painter: _CueStudyIconPainter(),
+      );
+}
+
+class _CueStudyIconPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+
+    // Center filled circle
+    canvas.drawCircle(
+      Offset(cx, cy),
+      4,
+      Paint()..color = _csAmber,
+    );
+
+    // Cardinal rays (N/S/E/W) — length 6, strokeWidth 1.5, opacity 1.0
+    final cardinalPaint = Paint()
+      ..color = _csAmber
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+
+    const cardinalAngles = [0.0, pi / 2, pi, 3 * pi / 2]; // E, S, W, N
+    const innerR = 5.5;
+    const cardinalLen = 6.0;
+
+    for (final angle in cardinalAngles) {
+      final x1 = cx + innerR * cos(angle);
+      final y1 = cy + innerR * sin(angle);
+      final x2 = cx + (innerR + cardinalLen) * cos(angle);
+      final y2 = cy + (innerR + cardinalLen) * sin(angle);
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), cardinalPaint);
+    }
+
+    // Diagonal rays (NE/NW/SE/SW) — length 5, strokeWidth 1.2, opacity 0.4
+    final diagPaint = Paint()
+      ..color = _csAmber.withValues(alpha: 0.4)
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+
+    const diagAngles = [pi / 4, 3 * pi / 4, 5 * pi / 4, 7 * pi / 4];
+    const diagLen = 5.0;
+
+    for (final angle in diagAngles) {
+      final x1 = cx + innerR * cos(angle);
+      final y1 = cy + innerR * sin(angle);
+      final x2 = cx + (innerR + diagLen) * cos(angle);
+      final y2 = cy + (innerR + diagLen) * sin(angle);
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), diagPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
