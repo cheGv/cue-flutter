@@ -61,7 +61,8 @@ class LtgEditScreen extends StatefulWidget {
   State<LtgEditScreen> createState() => _LtgEditScreenState();
 }
 
-class _LtgEditScreenState extends State<LtgEditScreen> {
+class _LtgEditScreenState extends State<LtgEditScreen>
+    with SingleTickerProviderStateMixin {
   final _supabase = Supabase.instance.client;
 
   // ── Cue Study system prompts (Modes 1–5) ─────────────────────────────────
@@ -153,6 +154,13 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
   String? _sessionText;
   String? _sessionError;
 
+  // Cue Study — Mode 0: Passive auto-insight (fires on open, silent fail)
+  String _passiveInsight = '';
+  bool   _passiveLoading = true;
+  bool   _insightVisible = false;
+  late final AnimationController _pulseController;
+  late final Animation<double>   _pulseAnim;
+
   // ── lifecycle ─────────────────────────────────────────────────────────────
 
   @override
@@ -172,6 +180,15 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
     _tags = _parseTags(widget.goal);
     // ignore: avoid_print
     print('[LtgEditScreen] parsed ${_tags.length} tags: $_tags');
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.3, end: 1.0).animate(_pulseController);
+
+    // Fire passive insight immediately — silent fail, no loading indicator on error
+    _fetchPassiveInsight();
 
     final parsed = _parseGoalText(widget.goal['goal_text'] as String? ?? '');
 
@@ -195,6 +212,7 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
 
   @override
   void dispose() {
+    _pulseController.dispose();
     _actionCtrl.dispose();
     _conditionCtrl.dispose();
     _criterionCtrl.dispose();
@@ -362,6 +380,77 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
       widget.onSaved({...widget.goal, 'goal_text': goalText, 'is_edited': true});
       Navigator.pop(context);
     }
+  }
+
+  // ── Cue Study — Mode 0: Passive auto-insight ─────────────────────────────
+
+  Future<void> _fetchPassiveInsight() async {
+    final frameworks = _tags
+        .map((t) => t['framework_name'] as String? ?? '')
+        .where((n) => n.isNotEmpty)
+        .join(', ');
+    try {
+      final text = await _callCueStudy(
+        systemPrompt: _csFrameworkPrompt,
+        userMessage:
+            'Goal: ${_assembled()}\n'
+            'Child: ${widget.clientName}\n'
+            'Frameworks: ${frameworks.isNotEmpty ? frameworks : 'not specified'}',
+      );
+      if (!mounted) return;
+      setState(() {
+        _passiveInsight = text ?? '';
+        _passiveLoading = false;
+        _insightVisible = false;
+      });
+      // Two-frame trick: render at opacity 0, then flip to 1 so AnimatedOpacity
+      // actually transitions rather than snapping directly to visible.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _insightVisible = true);
+      });
+    } catch (_) {
+      // Silent fail — just stop the pulsing dot
+      if (mounted) setState(() => _passiveLoading = false);
+    }
+  }
+
+  Widget _passiveInsightWidget() {
+    if (_passiveLoading) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: AnimatedBuilder(
+          animation: _pulseAnim,
+          builder: (context2, child2) => Opacity(
+            opacity: _pulseAnim.value,
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: _signalTeal,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (_passiveInsight.isEmpty) return const SizedBox.shrink();
+    return AnimatedOpacity(
+      opacity: _insightVisible ? 1.0 : 0.0,
+      duration: const Duration(milliseconds: 600),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 10),
+        child: Text(
+          _passiveInsight,
+          style: GoogleFonts.dmSans(
+            fontSize: 13,
+            color: _signalTeal,
+            fontStyle: FontStyle.italic,
+            height: 1.55,
+          ),
+        ),
+      ),
+    );
   }
 
   // ── Cue Study shared API helper ───────────────────────────────────────────
@@ -731,13 +820,7 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ── Section header
-        Text(
-          'CUE STUDY',
-          style: GoogleFonts.dmSans(
-            fontSize: 10, fontWeight: FontWeight.w600,
-            color: _ghost, letterSpacing: 0.8,
-          ),
-        ),
+        _sectionLabel('CUE STUDY'),
         const SizedBox(height: 4),
         Text(
           'Explore the evidence behind this goal, get direction when stuck, '
@@ -745,13 +828,81 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
           style: GoogleFonts.dmSans(fontSize: 12, color: _ghost, height: 1.4),
         ),
 
-        // ── Mode 1: Framework chips (only when tags exist)
-        if (_tags.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text(
-            'Tap a framework to understand why it grounds this goal.',
-            style: GoogleFonts.dmSans(fontSize: 12, color: _ghost, height: 1.4),
+        // ── Divider
+        const SizedBox(height: 16),
+        Container(height: 1, color: _line),
+        const SizedBox(height: 16),
+
+        // ── Mode 2: Explore goal directions
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton(
+            onPressed: _showStuckSheet,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: _teal,
+              side: const BorderSide(color: _teal),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text(
+              'Explore goal directions',
+              style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w500, color: _teal),
+            ),
           ),
+        ),
+        const SizedBox(height: 16),
+
+        // ── Mode 3: Check against EBP
+        _csTextButton(
+          label: 'Check against EBP',
+          onPressed: _reviewLoading ? null : _fetchReview,
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: reviewCardVisible
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _csCard(
+                    modeName: 'Check against EBP',
+                    loading: _reviewLoading,
+                    text: _reviewText,
+                    error: _reviewError,
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+        const SizedBox(height: 12),
+
+        // ── Mode 4: What does this mean for my session?
+        _csTextButton(
+          label: 'What does this mean for my session?',
+          onPressed: _sessionLoading ? null : _fetchSession,
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: sessionCardVisible
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _csCard(
+                    modeName: 'Session strategies',
+                    loading: _sessionLoading,
+                    text: _sessionText,
+                    error: _sessionError,
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+
+        // ── Mode 1: Framework chips (only when tags exist) — always at bottom
+        if (_tags.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Container(height: 1, color: _line),
+          const SizedBox(height: 16),
+          _sectionLabel('FRAMEWORKS LINKED TO THIS GOAL'),
           const SizedBox(height: 10),
           Wrap(
             spacing: 8,
@@ -798,75 +949,6 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
                 : const SizedBox.shrink(),
           ),
         ],
-
-        // ── Divider
-        const SizedBox(height: 16),
-        Container(height: 1, color: _line),
-        const SizedBox(height: 16),
-
-        // ── Mode 2: I'm stuck on this goal
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: _showStuckSheet,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _teal,
-              side: const BorderSide(color: _teal),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: Text(
-              "I'm stuck on this goal",
-              style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w500, color: _teal),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ── Mode 3: Review this goal
-        _csTextButton(
-          label: 'Review this goal',
-          onPressed: _reviewLoading ? null : _fetchReview,
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: reviewCardVisible
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: _csCard(
-                    modeName: 'Review this goal',
-                    loading: _reviewLoading,
-                    text: _reviewText,
-                    error: _reviewError,
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
-        const SizedBox(height: 12),
-
-        // ── Mode 4: What does this mean for my session?
-        _csTextButton(
-          label: 'What does this mean for my session?',
-          onPressed: _sessionLoading ? null : _fetchSession,
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: sessionCardVisible
-              ? Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: _csCard(
-                    modeName: 'Session strategies',
-                    loading: _sessionLoading,
-                    text: _sessionText,
-                    error: _sessionError,
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
       ],
     );
   }
@@ -948,6 +1030,7 @@ class _LtgEditScreenState extends State<LtgEditScreen> {
               const SizedBox(height: 28),
 
               _previewCard(),
+              _passiveInsightWidget(),
               const SizedBox(height: 28),
 
               _cueStudySection(),
