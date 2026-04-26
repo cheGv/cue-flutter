@@ -916,28 +916,6 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     );
   }
 
-  /// Text button styled in Signal Teal with underline.
-  Widget _csTextButton({required String label, required VoidCallback? onPressed}) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        foregroundColor: _signalTeal,
-        padding: EdgeInsets.zero,
-        minimumSize: Size.zero,
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: Text(
-        label,
-        style: GoogleFonts.dmSans(
-          fontSize: 13,
-          color: onPressed != null ? _signalTeal : _signalTeal.withValues(alpha: 0.4),
-          decoration: TextDecoration.underline,
-          decorationColor: onPressed != null ? _signalTeal : _signalTeal.withValues(alpha: 0.4),
-        ),
-      ),
-    );
-  }
-
   Widget _cueStudySection() {
     final tagCardVisible      = _openTagName != null;
     final reviewCardVisible   = _reviewLoading  || _reviewText  != null || _reviewError  != null;
@@ -947,49 +925,160 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Section header row — label left, mic button right
-        Row(
-          children: [
-            Expanded(child: _sectionLabel('CUE STUDY')),
-            GestureDetector(
-              onTap: _toggleNarratorMic,
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: _narratorListening
-                      ? const Color(0xFFEF4444)
-                      : _signalTeal,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _narratorListening ? Icons.stop : Icons.mic,
-                  color: Colors.white,
-                  size: 16,
+
+        // ══════════════════════════════════════════════════════════
+        // Intelligence panel — teal-tinted container
+        // ══════════════════════════════════════════════════════════
+        Container(
+          decoration: BoxDecoration(
+            color: _tealFill,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              // ── Header row: CUE STUDY label + mic button
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'CUE STUDY',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: _signalTeal,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _toggleNarratorMic,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: _narratorListening
+                            ? const Color(0xFFEF4444)
+                            : _signalTeal,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _narratorListening ? Icons.stop : Icons.mic,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+
+              // ── Description
+              Text(
+                'A clinical reasoning companion grounded in evidence.',
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  color: const Color(0xFF6B7280),
+                  height: 1.4,
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Explore the evidence behind this goal, get direction when stuck, '
-          'or translate it into session strategies.',
-          style: GoogleFonts.dmSans(fontSize: 12, color: _ghost, height: 1.4),
-        ),
 
-        // ── Live transcript (shown while recording)
-        if (_narratorListening && _narratorText.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text(
-            _narratorText,
-            style: GoogleFonts.dmSans(
-              fontSize: 12, color: _signalTeal, fontStyle: FontStyle.italic, height: 1.4,
-            ),
+              // ── Live transcript while mic is active
+              if (_narratorListening && _narratorText.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _narratorText,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    color: _signalTeal,
+                    fontStyle: FontStyle.italic,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 12),
+
+              // ── Mode 2: Explore goal directions — filled teal
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _showStuckSheet,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _teal,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Explore goal directions',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // ── Mode 3: Check against EBP — outlined teal
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _reviewLoading ? null : _fetchReview,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _teal,
+                    side: const BorderSide(color: _teal),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Check against EBP',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14, fontWeight: FontWeight.w500, color: _teal,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              // ── Mode 4: Session strategies — outlined teal
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: _sessionLoading ? null : _fetchSession,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _teal,
+                    side: const BorderSide(color: _teal),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'What does this mean for my session?',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 14, fontWeight: FontWeight.w500, color: _teal,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
 
-        // ── Narrator response card
+        // ══════════════════════════════════════════════════════════
+        // Response cards — outside the panel, expand below it
+        // ══════════════════════════════════════════════════════════
+
+        // ── Narrator response
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -1007,35 +1096,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
               : const SizedBox.shrink(),
         ),
 
-        // ── Divider
-        const SizedBox(height: 16),
-        Container(height: 1, color: _line),
-        const SizedBox(height: 16),
-
-        // ── Mode 2: Explore goal directions
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
-            onPressed: _showStuckSheet,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _teal,
-              side: const BorderSide(color: _teal),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: Text(
-              'Explore goal directions',
-              style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w500, color: _teal),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        // ── Mode 3: Check against EBP
-        _csTextButton(
-          label: 'Check against EBP',
-          onPressed: _reviewLoading ? null : _fetchReview,
-        ),
+        // ── EBP review response
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -1052,13 +1113,8 @@ class _LtgEditScreenState extends State<LtgEditScreen>
                 )
               : const SizedBox.shrink(),
         ),
-        const SizedBox(height: 12),
 
-        // ── Mode 4: What does this mean for my session?
-        _csTextButton(
-          label: 'What does this mean for my session?',
-          onPressed: _sessionLoading ? null : _fetchSession,
-        ),
+        // ── Session strategies response
         AnimatedSize(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -1076,9 +1132,11 @@ class _LtgEditScreenState extends State<LtgEditScreen>
               : const SizedBox.shrink(),
         ),
 
-        // ── Mode 1: Framework chips (only when tags exist) — always at bottom
+        // ══════════════════════════════════════════════════════════
+        // Frameworks — separate, outside the intelligence panel
+        // ══════════════════════════════════════════════════════════
         if (_tags.isNotEmpty) ...[
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           Container(height: 1, color: _line),
           const SizedBox(height: 16),
           _sectionLabel('FRAMEWORKS LINKED TO THIS GOAL'),
@@ -1110,7 +1168,6 @@ class _LtgEditScreenState extends State<LtgEditScreen>
               );
             }).toList(),
           ),
-          // AnimatedSize so the card expands smoothly below the chips
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,
