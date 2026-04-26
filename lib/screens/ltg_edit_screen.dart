@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
@@ -117,6 +118,14 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Never say 'reward' — say 'communicative payoff'. "
       "Format: 2 paragraphs. Plain text only. 80-100 words.";
 
+  // Multilingual suffix — appended to _csFrameworkPrompt for the voice narrator only.
+  static const String _csMultilingualSuffix =
+      'The SLP may speak in any Indian language including '
+      'Hindi, Telugu, Tamil, Kannada, Malayalam, Marathi, '
+      'Bengali, or English. Understand input in any of these '
+      'languages. Always respond in English only, as clinical '
+      'documentation is in English.';
+
   // Mode 5 (_csProgressPrompt / kCsProgressPrompt) — see top-level const above.
   // UI entry point belongs in report_screen.dart, not here.
 
@@ -161,6 +170,17 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   late final AnimationController _pulseController;
   late final Animation<double>   _pulseAnim;
 
+  // Cue Study — Voice narrator (multilingual mic in CUE STUDY header)
+  final SpeechToText _narratorSpeech   = SpeechToText();
+  bool   _narratorSpeechAvailable      = false;
+  bool   _narratorRecording            = false; // SLP intends to record (drives web auto-restart)
+  bool   _narratorListening            = false; // mic is actively capturing right now
+  String _narratorText                 = '';    // accumulated transcript
+  String _narratorPrevText             = '';    // snapshot before each listen segment
+  bool   _narratorLoading              = false;
+  String? _narratorError;
+  String _narratorResponse             = '';
+
   // ── lifecycle ─────────────────────────────────────────────────────────────
 
   @override
@@ -190,6 +210,9 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     // Fire passive insight immediately — silent fail, no loading indicator on error
     _fetchPassiveInsight();
 
+    // Init narrator mic (non-blocking — updates _narratorSpeechAvailable)
+    _initNarratorSpeech();
+
     final parsed = _parseGoalText(widget.goal['goal_text'] as String? ?? '');
 
     _actionCtrl         = TextEditingController(text: parsed['action']);
@@ -213,6 +236,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   @override
   void dispose() {
     _pulseController.dispose();
+    _narratorSpeech.stop();
     _actionCtrl.dispose();
     _conditionCtrl.dispose();
     _criterionCtrl.dispose();
@@ -451,6 +475,109 @@ class _LtgEditScreenState extends State<LtgEditScreen>
         ),
       ),
     );
+  }
+
+  // ── Cue Study — Voice narrator (multilingual mic) ────────────────────────
+
+  Future<void> _initNarratorSpeech() async {
+    final available = await _narratorSpeech.initialize(
+      onStatus: (status) async {
+        // Web Speech API has a hard ~60 s session cap and fires 'done' when
+        // it hits it. If the SLP is still recording, silently restart so she
+        // gets a continuous session — same pattern as add_client_screen.dart.
+        if (status == 'done' && _narratorRecording && mounted) {
+          _narratorPrevText = _narratorText;
+          await _startNarratorListening();
+          return;
+        }
+        if ((status == 'done' || status == 'notListening') &&
+            !_narratorRecording &&
+            mounted) {
+          setState(() => _narratorListening = false);
+        }
+      },
+      onError: (e) {
+        if (mounted) {
+          setState(() {
+            _narratorListening  = false;
+            _narratorRecording  = false;
+            _narratorError = 'Microphone error — check browser permissions.';
+          });
+        }
+      },
+    );
+    if (mounted) setState(() => _narratorSpeechAvailable = available);
+  }
+
+  Future<void> _startNarratorListening() async {
+    await _narratorSpeech.listen(
+      onResult: (result) {
+        if (mounted) {
+          setState(() {
+            _narratorText =
+                ('$_narratorPrevText ${result.recognizedWords}').trim();
+          });
+        }
+      },
+      listenFor: const Duration(minutes: 10),
+      pauseFor: const Duration(minutes: 10),
+      localeId: 'en_IN',
+      listenOptions: SpeechListenOptions(partialResults: true),
+    );
+    if (mounted) setState(() => _narratorListening = true);
+  }
+
+  Future<void> _toggleNarratorMic() async {
+    if (!_narratorSpeechAvailable) return;
+
+    if (_narratorListening) {
+      // Tap to stop — keep transcript, submit automatically
+      _narratorRecording = false;
+      await _narratorSpeech.stop();
+      if (mounted) setState(() => _narratorListening = false);
+      if (_narratorText.isNotEmpty) await _submitNarrator();
+    } else {
+      // Tap to start
+      setState(() {
+        _narratorError    = null;
+        _narratorResponse = '';
+      });
+      _narratorPrevText  = _narratorText;
+      _narratorRecording = true;
+      await _startNarratorListening();
+    }
+  }
+
+  Future<void> _submitNarrator() async {
+    final spoken = _narratorText.trim();
+    if (spoken.isEmpty) return;
+
+    setState(() { _narratorLoading = true; _narratorError = null; });
+
+    try {
+      final text = await _callCueStudy(
+        systemPrompt: '$_csFrameworkPrompt $_csMultilingualSuffix',
+        userMessage:
+            'Goal: ${_assembled()}\n'
+            'Child: ${widget.clientName}\n'
+            'SLP said: $spoken',
+      );
+      if (mounted) {
+        setState(() {
+          _narratorResponse = text ?? '';
+          _narratorLoading  = false;
+          _narratorText     = ''; // clear transcript after successful response
+          _narratorPrevText = '';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _narratorError   = 'Cue Study is unavailable. Try again.';
+          _narratorLoading = false;
+        });
+      }
+    }
   }
 
   // ── Cue Study shared API helper ───────────────────────────────────────────
@@ -812,20 +939,72 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   }
 
   Widget _cueStudySection() {
-    final tagCardVisible     = _openTagName != null;
-    final reviewCardVisible  = _reviewLoading  || _reviewText  != null || _reviewError  != null;
-    final sessionCardVisible = _sessionLoading || _sessionText != null || _sessionError != null;
+    final tagCardVisible      = _openTagName != null;
+    final reviewCardVisible   = _reviewLoading  || _reviewText  != null || _reviewError  != null;
+    final sessionCardVisible  = _sessionLoading || _sessionText != null || _sessionError != null;
+    final narratorCardVisible = _narratorLoading || _narratorResponse.isNotEmpty || _narratorError != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Section header
-        _sectionLabel('CUE STUDY'),
+        // ── Section header row — label left, mic button right
+        Row(
+          children: [
+            Expanded(child: _sectionLabel('CUE STUDY')),
+            GestureDetector(
+              onTap: _toggleNarratorMic,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: _narratorListening
+                      ? const Color(0xFFEF4444)
+                      : _signalTeal,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _narratorListening ? Icons.stop : Icons.mic,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         Text(
           'Explore the evidence behind this goal, get direction when stuck, '
           'or translate it into session strategies.',
           style: GoogleFonts.dmSans(fontSize: 12, color: _ghost, height: 1.4),
+        ),
+
+        // ── Live transcript (shown while recording)
+        if (_narratorListening && _narratorText.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            _narratorText,
+            style: GoogleFonts.dmSans(
+              fontSize: 12, color: _signalTeal, fontStyle: FontStyle.italic, height: 1.4,
+            ),
+          ),
+        ],
+
+        // ── Narrator response card
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          alignment: Alignment.topCenter,
+          child: narratorCardVisible
+              ? Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _csCard(
+                    modeName: 'Voice reasoning',
+                    loading: _narratorLoading,
+                    text: _narratorResponse.isNotEmpty ? _narratorResponse : null,
+                    error: _narratorError,
+                  ),
+                )
+              : const SizedBox.shrink(),
         ),
 
         // ── Divider
