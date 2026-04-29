@@ -1,3 +1,19 @@
+# CUE NORTH STAR
+
+**JARVIS for SLPs. Expanding to all of rehabilitation.**
+
+JARVIS doesn't wait to be asked.
+JARVIS reads the room.
+JARVIS knows what the clinician needs before she knows she needs it.
+JARVIS makes the SLP feel like the smartest, most prepared version of herself.
+
+Every feature must pass this test:
+Does this make the clinician feel more like a JARVIS-assisted clinician, or more like a form-filler?
+
+If the answer is form-filler — kill it.
+
+---
+
 # Cue — Claude Code Project Context
 
 > **Read this file in full at the start of every non-trivial task.**
