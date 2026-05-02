@@ -134,13 +134,49 @@ A row in `stg_evidence` represents one session's measurable contribution to an S
 
 ---
 
-## 7. Database Schema — Target State
-> ⚠️ Schema drift note (confirmed 19 Apr 2026):
-> Prototype uses `clients` (not `patients`) and `sessions.id` is `bigint` (not `uuid`).
-> `short_term_goals` uses `long_term_goal_id`, `client_id`, `user_id` as FK column names.
-> Flutter data layer must match actual Supabase column names, not §7 canonical names.
-> DDL below is the canonical target. Run it via Supabase MCP `apply_migration`.
-> For the immediate additive migration (STG + evidence + attestation), see §8.
+## 7. Database Schema — Prototype Reality (canonical)
+
+> **Rewritten Phase 4.0.** §7 now documents what actually exists in Supabase project `cgnjbjbargkxtcnafxaa` today, plus the additive Phase 4.0 columns and tables. The earlier "canonical target" §7 (that named `patients`, `sessions.id uuid`, `short_term_goals.target_behavior + mastery_criterion jsonb`) was never migrated to and is now marked deprecated below. Flutter and proxy code read and write against this prototype shape; aligning §7 to that reality removes the compounding ambiguity tax of two competing schemas.
+
+### 7.1 Existing prototype tables (as of Phase 4.0 start)
+
+| Table | Purpose | Notes |
+|---|---|---|
+| `clients` | Roster (NOT `patients`). Per-client clinical intake fields. | Soft-delete via `deleted_at`. ASD/AAC-shaped columns (`uses_aac`, `communication_modality`, `regulatory_profile`, `baseline_summary`) are first-class on this table — Phase 4.0 adds population-aware columns alongside; legacy ASD/AAC columns retain. |
+| `sessions` | Per-session row. `id` is `bigint` (NOT `uuid`). FK is `client_id` (NOT `patient_id`). | Carries `soap_note jsonb`, `parent_update`, attestation columns. AAC-shaped per-session structured fields (barrier axes, prompt levels, trial counts) live here. |
+| `long_term_goals` | LTGs. FK is `client_id`. Plus `goal_text`, `notes` (with `Conditions:` prefix per §13.13 legacy or JSON-stringified structured-conditions per current §13.13). | Sequenced by `sequence_num`. |
+| `short_term_goals` | STG steps. FK columns are `long_term_goal_id`, `client_id`, `user_id`. Step shape is `specific + measurable + target_accuracy + time_bound_sessions` (NOT `target_behavior + mastery_criterion jsonb` from the deprecated target). | `original_text` carries the full Part A + Part B structured-conditions JSON per §13.13. |
+| `goal_plans` | Plan metadata written by Generate Plan. Carries `framework_router`, `router_confidence`, `clarifying_answers`, `reasoning_trace`, `data_sources`. | Written from proxy `routes/generateGoals.js`. |
+| `goal_attestations`, `goal_evidence_tags` | Plan attestation + evidence-tag rows. | Written from proxy. |
+| `clinic_profile` | Per-clinician practice configuration (RCI number, settings). | One row per clinician. |
+| `narrator_transcripts` | Whisper/GPT-4o-mini transcript rows. | Reader exists; current Narrator code path persists transcript content via `sessions` directly in some flows. Migration to Anthropic deferred. |
+| `stg_evidence` | Per-session per-STG measurement row. | **Resurrected in Phase 4.0** — was schema-defined in §8 but had no Flutter writer. Phase 4.0 adds a Flutter writer and a `population_payload jsonb` column for population-shaped metrics (Layer 06). |
+
+### 7.2 Phase 4.0 additive schema
+
+Every change below is additive. No drops, no renames. Existing read paths tolerate null new columns; legacy ASD/AAC clients render unchanged. See [PHASE_4_SPEC.md](PHASE_4_SPEC.md) Section 2 for the exact migration shape and per-population JSONB payloads.
+
+| Table | Phase 4.0 change |
+|---|---|
+| `clients` | add `population_type text not null default 'asd_aac'`; add `primary_language text`; add `additional_languages text[]`; add `primary_concern_verbatim text` |
+| `sessions` | add `population_payload jsonb` (Layer-03 live-entry / debrief data; carries `mode` discriminator) |
+| `goal_plans` | add `lesson_plan_inputs jsonb` (Layer-05 approach + techniques + session structure) |
+| `stg_evidence` | add `population_payload jsonb` (Layer-06 fluency metrics: `stuttered_syllables`, `total_syllables`, `naturalness_rating`, `support_level`, `self_report_rating`, `technique_practised` — all live as JSONB keys, NOT new top-level columns) |
+| `case_history_entries` | NEW table (Layer 02): `id uuid pk`, `client_id uuid fk`, `population_type text`, `payload jsonb`, `created_at`, `updated_at`, `created_by` |
+| `assessment_entries` | NEW table (Layer 03): `id uuid pk`, `client_id uuid fk`, `session_id bigint fk nullable`, `mode text` (`live_entry \| debrief \| parent_interview`), `population_type text`, `payload jsonb`, `created_at`, `updated_at`, `created_by` |
+
+`session_id` on `assessment_entries` is nullable because Layer-03c parent-interview can pre-date a session row. RLS on new tables follows the §11 per-clinician-isolation template; deferral status tracks under §11.
+
+### 7.3 STG state updates from `stg_evidence` (unchanged from §9.4)
+
+The §9.4 trigger continues to roll `current_accuracy`, `sessions_at_criterion`, and `total_sessions_worked` from the **structured columns** of `stg_evidence`. Phase 4.0's `population_payload` JSONB does NOT feed §9.4 — population-specific metrics feed the Progress Report composer instead (see [PHASE_4_SPEC.md](PHASE_4_SPEC.md) Section 4.3).
+
+### 7.4 Deprecated target — never migrated to
+
+Earlier §7 documented a target schema with `patients` (not `clients`), `sessions.id uuid` (not `bigint`), and `short_term_goals.target_behavior + mastery_criterion jsonb` (not `specific + measurable + target_accuracy + time_bound_sessions`). The prototype never migrated to that shape; the Flutter data layer and the proxy both write the shape documented in §7.1. Phase 4.0 commits to prototype reality as canonical and removes the deprecated target's DDL block from §7. The deprecated DDL survives only in git history; do not reintroduce its column names in new code.
+
+<!-- DEPRECATED-DDL-START -->
+<details><summary>Deprecated target DDL (never migrated to — kept folded for historical reference only)</summary>
 
 ```sql
 -- =========================================================
@@ -325,6 +361,8 @@ create table if not exists narrator_transcripts (
 create index if not exists idx_narrator_session
   on narrator_transcripts(session_id);
 ```
+</details>
+<!-- DEPRECATED-DDL-END -->
 
 ## 8. Database Schema — Additive Migration (this sprint)
 
@@ -844,6 +882,39 @@ Cue Study remains the clinical reasoning partner per §13.6, §13.7, §13.8. Cue
 
 **Cross-references.** §2 (CUE PRODUCT LAW — labour the SLP didn't ask for never lands on the chart), §13.6 (chart ownership), §13.13 (the data model preserves what §13.14 strips from the chart so future surfaces can still surface it), §14.6 (Phase 4.1 Cue Calc — Route 1 implementation), §14.7 (Phase 5+ Cue Reference — Route 2, deferred).
 
+### 13.15 Cue's vantage extends to the structured data layer
+
+> **Locked Phase 4.0.** §13.8 VANTAGE governs authored prose. §13.15 extends the same discipline to structured fields, form labels, dropdown options, and any schema-shaped surface the SLP touches. Cue's affirmative-language commitments are not a prose-only concern — they live in the schema.
+
+Specifically:
+
+- **No gendered pronouns in core profile display strings.** Identity uses name + age + concern only. This applies to every population's intake form, every chart header, every tile that names a client. Mirrors §13.8's name-first rule into the structured layer.
+- **Variability across contexts uses "easier in / harder in" framing**, never "better/worse." When a structured field captures where stuttering (or any clinical phenomenon) is more or less present, the labels are `easier_in` / `harder_in`, with display copy "easier in {context}" / "harder in {context}." A child does not perform "better" or "worse" — variability is observed, not graded.
+- **Emotional response uses "comfort level" framing**, never "frustration." The enum values are `high` / `mixed` / `low`. Low values are a clinical concern (the SLP attends to them); they are never framed as the child being "frustrated" or "difficult." This is the same principle that turns "stuck" into "active for N sessions" in §13.2 — relocate the framing from a verdict on the child to an observation Cue surfaces.
+- **Awareness stays as-is.** Awareness is a clinical construct in fluency literature (none/some/high), not a deficit-framing word. It survives the §13.15 pass intact.
+- **Applies to every population.** As Cue expands beyond developmental stuttering, every new structured form is reviewed against §13.15 before ship. The reviewer asks: does this label or enum value frame the child as deficient? If yes, restructure.
+
+**Cross-references.** §13.8 (vantage in prose — the parent rule), §13.1 (forbidden words — same discipline applied to free-form copy), §2 (CUE PRODUCT LAW — labels that perform judgement add invisible labour the SLP must absorb).
+
+### 13.16 Legacy clinical data is never AI-re-extracted without SLP attestation
+
+> **Locked Phase 4.0.** When Cue's data architecture changes (population restructuring, schema additions, new structured fields replacing what used to be free text), existing clinical data captured under the old shape stays in legacy mode forever — UNLESS the SLP explicitly initiates migration with attestation.
+
+**The principle.** Cue does not silently re-interpret previous SLP-captured prose into new structured fields, even when migration would benefit downstream features. The trust boundary is hard: clinicians own their authored content; Cue does not silently re-author it.
+
+**Why.** The Phase 4.0 example is illustrative. The pre-Phase-4 schema captured Layer-2 case history as free-text `regulatory_profile` and `baseline_summary` columns. Phase 4.0 introduces structured Layer-2 payloads keyed by population. It would be technically straightforward to feed the legacy free text to an LLM and emit a structured payload. Doing so would be a category error: the SLP authored those words in a specific clinical voice for a specific purpose, and an AI re-extraction is a re-authoring — Cue would be putting words into structured fields the SLP never affirmed. That violates §13.6 (chart ownership) and adds a silent provenance ambiguity to the chart that the SLP cannot audit.
+
+**The rule.**
+
+- Legacy free text continues to render verbatim, in clearly-labeled "previous intake notes (verbatim)" or equivalent legacy blocks.
+- New structured fields begin empty for legacy clients; they fill incrementally as the SLP captures fresh data.
+- An opt-in migration tool is permissible (Phase 4.x deferred): SLP reads the legacy text, optionally edits it, and explicitly attests to the migrated structured shape. The attestation is logged. Without that explicit step, the legacy text never enters the structured layer.
+- AI-assisted re-extraction from the original PDF source (if still on file) is also gated on SLP attestation — the SLP reviews and confirms each extracted field before persistence.
+
+**Applies to every future schema migration**, not just Phase 4.0. Whenever Cue's data shape evolves and an LLM-assisted backfill becomes technically viable, §13.16 forbids the silent path. The migration ships with explicit SLP attestation OR it does not ship.
+
+**Cross-references.** §13.6 (chart ownership), §13.8 (vantage — Cue does not author what the SLP authored), §9.2 (clinician attestation gate — the same liability architecture applied to migration), §2 (CUE PRODUCT LAW — silent re-authoring is performative labour the SLP didn't authorise).
+
 ## 14. Architectural Direction
 
 > **Decisions made in conversation, captured here so future Claude Code instances start from the right premise.** Locked unless explicitly revisited.
@@ -936,6 +1007,41 @@ PCC, PVC, PCC-R, whole-word accuracy, %SS, speech rate, articulation rate, TTR, 
 Grounded-retrieval surface for broader clinical reference content beyond what Cue Calc deterministically computes. RAG architecture against a hand-curated public-domain corpus (ASHA practice portal, peer-reviewed open-access literature, public-domain textbooks, hand-curated clinical knowledge cards). Every answer cites its source. The LLM surfaces verified content with provenance; it does not generate reference content from training data.
 
 **Deferred until Phase 5 or after.** See §13.14 ROUTE 2 for the boundary that governs what this surface is permitted to do.
+
+### 14.8 Phase 4.0 — Cue becomes a multi-population platform
+
+> **Locked Phase 4.0 Session 2.** Phase 4.0 is the moment Cue stops being a single-population (ASD/AAC) product and becomes a multi-population platform. The first population shipped end-to-end under the new architecture is **developmental stuttering**. The load-bearing document for the next 8–12 build sessions is [PHASE_4_SPEC.md](PHASE_4_SPEC.md) — every Phase 4.0.x build session reads its relevant section from that spec before writing code.
+
+Phase 4.0 V1 ships developmental stuttering only. Other fluency sub-types (acquired adult, neurogenic, psychogenic, cluttering) are V1.1–V1.4 and ship as separate phases AFTER V1. Other populations (SSD, voice, language, dyslexia, CP, HI) are Phase 4.1+. Co-occurring populations on a single client are Phase 4.x. ASD/AAC re-architecture into the six-layer model is Phase 4.x — for the duration of Phase 4.0, ASD/AAC clients render unchanged on the legacy AAC-shaped surfaces.
+
+The architectural commitment: ship one population fully — Layer 01 through Layer 06 plus three derived outputs — before any second population begins. Build order is strict and documented in PHASE_4_SPEC.md Section 5.
+
+### 14.9 Six-layer architecture is canonical for every population
+
+> **Locked Phase 4.0 Session 2.** Every population Cue serves implements the same six-layer shape. Population-specific concerns live in JSONB `population_payload` columns; the table-level structure and the layer ordering are universal.
+
+**The six layers:**
+
+| Layer | Purpose | Where it lives |
+|---|---|---|
+| 01 | **Core Profile** — population-agnostic identity. Name, age, primary concern verbatim, languages, population_type. | `clients` table (extended in Phase 4.0). |
+| 02 | **Case History** — population-specific. For developmental stuttering: onset, development pattern, variability across contexts (§13.15 affirmative wording), awareness, comfort level (§13.15), secondary behaviours, previous intervention. | `case_history_entries` table, `payload jsonb` keyed by `population_type`. |
+| 03 | **Assessment Data** — three sub-modes: (a) live entry during a session, (b) debrief after a session, (c) parent interview, recurrent across the assessment phase. | `sessions.population_payload jsonb` for (a) and (b) anchored to a session row; `assessment_entries` table with `mode` discriminator for (c). |
+| 04 | **Pre-therapy Planning** — family goals, priority focus, child's readiness, family involvement. | Captured during Goal Authoring; persisted as part of `goal_plans` metadata. |
+| 05 | **Lesson Plan Inputs** — therapy approach, techniques to include, session structure (duration, frequency, target support level). | `goal_plans.lesson_plan_inputs jsonb`. |
+| 06 | **Progress Tracking** — per-session per-STG structured metrics. For developmental stuttering: stuttered_syllables, total_syllables, %SS (Cue Calc deterministic), naturalness_rating, support_level, self_report_rating, technique_practised. | `stg_evidence.population_payload jsonb`. The §9.4 trigger continues to roll standard columns; population-specific metrics feed the Progress Report composer. |
+
+**Three derived outputs** compose from the six layers:
+
+- **Assessment Report** — composes layers 01–03. Section anatomy in [PHASE_4_SPEC.md](PHASE_4_SPEC.md) Section 4.2.
+- **Progress Report** — composes layer 06 longitudinally + the goal plan from layer 05. Section anatomy in PHASE_4_SPEC.md Section 4.3.
+- **Baseline Snapshot** — structured snapshot at the end of layer 03 lock; surfaced at the assessment-lock moment in the chart timeline.
+
+**Schema generalises across populations via the JSONB population_payload pattern.** The column shape is identical across populations (`population_type text` + `payload jsonb`); the JSONB key set is population-specific. New populations add a new key set to the same column; they do not add new tables or alter the layer ordering.
+
+**Build order is strict 1 → 2 → 3 → 4 → 5 → 6, no leap-frog**, for every population. Layer 06 metrics are meaningless without Layer 05's technique frame; Layer 04 inputs are meaningless without Layer 03's baseline. The order is the dependency graph.
+
+**Cross-references.** [PHASE_4_SPEC.md](PHASE_4_SPEC.md) (the load-bearing master spec for Phase 4.0 V1), §7 (the schema additions that implement layers 01–06 for developmental stuttering), §13.15 (affirmative language at the structured data layer — applies to every population's Layer 02 and Layer 03 forms), §13.16 (legacy data never AI-re-extracted — applies whenever a population's schema evolves), §14.6 (Cue Calc — the deterministic computation surface that Layer-03a and Layer-06 metric paths depend on).
 
 ## 15. Deployment Discipline
 
