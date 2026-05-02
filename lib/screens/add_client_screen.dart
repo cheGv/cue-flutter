@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/case_history_fluency_section.dart';
 
 // ── Design tokens (§5 palette) ────────────────────────────────────────────────
 const Color _ink      = Color(0xFF1B2B4B);
@@ -31,7 +32,18 @@ const String _brainDumpSystem =
     'guardian_name, school_setting, referral_source, previous_therapy (true/false), '
     'previous_therapy_duration, regulatory_profile, baseline_summary, '
     'primary_language, additional_languages (array of strings), '
-    'primary_concern_verbatim (the parent\'s words about why they came, quoted as closely as possible). '
+    'primary_concern_verbatim (the parent\'s words about why they came, quoted as closely as possible), '
+    'case_history (object — only populate for developmental stuttering. Keys: '
+    'onset {age_of_onset_text, onset_pattern: gradual|sudden|unknown}, '
+    'family_history {stuttering_present: yes|no|unknown, details}, '
+    'variability_across_contexts {harder_in: [string], easier_in: [string]} '
+    'where context values are drawn from: talking_to_strangers, reading_aloud, '
+    'classroom, phone_speaking, with_siblings, at_home, with_friends, '
+    'with_unfamiliar_adults, '
+    'awareness {level: none|slight|moderate|marked}, '
+    'comfort_level {level: low|moderate|high}, '
+    'secondary_behaviours: [eye_blink|facial_tension|head_movement|limb_movement|audible_tension], '
+    'previous_intervention {received: yes|no|unknown, where, when, approach, outcome}). '
     'Return valid JSON only, no markdown, no explanation.';
 
 const String _extractSystem =
@@ -43,7 +55,18 @@ const String _extractSystem =
     'school_setting, referral_source, previous_therapy (true/false), '
     'previous_therapy_duration, regulatory_profile, baseline_summary, '
     'primary_language, additional_languages (array of strings), '
-    'primary_concern_verbatim (the parent\'s or referrer\'s words about the reason for referral, quoted closely). '
+    'primary_concern_verbatim (the parent\'s or referrer\'s words about the reason for referral, quoted closely), '
+    'case_history (object — only populate for developmental stuttering. Keys: '
+    'onset {age_of_onset_text, onset_pattern: gradual|sudden|unknown}, '
+    'family_history {stuttering_present: yes|no|unknown, details}, '
+    'variability_across_contexts {harder_in: [string], easier_in: [string]} '
+    'where context values are drawn from: talking_to_strangers, reading_aloud, '
+    'classroom, phone_speaking, with_siblings, at_home, with_friends, '
+    'with_unfamiliar_adults, '
+    'awareness {level: none|slight|moderate|marked}, '
+    'comfort_level {level: low|moderate|high}, '
+    'secondary_behaviours: [eye_blink|facial_tension|head_movement|limb_movement|audible_tension], '
+    'previous_intervention {received: yes|no|unknown, where, when, approach, outcome}). '
     'Return valid JSON only, no markdown, no explanation.';
 
 // Population types selectable in V1. V1.x adds others (acquired_stuttering,
@@ -88,6 +111,13 @@ class _AddClientScreenState extends State<AddClientScreen> {
   final _additionalLangsCtrl  = TextEditingController(); // comma-separated
   final _concernVerbatimCtrl  = TextEditingController();
 
+  // ── Layer-02 Phase 4.0.3 (case history, developmental stuttering only) ─────
+  Map<String, dynamic> _caseHistoryPayload = const {};
+  String? _existingCaseHistoryId; // uuid of loaded case_history_entries row
+  // Bumped to force the section to re-seed when AI extract or async-load
+  // delivers a new initial payload.
+  int _caseHistoryRebuildSeq = 0;
+
   // ── Clinical intake fields ──────────────────────────────────────────────────
   final _secDiagCtrl          = TextEditingController();
   final _referralCtrl         = TextEditingController();
@@ -110,7 +140,35 @@ class _AddClientScreenState extends State<AddClientScreen> {
   @override
   void initState() {
     super.initState();
-    if (_isEditMode) _populateFromExistingClient(widget.existingClient!);
+    if (_isEditMode) {
+      _populateFromExistingClient(widget.existingClient!);
+      // Async — load case_history_entries row if it exists. Rebuild on
+      // arrival so the section seeds with persisted state.
+      _loadExistingCaseHistory();
+    }
+  }
+
+  Future<void> _loadExistingCaseHistory() async {
+    final clientId = widget.existingClient?['id'];
+    if (clientId == null) return;
+    try {
+      final row = await _supabase
+          .from('case_history_entries')
+          .select('id, payload')
+          .eq('client_id', clientId)
+          .eq('population_type', 'developmental_stuttering')
+          .maybeSingle();
+      if (row == null || !mounted) return;
+      setState(() {
+        _existingCaseHistoryId = row['id'] as String?;
+        final p = row['payload'];
+        _caseHistoryPayload =
+            (p is Map) ? Map<String, dynamic>.from(p) : const {};
+        _caseHistoryRebuildSeq++;
+      });
+    } catch (_) {
+      // Soft-fail — table may be empty for this client. Form starts blank.
+    }
   }
 
   void _populateFromExistingClient(Map<String, dynamic> c) {
@@ -303,6 +361,17 @@ class _AddClientScreenState extends State<AddClientScreen> {
       filled.add('additional_languages');
     }
 
+    // Layer-02 case history: only seed if the SLP hasn't started filling it
+    // yet (§13.16 — never silently overwrite clinician-entered structure).
+    final caseHistoryFromAi = data['case_history'];
+    if (_caseHistoryPayload.isEmpty &&
+        caseHistoryFromAi is Map &&
+        caseHistoryFromAi.isNotEmpty) {
+      _caseHistoryPayload = Map<String, dynamic>.from(caseHistoryFromAi);
+      _caseHistoryRebuildSeq++;
+      filled.add('case_history');
+    }
+
     // Age (numeric)
     if (data['age'] != null) {
       _ageCtrl.text = data['age'].toString();
@@ -455,16 +524,50 @@ class _AddClientScreenState extends State<AddClientScreen> {
     };
 
     try {
+      String clientId;
       if (_isEditMode) {
-        final id = widget.existingClient!['id'];
-        await _supabase.from('clients').update(data).eq('id', id);
+        clientId = widget.existingClient!['id'] as String;
+        await _supabase.from('clients').update(data).eq('id', clientId);
       } else {
-        await _supabase.from('clients').insert({
-          ...data,
-          'total_sessions': 0,
-          'clinician_id':   userId,
-        });
+        final inserted = await _supabase
+            .from('clients')
+            .insert({
+              ...data,
+              'total_sessions': 0,
+              'clinician_id':   userId,
+            })
+            .select('id')
+            .single();
+        clientId = inserted['id'] as String;
       }
+
+      // Layer 02 persistence — only for developmental_stuttering. Soft-fails
+      // with a SnackBar; the client save itself has already landed.
+      if (_populationType == 'developmental_stuttering') {
+        try {
+          if (_existingCaseHistoryId != null) {
+            await _supabase
+                .from('case_history_entries')
+                .update({'payload': _caseHistoryPayload})
+                .eq('id', _existingCaseHistoryId!);
+          } else {
+            await _supabase.from('case_history_entries').insert({
+              'client_id':       clientId,
+              'population_type': 'developmental_stuttering',
+              'payload':         _caseHistoryPayload,
+              'created_by': ?userId,
+            });
+          }
+        } catch (caseErr) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(
+                  'Client saved. Case history capture failed — $caseErr')),
+            );
+          }
+        }
+      }
+
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
@@ -523,6 +626,16 @@ class _AddClientScreenState extends State<AddClientScreen> {
                 // ── Parent's concern ───────────────────────────────────────
                 _buildConcernSection(),
                 const SizedBox(height: 32),
+
+                // ── Layer 02: case history (developmental stuttering only) ─
+                if (_populationType == 'developmental_stuttering') ...[
+                  CaseHistoryFluencySection(
+                    key: ValueKey('case_history_$_caseHistoryRebuildSeq'),
+                    initialPayload: _caseHistoryPayload,
+                    onChanged: (p) => _caseHistoryPayload = p,
+                  ),
+                  const SizedBox(height: 32),
+                ],
 
                 // ── Basic ──────────────────────────────────────────────────
                 _sectionLabel('Basic'),
