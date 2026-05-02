@@ -21,6 +21,7 @@ import 'add_client_screen.dart';
 import 'cue_study_screen.dart';
 import 'goal_authoring_screen.dart';
 import 'ltg_edit_screen.dart';
+import 'pre_therapy_planning_fluency_screen.dart';
 
 // ── Theme-aware colour swatch ─────────────────────────────────────────────────
 class _C {
@@ -448,13 +449,45 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // ── Navigation ────────────────────────────────────────────────────────────
 
   Future<void> _openGoalAuthoring() async {
+    final population = _client['population_type'] as String? ?? 'asd_aac';
+    final clientId = _client['id'].toString();
+    final clientName = _client['name'] as String? ?? '';
+    final sessionCount = _client['total_sessions'] as int? ?? 0;
+
+    // Phase 4.0.7 — for developmental_stuttering clients, gate Build-plan
+    // on Layer-04 plan_inputs being locked. If they aren't yet, route
+    // through the pre-therapy planning surface first; that screen calls
+    // pushReplacement → GoalAuthoringScreen on lock+proceed.
+    if (population == 'developmental_stuttering') {
+      final locked = await isPlanInputsLocked(
+        supabase: _supabase,
+        clientId: clientId,
+      );
+      if (!locked) {
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PreTherapyPlanningFluencyScreen(
+              clientId:     clientId,
+              clientName:   clientName,
+              sessionCount: sessionCount,
+            ),
+          ),
+        );
+        if (mounted) _refreshSpine();
+        return;
+      }
+    }
+
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => GoalAuthoringScreen(
-          clientId:     _client['id'].toString(),
-          clientName:   _client['name'] as String? ?? '',
-          sessionCount: _client['total_sessions'] as int? ?? 0,
+          clientId:     clientId,
+          clientName:   clientName,
+          sessionCount: sessionCount,
         ),
       ),
     );
@@ -464,6 +497,23 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     // sliver's empty-chart bypass re-evaluates. _refreshSpine handles
     // both. The cost is one extra round-trip when the SLP cancels —
     // small price for guaranteed reactivity.
+    if (mounted) _refreshSpine();
+  }
+
+  // Phase 4.0.7 — chart-side entry point for editing plan inputs without
+  // proceeding to authoring. Used by the "Plan inputs" pill on the bar.
+  Future<void> _openPlanInputs() async {
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PreTherapyPlanningFluencyScreen(
+          clientId:                _client['id'].toString(),
+          clientName:              _client['name'] as String? ?? '',
+          sessionCount:            _client['total_sessions'] as int? ?? 0,
+          proceedToAuthoringOnLock: false,
+        ),
+      ),
+    );
     if (mounted) _refreshSpine();
   }
 
@@ -1247,6 +1297,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     // truncate at the desktop ConstrainedBox(max: 560) cap. Now each pill
     // takes its natural width; the bar shrink-wraps on desktop and
     // scrolls horizontally on mobile when content exceeds viewport.
+    // Phase 4.0.7 — show a "Plan inputs" pill between Session and Build
+    // plan for developmental_stuttering clients. asd_aac sees the bar
+    // unchanged.
+    final population = _client['population_type'] as String? ?? 'asd_aac';
+    final showPlanInputs = population == 'developmental_stuttering';
+
     final pillRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1257,6 +1313,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           onTap:     _openAddSession,
         ),
         divider,
+        if (showPlanInputs) ...[
+          _FabBarItem(
+            icon:      Icon(Icons.tune, size: 14, color: c.amber),
+            label:     'Plan inputs',
+            labelColor: c.amber,
+            onTap:     _openPlanInputs,
+          ),
+          divider,
+        ],
         _FabBarItem(
           // Cue Study — the conversational clinical reasoning surface.
           // Phase 3.3: renamed from "Ask Cue" for codebase-vocabulary
