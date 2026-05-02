@@ -3,16 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/name_formatter.dart';
+import '../theme/cue_theme.dart';
+import '../theme/cue_tokens.dart';
+import '../theme/cue_typography.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/cue_amber_link.dart';
+import '../widgets/cue_cuttlefish.dart';
 import 'client_profile_screen.dart';
 
-// ── Design tokens (§5 palette) ─────────────────────────────────────────────────
-const Color _paper    = Color(0xFFFAFAF7);
-const Color _ink      = Color(0xFF1B2B4B);
-const Color _ghost    = Color(0xFF6B7690);
-const Color _amber    = Color(0xFFB45309);
-const Color _border   = Color(0xFFE8E4DC);
-const Color _skeleton = Color(0xFF9CA3AF);
+// ── Legacy local palette ─────────────────────────────────────────────────────
+// Pre-Phase-3.1 yesterday-reminder code (further down) still references
+// these. Phase 3.1 brief / pulse / greeting blocks all flow from CueColors
+// + CueAlpha + cue_tokens directly.
+const Color _paper  = Color(0xFFFAFAF7);
+const Color _ink    = Color(0xFF1B2B4B);
+const Color _ghost  = Color(0xFF6B7690);
+const Color _amber  = Color(0xFFB45309);
+const Color _border = Color(0xFFE8E4DC);
 
 // ── Proxy (§4 — plain http.post, never functions.invoke) ───────────────────────
 const String _proxyBase = 'https://cue-ai-proxy.onrender.com';
@@ -34,18 +42,6 @@ String _todayStr() => DateTime.now().toIso8601String().split('T').first;
 String _yesterdayStr() =>
     DateTime.now().subtract(const Duration(days: 1)).toIso8601String().split('T').first;
 
-String _formatDate(DateTime d) {
-  const days = [
-    'Monday', 'Tuesday', 'Wednesday', 'Thursday',
-    'Friday', 'Saturday', 'Sunday'
-  ];
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
-  return '${days[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
-}
-
 // ── Widget ─────────────────────────────────────────────────────────────────────
 
 class TodayScreen extends StatefulWidget {
@@ -64,11 +60,51 @@ class _TodayScreenState extends State<TodayScreen> {
   List<Map<String, dynamic>> _allClients      = []; // full caseload for picker
   bool _expandYesterday = false;
 
+  // ── Phase 3.1: greeting + last-session + week-pulse data ────────────────
+  /// SLP first name resolved from auth metadata (best-effort — falls back
+  /// to null which collapses the greeting comma-name suffix).
+  String? _slpFirstName;
+  /// Most-recent session per client_id, used by the "Last session: …" line.
+  /// null entry = no session ever recorded for that client.
+  final Map<String, Map<String, dynamic>?> _lastSessionByClient = {};
+  /// Counts for the "this week" pulse strip.
+  int _weekSessionCount     = 0;
+  int _weekDocumentedCount  = 0;
+  int _weekGoalsAchieved    = 0;
+
   @override
   void initState() {
     super.initState();
+    _slpFirstName = _resolveSlpFirstName();
     _load();
   }
+
+  /// Read the SLP's first name from Supabase auth metadata. Tries common
+  /// metadata keys, then falls back to splitting an email local-part on
+  /// dots/underscores. Returns null if nothing usable is found.
+  String? _resolveSlpFirstName() {
+    final user = _supabase.auth.currentUser;
+    if (user == null) return null;
+    final md = user.userMetadata;
+    for (final key in const ['first_name', 'firstName', 'name', 'full_name']) {
+      final v = md?[key];
+      if (v is String && v.trim().isNotEmpty) {
+        final first = v.trim().split(RegExp(r'\s+')).first;
+        return _capitalise(first);
+      }
+    }
+    // Last-ditch fallback: derive from email local-part.
+    final email = user.email;
+    if (email != null && email.contains('@')) {
+      final local = email.split('@').first;
+      final first = local.split(RegExp(r'[._]')).first;
+      if (first.isNotEmpty) return _capitalise(first);
+    }
+    return null;
+  }
+
+  String _capitalise(String s) =>
+      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1).toLowerCase();
 
   // ── Data orchestration ──────────────────────────────────────────────────────
 
@@ -134,9 +170,105 @@ class _TodayScreenState extends State<TodayScreen> {
           _generateBrief(row); // intentionally un-awaited — runs in parallel
         }
       }
+
+      // Phase 3.1 secondary fetches — last session per client + week pulse.
+      // Run un-awaited so the screen renders fast even if these are slow.
+      _loadLastSessionPerClient(uid: uid, rosterRows: rosterRows);
+      _loadWeekPulse(uid: uid);
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Pulls the most-recent session for every client on today's roster in
+  /// ONE query, then groups in memory. Populates [_lastSessionByClient].
+  Future<void> _loadLastSessionPerClient({
+    required String uid,
+    required List<Map<String, dynamic>> rosterRows,
+  }) async {
+    if (rosterRows.isEmpty) return;
+    final clientIds = rosterRows
+        .map((r) {
+          final cl = r['clients'] as Map?;
+          return cl?['id']?.toString();
+        })
+        .where((id) => id != null && id.isNotEmpty)
+        .map((id) => id!)
+        .toSet()
+        .toList();
+    if (clientIds.isEmpty) return;
+    try {
+      // sessions.client_id is text in this schema; pass strings.
+      final rows = await _supabase
+          .from('sessions')
+          .select('id, client_id, date, soap_note, notes, created_at')
+          .eq('user_id', uid)
+          .inFilter('client_id', clientIds)
+          .order('date', ascending: false);
+
+      final byClient = <String, Map<String, dynamic>?>{
+        for (final id in clientIds) id: null,
+      };
+      for (final raw in rows) {
+        final r = Map<String, dynamic>.from(raw as Map);
+        final cid = r['client_id']?.toString();
+        if (cid == null) continue;
+        // First row wins (already date-desc).
+        byClient[cid] ??= r;
+      }
+      if (mounted) {
+        setState(() {
+          _lastSessionByClient
+            ..clear()
+            ..addAll(byClient);
+        });
+      }
+    } catch (_) {/* leave map empty — UI shows "not yet documented" */}
+  }
+
+  /// Sessions in last 7d, of which N have a note attached, plus goals
+  /// achieved in the same window. Three counters; one query per metric.
+  Future<void> _loadWeekPulse({required String uid}) async {
+    final sevenDaysAgo = DateTime.now()
+        .toUtc()
+        .subtract(const Duration(days: 7))
+        .toIso8601String()
+        .split('T')
+        .first;
+    try {
+      final results = await Future.wait<dynamic>([
+        _supabase
+            .from('sessions')
+            .select('id, soap_note, notes')
+            .eq('user_id', uid)
+            .gte('date', sevenDaysAgo),
+        _supabase
+            .from('long_term_goals')
+            .select('id')
+            .eq('user_id', uid)
+            .eq('status', 'achieved')
+            .gte('updated_at', sevenDaysAgo),
+      ]);
+      final sessionRows = (results[0] as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+      final goalRows = (results[1] as List).length;
+
+      final documented = sessionRows.where((s) {
+        final soap  = (s['soap_note'] as String?)?.trim();
+        final notes = (s['notes']     as String?)?.trim();
+        return (soap != null && soap.isNotEmpty) ||
+               (notes != null && notes.isNotEmpty);
+      }).length;
+
+      if (mounted) {
+        setState(() {
+          _weekSessionCount    = sessionRows.length;
+          _weekDocumentedCount = documented;
+          _weekGoalsAchieved   = goalRows;
+        });
+      }
+    } catch (_) {/* leave at zero */}
   }
 
   // Returns true if the stored brief_text is absent or malformed
@@ -454,7 +586,7 @@ class _TodayScreenState extends State<TodayScreen> {
               const SizedBox(height: 20),
               Text(
                 'Who are you seeing today?',
-                style: GoogleFonts.playfairDisplay(
+                style: CueType.serif(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: _ink,
@@ -558,6 +690,14 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ── Build ───────────────────────────────────────────────────────────────────
 
+  // ── End-of-day detection ────────────────────────────────────────────────
+  // True when every roster row for today has session_documented = true AND
+  // there is at least one row. This is the "good work today" moment.
+  bool get _isEndOfDay {
+    if (_rosterRows.isEmpty) return false;
+    return _rosterRows.every((r) => (r['session_documented'] as bool?) == true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppLayout(
@@ -567,25 +707,107 @@ class _TodayScreenState extends State<TodayScreen> {
           ? const Center(
               child: CircularProgressIndicator(
                 strokeWidth: 1.5,
-                color: Color(0xFF1B2B4B),
+                color: CueColors.amber,
               ),
             )
-          : LayoutBuilder(
-              builder: (context, constraints) {
-                final hPad = constraints.maxWidth > 700 ? 48.0 : 24.0;
-                return ColoredBox(
-                  color: _paper,
-                  child: ListView(
-                    padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 96),
-                    children: [
-                      if (_yesterdayMissed.isNotEmpty)
-                        _buildYesterdayReminder(),
-                      _buildTodayZone(),
-                    ],
-                  ),
-                );
-              },
+          : (_isEndOfDay
+              ? _buildEndOfDayResting()
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final hPad = constraints.maxWidth > 700 ? 48.0 : 24.0;
+                    return ColoredBox(
+                      color: _paper,
+                      child: ListView(
+                        padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 96),
+                        children: [
+                          if (_yesterdayMissed.isNotEmpty)
+                            _buildYesterdayReminder(),
+                          _buildTodayZone(),
+                        ],
+                      ),
+                    );
+                  },
+                )),
+    );
+  }
+
+  // ── End-of-day resting moment ──────────────────────────────────────────
+  // Forces night-mode visual regardless of user setting — end of day IS
+  // night. Centered Cue resting + stat pill + "Cue will prepare tomorrow's
+  // briefs overnight." footnote.
+  Widget _buildEndOfDayResting() {
+    // Counts
+    final sessionsDone = _rosterRows.length;
+    int goalsHit = 0;
+    int pending  = 0;
+    for (final r in _rosterRows) {
+      final goalMet = (r['goal_met'] as String?)?.toLowerCase();
+      if (goalMet == 'yes' || goalMet == 'met') goalsHit++;
+      // "Pending" = anything flagged for tomorrow follow-up. Without a
+      // dedicated column we infer from next_session_focus presence.
+      final next = (r['next_session_focus'] as String?)?.trim();
+      if (next != null && next.isNotEmpty) pending++;
+    }
+
+    return Stack(
+      children: [
+        // Forced near-black background — end of day IS night.
+        const Positioned.fill(
+          child: ColoredBox(color: CueColors.backgroundDark),
+        ),
+        // Soft amber halo beneath the cuttlefish.
+        Positioned.fill(
+          child: Center(
+            child: Container(
+              width:  220,
+              height: 220,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    CueColors.amber.withValues(alpha: 0.10),
+                    CueColors.amber.withValues(alpha: 0.0),
+                  ],
+                ),
+              ),
             ),
+          ),
+        ),
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CueCuttlefish(size: 96, state: CueState.resting),
+              const SizedBox(height: 24),
+              Text(
+                'Good work today.',
+                style: CueType.displayMedium
+                    .copyWith(color: CueColors.inkDark),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'See you tomorrow.',
+                style: CueType.bodyLarge
+                    .copyWith(color: CueColors.inkSecondaryDark),
+              ),
+              const SizedBox(height: 28),
+              _StatPill(
+                sessions: sessionsDone,
+                goalsHit: goalsHit,
+                pending:  pending,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'Cue will prepare tomorrow\'s briefs overnight.',
+                style: CueType.bodySmall.copyWith(
+                  color:     CueColors.inkTertiaryDark,
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -689,109 +911,199 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
-  // ── Zone 2: Today's roster ──────────────────────────────────────────────────
+  // ── Phase 3.1: Today screen content blocks ──────────────────────────────
 
   Widget _buildTodayZone() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header row: date + add button
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Expanded(
-              child: Text(
-                'Today · ${_formatDate(DateTime.now())}',
-                style: GoogleFonts.playfairDisplay(
-                  fontSize:   18,
-                  fontWeight: FontWeight.w700,
-                  color:      _ink,
-                ),
-              ),
-            ),
-            GestureDetector(
-              onTap: _showAddSheet,
-              child: Container(
-                width:  32,
-                height: 32,
-                decoration: BoxDecoration(
-                  border:       Border.all(color: _border),
-                  borderRadius: BorderRadius.circular(8),
-                  color:        Colors.white,
-                ),
-                child: Icon(Icons.add_rounded, size: 18, color: _ink),
-              ),
-            ),
-          ],
+        _buildGreetingBlock(),
+        const SizedBox(height: CueGap.greetingToEyebrow),
+
+        // Today's session(s) section — eyebrow row keeps the "+" affordance
+        // for adding clients to the roster (legacy behaviour preserved,
+        // visually demoted from the prior big header).
+        _buildEyebrowRow(
+          label: "today's session",
+          trailing: _buildAddRosterButton(),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: CueGap.eyebrowToCard),
+        if (_rosterRows.isEmpty)
+          _buildEmptyTodayHint()
+        else
+          ..._rosterRows.asMap().entries.map((e) => Padding(
+                padding: EdgeInsets.only(
+                  bottom: e.key == _rosterRows.length - 1
+                      ? 0
+                      : CueGap.sessionCardGap,
+                ),
+                child: _buildSessionBriefCard(e.value),
+              )),
 
-        // Empty state
-        if (_rosterRows.isEmpty) ...[
-          Text(
-            'Who are you seeing today?',
-            style: GoogleFonts.dmSans(fontSize: 15, color: _ghost),
-          ),
-          const SizedBox(height: 12),
-          GestureDetector(
-            onTap: _showAddSheet,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                border:       Border.all(color: _border),
-                borderRadius: BorderRadius.circular(10),
-                color:        Colors.white,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_rounded, size: 16, color: _ink),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Add clients to today',
-                    style: GoogleFonts.dmSans(
-                      fontSize:   14,
-                      color:      _ink,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+        const SizedBox(height: CueGap.cardToEyebrow),
 
-        // Roster cards (swipe-to-remove via Dismissible)
-        ..._rosterRows.map(_buildRosterCard),
+        _buildEyebrowRow(label: 'this week'),
+        const SizedBox(height: CueGap.eyebrowToCard),
+        _buildWeekPulse(),
       ],
     );
   }
 
-  Widget _buildRosterCard(Map<String, dynamic> row) {
+  // ── Greeting block ──────────────────────────────────────────────────────
+
+  Widget _buildGreetingBlock() {
+    final hour = DateTime.now().hour;
+    final greetingPrefix = hour < 12
+        ? 'Good morning'
+        : (hour < 17 ? 'Good afternoon' : 'Good evening');
+    final headline = _slpFirstName != null
+        ? '$greetingPrefix, $_slpFirstName.'
+        : '$greetingPrefix.';
+
+    final subline = _greetingSubline();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(
+          width:  CueSize.cuttlefishWelcome,
+          height: CueSize.cuttlefishWelcome,
+          child: CueCuttlefish(
+              size: CueSize.cuttlefishWelcome, state: CueState.softWave),
+        ),
+        const SizedBox(width: CueGap.greetingFishToText),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                headline,
+                style: CueType.custom(
+                  fontSize:      20,
+                  weight:        FontWeight.w500,
+                  color:         CueColors.amber,
+                  letterSpacing: -0.3,
+                  height:        1.25,
+                ),
+              ),
+              const SizedBox(height: CueGap.s4),
+              Text(
+                subline,
+                style: CueType.bodyLarge.copyWith(
+                  color: CueColors.amber
+                      .withValues(alpha: CueAlpha.amberSubline),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _greetingSubline() {
+    final n = _rosterRows.length;
+    if (n == 0) return 'No sessions on the calendar today.';
+    final firstClient = _rosterRows.first['clients'] as Map?;
+    final firstName   = _firstNameOf(firstClient?['name'] as String?);
+    final word        = n == 1 ? 'session' : 'sessions';
+    if (firstName == null) return '$n $word today.';
+    // session_time isn't part of this schema — render the no-time variant.
+    return '$n $word today — $firstName is your first.';
+  }
+
+  // ── Eyebrow row + add-roster button ─────────────────────────────────────
+
+  Widget _buildEyebrowRow({required String label, Widget? trailing}) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: CueType.bodySmall.copyWith(
+              color: CueColors.inkPrimary
+                  .withValues(alpha: CueAlpha.eyebrowText),
+            ),
+          ),
+        ),
+        if (trailing != null) trailing,
+      ],
+    );
+  }
+
+  Widget _buildAddRosterButton() {
+    return GestureDetector(
+      onTap: _showAddSheet,
+      child: Container(
+        width:  CueSize.sendButton,    // 36
+        height: CueSize.sendButton,    // 36
+        decoration: BoxDecoration(
+          border:       Border.all(
+              color: CueColors.divider, width: CueSize.hairline),
+          borderRadius: BorderRadius.circular(CueRadius.s8),
+          color:        Colors.white,
+        ),
+        child: Icon(Icons.add_rounded,
+            size: CueGap.s18, color: CueColors.inkPrimary),
+      ),
+    );
+  }
+
+  Widget _buildEmptyTodayHint() {
+    // Lightweight inline empty state — the headline subline already says
+    // "No sessions on the calendar today.", so this is just an affordance.
+    return GestureDetector(
+      onTap: _showAddSheet,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+            horizontal: CueGap.s16, vertical: CueGap.s12),
+        decoration: BoxDecoration(
+          border:       Border.all(
+              color: CueColors.divider, width: CueSize.hairline),
+          borderRadius: BorderRadius.circular(CueRadius.s8),
+          color:        Colors.white,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add_rounded,
+                size: CueGap.s16, color: CueColors.inkPrimary),
+            const SizedBox(width: CueGap.s8),
+            Text(
+              'Add clients to today',
+              style: CueType.bodyMedium.copyWith(
+                color:      CueColors.inkPrimary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Session brief card ──────────────────────────────────────────────────
+
+  Widget _buildSessionBriefCard(Map<String, dynamic> row) {
     final cl       = Map<String, dynamic>.from(row['clients'] as Map? ?? {});
     final rosterId = row['id'].toString();
-    final briefText = row['brief_text'] as String?;
+    final clientId = cl['id']?.toString() ?? '';
 
-    // First non-empty line of the AI brief, truncated to 100 chars
-    String? previewLine;
-    if (briefText != null) {
-      final lines = briefText
-          .split('\n')
-          .where((l) => l.trim().isNotEmpty)
-          .toList();
-      if (lines.isNotEmpty) {
-        final first = lines.first.trim();
-        previewLine =
-            first.length > 100 ? '${first.substring(0, 100)}…' : first;
-      }
-    }
-    final hasPreview = previewLine != null && previewLine.isNotEmpty;
+    final clientName = _toTitleCase(
+        (cl['name'] as String?)?.trim() ?? 'Unknown');
+    final ageRaw    = cl['age'];
+    final age       = ageRaw is int
+        ? ageRaw
+        : (ageRaw is String ? int.tryParse(ageRaw) : null);
+    final diagnosis = (cl['diagnosis'] as String?)?.trim();
 
-    final metaLine = [
-      if (cl['age'] != null) 'Age ${cl['age']}',
-      if ((cl['diagnosis'] as String?)?.isNotEmpty == true)
-        cl['diagnosis'] as String,
+    // "Age 0" reads as data noise (placeholder rows, unborn DOBs); drop it
+    // and just show the diagnosis when age isn't a usable positive int.
+    final subtitle = [
+      if (age != null && age > 0) 'Age $age',
+      if (diagnosis != null && diagnosis.isNotEmpty) diagnosis,
     ].join(' · ');
 
     return Dismissible(
@@ -799,96 +1111,359 @@ class _TodayScreenState extends State<TodayScreen> {
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
-        padding:   const EdgeInsets.only(right: 20),
-        margin:    const EdgeInsets.only(bottom: 12),
+        padding:   const EdgeInsets.only(right: CueGap.s20),
         decoration: BoxDecoration(
           color:        const Color(0xFFFFEEEE),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(CueRadius.s20),
         ),
         child: Icon(
           Icons.remove_circle_outline_rounded,
           color: Colors.red.shade300,
-          size:  20,
+          size:  CueGap.s20,
         ),
       ),
       onDismissed: (_) => _removeFromRoster(rosterId),
       child: Container(
-        margin:  const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(
+            horizontal: CueGap.s20, vertical: CueGap.s16),
         decoration: BoxDecoration(
           color:        Colors.white,
-          border:       Border.all(color: _border),
-          borderRadius: BorderRadius.circular(10),
+          border:       Border.all(
+              color: CueColors.divider, width: CueSize.hairline),
+          borderRadius: BorderRadius.circular(CueRadius.s20),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Name
             Text(
-              cl['name']?.toString() ?? 'Unknown',
-              style: GoogleFonts.playfairDisplay(
-                fontSize:   16,
-                fontWeight: FontWeight.w700,
-                color:      _ink,
+              clientName,
+              style: CueType.custom(
+                fontSize:      18,
+                weight:        FontWeight.w500,
+                color:         CueColors.inkPrimary,
+                letterSpacing: -0.3,
+                height:        1.3,
               ),
             ),
-            if (metaLine.isNotEmpty) ...[
-              const SizedBox(height: 2),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: CueGap.s4),
               Text(
-                metaLine,
-                style: GoogleFonts.dmSans(fontSize: 12, color: _ghost),
+                subtitle,
+                style: CueType.bodyMedium.copyWith(
+                  color: CueColors.inkPrimary
+                      .withValues(alpha: CueAlpha.subtitleText),
+                ),
               ),
             ],
-
-            // Brief preview or placeholder
-            const SizedBox(height: 10),
+            const SizedBox(height: CueGap.s12),
             Text(
-              hasPreview ? previewLine : 'Generating brief...',
-              style: GoogleFonts.dmSans(
-                fontSize: 13,
-                color:    hasPreview ? _ink : _skeleton,
-                height:   1.4,
+              'Last session: ${_lastSessionState(clientId, rosterId)}.',
+              style: CueType.custom(
+                fontSize: 14,
+                weight:   FontWeight.w400,
+                color: CueColors.inkPrimary
+                    .withValues(alpha: CueAlpha.bodyText),
+                height:   1.45,
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
             ),
+            const SizedBox(height: CueGap.s14),
+            _buildSessionActionRow(rosterId: rosterId, clientMap: cl),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Start Session
-            const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerRight,
-              child: GestureDetector(
-                onTap: () async {
-                  _markDocumented(rosterId); // fire-and-forget
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ClientProfileScreen(client: cl),
-                    ),
-                  );
-                  // Refresh roster on return (brief may have been generated)
-                  _load();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color:        _ink,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Start Session →',
-                    style: GoogleFonts.dmSans(
-                      fontSize:   13,
-                      color:      Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
+  Widget _buildSessionActionRow({
+    required String rosterId,
+    required Map<String, dynamic> clientMap,
+  }) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Primary CTA — dark-ink rectangle, CueRadius.s8.
+        GestureDetector(
+          onTap: () async {
+            _markDocumented(rosterId);
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ClientProfileScreen(client: clientMap),
+              ),
+            );
+            _load();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: CueGap.s16, vertical: CueGap.s8),
+            decoration: BoxDecoration(
+              color:        CueColors.inkPrimary,
+              borderRadius: BorderRadius.circular(CueRadius.s8),
+            ),
+            child: Text(
+              'Start session →',
+              style: CueType.custom(
+                fontSize: 13,
+                weight:   FontWeight.w600,
+                color:    Colors.white,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: CueGap.s12),
+        // Secondary amber text-links separated by a 0.25-alpha middot.
+        // Both targets are the chart screen (timeline holds past notes;
+        // goals section holds the goals view).
+        Flexible(
+          child: Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              CueAmberLink(
+                label: 'open last note',
+                onTap: () => _openClient(clientMap),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: CueGap.s8),
+                child: Text(
+                  '·',
+                  style: CueType.bodyMedium.copyWith(
+                    color: CueColors.inkPrimary
+                        .withValues(alpha: CueAlpha.middotDivider),
                   ),
                 ),
               ),
-            ),
-          ],
+              CueAmberLink(
+                label: 'review goals',
+                onTap: () => _openClient(clientMap),
+              ),
+            ],
+          ),
         ),
+      ],
+    );
+  }
+
+  Future<void> _openClient(Map<String, dynamic> client) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ClientProfileScreen(client: client),
+      ),
+    );
+    _load();
+  }
+
+  // ── This-week pulse ─────────────────────────────────────────────────────
+
+  Widget _buildWeekPulse() {
+    final cards = [
+      _PulseCardData(
+        number: _weekSessionCount,
+        label:  'sessions',
+      ),
+      _PulseCardData(
+        number: _weekDocumentedCount,
+        label:  'documented',
+      ),
+      _PulseCardData(
+        number: _weekGoalsAchieved,
+        label:  _weekGoalsAchieved == 1 ? 'goal achieved' : 'goals achieved',
+      ),
+    ];
+    // IntrinsicHeight gives the Row a finite "tallest child" height so the
+    // CrossAxisAlignment.stretch below has something to stretch *to*.
+    // Without it, the Row's height is unbounded (we're inside a vertical
+    // ListView) and `stretch` cascades infinity to each Expanded child →
+    // RenderBox layout crash. The IntrinsicHeight wrap is the canonical
+    // pattern for "make these cards visually equal in height".
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            Expanded(child: _WeekPulseCard(data: cards[i])),
+            if (i != cards.length - 1)
+              const SizedBox(width: CueGap.weekPulseGap),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  /// Phase 3.2: title-case display name routed through [NameFormatter]
+  /// so all-upper / all-lower data is normalised, mixed case is left alone.
+  String _toTitleCase(String name) => NameFormatter.displayName(name);
+
+  /// Phase 3.2: honorific stripping + first-name resolution lives in
+  /// the shared [NameFormatter] so Today, Clients, and the chart all
+  /// agree on how "Ch. Ranadir" becomes "Ranadir."
+  String? _firstNameOf(String? fullName) =>
+      NameFormatter.firstNameForGreeting(fullName);
+
+  /// Returns the sentence fragment that follows "Last session: " — three
+  /// states per spec: "in progress" / "documented {relativeDate}" /
+  /// "not yet documented". Falls back to the third when unknown.
+  String _lastSessionState(String clientId, String todayRosterId) {
+    // If today's roster is documented = true, treat today's note as the
+    // current "last session".
+    final todayRow = _rosterRows.firstWhere(
+      (r) => r['id'].toString() == todayRosterId,
+      orElse: () => const {},
+    );
+    final todayDocumented =
+        (todayRow['session_documented'] as bool?) == true;
+
+    final last = _lastSessionByClient[clientId];
+    if (last == null) {
+      return todayDocumented ? 'documented today' : 'not yet documented';
+    }
+
+    final dateStr = (last['date'] as String?) ??
+        (last['created_at'] as String?)?.substring(0, 10);
+    final dt = _safeParseDate(dateStr);
+    if (dt == null) return 'not yet documented';
+
+    // "In progress" = a session row exists for today, but it has no note.
+    final isToday = _isSameDate(dt, DateTime.now());
+    final hasNote =
+        ((last['soap_note'] as String?)?.trim().isNotEmpty ?? false) ||
+        ((last['notes']     as String?)?.trim().isNotEmpty ?? false);
+    if (isToday && !hasNote) return 'in progress';
+    if (!hasNote) return 'not yet documented';
+
+    return 'documented ${_formatRelativeDate(dt)}';
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  DateTime? _safeParseDate(String? s) {
+    if (s == null) return null;
+    try { return DateTime.parse(s); } catch (_) { return null; }
+  }
+
+  /// "today" / "yesterday" / "12 Aug" / "12 Aug 2025" depending on distance.
+  String _formatRelativeDate(DateTime d) {
+    final now = DateTime.now();
+    if (_isSameDate(d, now)) return 'today';
+    final yesterday = now.subtract(const Duration(days: 1));
+    if (_isSameDate(d, yesterday)) return 'yesterday';
+    const months = [
+      '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    final base = '${d.day} ${months[d.month]}';
+    return d.year == now.year ? base : '$base ${d.year}';
+  }
+}
+
+// ── End-of-day stat pill ─────────────────────────────────────────────────────
+
+class _StatPill extends StatelessWidget {
+  final int sessions, goalsHit, pending;
+  const _StatPill({
+    required this.sessions,
+    required this.goalsHit,
+    required this.pending,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: CueColors.amber.withValues(alpha: 0.08),
+        border: Border.all(
+            color: CueColors.amber.withValues(alpha: 0.20),
+            width: 0.5),
+        borderRadius: BorderRadius.circular(28),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _stat('$sessions', sessions == 1 ? 'Session' : 'Sessions'),
+          _divider(),
+          _stat('$goalsHit', goalsHit == 1 ? 'Goal hit' : 'Goals hit'),
+          _divider(),
+          _stat('$pending', 'Pending'),
+        ],
+      ),
+    );
+  }
+
+  Widget _stat(String n, String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(n,
+              style: CueType.displaySmall.copyWith(color: CueColors.amber)),
+          const SizedBox(height: 2),
+          Text(label.toUpperCase(),
+              style: CueType.labelSmall.copyWith(
+                  color: CueColors.inkTertiaryDark)),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(
+        width:  0.5,
+        height: 24,
+        color:  CueColors.amber.withValues(alpha: 0.20),
+      );
+}
+
+// ── This-week pulse card ─────────────────────────────────────────────────────
+
+class _PulseCardData {
+  final int    number;
+  final String label;
+  const _PulseCardData({required this.number, required this.label});
+}
+
+class _WeekPulseCard extends StatelessWidget {
+  final _PulseCardData data;
+  const _WeekPulseCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: CueGap.s16, vertical: CueGap.s12),
+      decoration: BoxDecoration(
+        color:        Colors.white,
+        border:       Border.all(
+            color: CueColors.divider, width: CueSize.hairline),
+        borderRadius: BorderRadius.circular(CueRadius.s8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize:       MainAxisSize.min,
+        children: [
+          Text(
+            '${data.number}',
+            style: CueType.custom(
+              fontSize:      26,
+              weight:        FontWeight.w500,
+              color:         CueColors.inkPrimary,
+              letterSpacing: -0.6,
+              height:        1.1,
+            ),
+          ),
+          const SizedBox(height: CueGap.s8),
+          Text(
+            data.label,
+            style: CueType.bodySmall.copyWith(
+              color: CueColors.inkPrimary
+                  .withValues(alpha: CueAlpha.subtitleText),
+            ),
+          ),
+        ],
       ),
     );
   }

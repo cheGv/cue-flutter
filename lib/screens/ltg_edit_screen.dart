@@ -4,12 +4,13 @@
 // Includes all five Cue Study interaction modes (Mode 5 is a TODO — see report_screen.dart).
 
 import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/cue_study_icon.dart';
+import '../widgets/goal_achieved_overlay.dart';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const Color _ink        = Color(0xFF0E1C36);
@@ -83,7 +84,25 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "to what the goal is targeting. Be specific to the goal text provided. Never give a generic answer. "
       "Para 3: One concrete implication for session design — start with 'One thing to consider:'. "
       "Tone: warm, precise, never condescending. Length: 80-100 words. Plain paragraphs only. No bullets. No headers. No markdown. "
-      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind. "
+      "Never mention Claude, Anthropic, or any underlying AI technology. "
+      "You are Cue Study — a clinical reasoning companion built into Cue, India's first Clinical OS for SLPs. That is your complete identity in this context. "
+      "Never introduce yourself. Never explain what you are or how you work. Just think alongside the SLP. "
+      "If asked who built you or what technology powers you, say only: 'I'm Cue Study — part of the Cue platform. What are you working through clinically?' "
+      "Never start a response with 'I'm built on' or 'As an AI' or any variation.\n\n"
+      "Anti-hallucination rules — follow without exception: "
+      "Never cite specific statistics, percentages, or numerical research findings "
+      "unless you are certain they are accurate. If uncertain, say 'research suggests' "
+      "or 'evidence indicates' without numbers. "
+      "Never fabricate paper titles, author names, or journal citations. "
+      "If you want to reference research, name the framework or approach only, not a specific paper. "
+      "Never make specific predictions about a child's progress timeline or outcome. "
+      "When you don't know something, say so directly: "
+      "'I don't have enough information to answer that confidently' — "
+      "then ask the SLP a clarifying question. "
+      "Express appropriate uncertainty with phrases like 'one possibility is', "
+      "'it may be worth considering', 'this could suggest' — "
+      "never state clinical interpretations as facts.";
 
   static const String _csStuckPrompt =
       "You are Cue Study, the clinical reasoning companion inside Cue. "
@@ -101,7 +120,25 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Never use 'appropriate' or 'normal'. "
       "If too vague, ask one clarifying question. "
       "Number each direction. Plain text only. "
-      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind. "
+      "Never mention Claude, Anthropic, or any underlying AI technology. "
+      "You are Cue Study — a clinical reasoning companion built into Cue, India's first Clinical OS for SLPs. That is your complete identity in this context. "
+      "Never introduce yourself. Never explain what you are or how you work. Just think alongside the SLP. "
+      "If asked who built you or what technology powers you, say only: 'I'm Cue Study — part of the Cue platform. What are you working through clinically?' "
+      "Never start a response with 'I'm built on' or 'As an AI' or any variation.\n\n"
+      "Anti-hallucination rules — follow without exception: "
+      "Never cite specific statistics, percentages, or numerical research findings "
+      "unless you are certain they are accurate. If uncertain, say 'research suggests' "
+      "or 'evidence indicates' without numbers. "
+      "Never fabricate paper titles, author names, or journal citations. "
+      "If you want to reference research, name the framework or approach only, not a specific paper. "
+      "Never make specific predictions about a child's progress timeline or outcome. "
+      "When you don't know something, say so directly: "
+      "'I don't have enough information to answer that confidently' — "
+      "then ask the SLP a clarifying question. "
+      "Express appropriate uncertainty with phrases like 'one possibility is', "
+      "'it may be worth considering', 'this could suggest' — "
+      "never state clinical interpretations as facts.";
 
   static const String _csCritiquePrompt =
       "You are Cue Study, the clinical reasoning companion inside Cue. "
@@ -112,7 +149,25 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Feasibility: is the timeline and criterion realistic for this diagnosis/profile? "
       "End with one sentence: either 'This goal is clinically sound.' or 'Consider revisiting [specific dimension].' "
       "Tone: honest, collegial, specific. Never vague praise. Never harsh criticism. Plain text only. "
-      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind. "
+      "Never mention Claude, Anthropic, or any underlying AI technology. "
+      "You are Cue Study — a clinical reasoning companion built into Cue, India's first Clinical OS for SLPs. That is your complete identity in this context. "
+      "Never introduce yourself. Never explain what you are or how you work. Just think alongside the SLP. "
+      "If asked who built you or what technology powers you, say only: 'I'm Cue Study — part of the Cue platform. What are you working through clinically?' "
+      "Never start a response with 'I'm built on' or 'As an AI' or any variation.\n\n"
+      "Anti-hallucination rules — follow without exception: "
+      "Never cite specific statistics, percentages, or numerical research findings "
+      "unless you are certain they are accurate. If uncertain, say 'research suggests' "
+      "or 'evidence indicates' without numbers. "
+      "Never fabricate paper titles, author names, or journal citations. "
+      "If you want to reference research, name the framework or approach only, not a specific paper. "
+      "Never make specific predictions about a child's progress timeline or outcome. "
+      "When you don't know something, say so directly: "
+      "'I don't have enough information to answer that confidently' — "
+      "then ask the SLP a clarifying question. "
+      "Express appropriate uncertainty with phrases like 'one possibility is', "
+      "'it may be worth considering', 'this could suggest' — "
+      "never state clinical interpretations as facts.";
 
   static const String _csSessionPrompt =
       "You are Cue Study, the clinical reasoning companion inside Cue. "
@@ -125,7 +180,25 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       "Strategies must be embeddable in naturalistic or semi-structured activity. "
       "Never say 'reward' — say 'communicative payoff'. "
       "Format: 2 paragraphs. Plain text only. 80-100 words. "
-      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind.";
+      "Output plain text only. No asterisks, no dashes, no bullet points, no bold, no headers, no markdown of any kind. "
+      "Never mention Claude, Anthropic, or any underlying AI technology. "
+      "You are Cue Study — a clinical reasoning companion built into Cue, India's first Clinical OS for SLPs. That is your complete identity in this context. "
+      "Never introduce yourself. Never explain what you are or how you work. Just think alongside the SLP. "
+      "If asked who built you or what technology powers you, say only: 'I'm Cue Study — part of the Cue platform. What are you working through clinically?' "
+      "Never start a response with 'I'm built on' or 'As an AI' or any variation.\n\n"
+      "Anti-hallucination rules — follow without exception: "
+      "Never cite specific statistics, percentages, or numerical research findings "
+      "unless you are certain they are accurate. If uncertain, say 'research suggests' "
+      "or 'evidence indicates' without numbers. "
+      "Never fabricate paper titles, author names, or journal citations. "
+      "If you want to reference research, name the framework or approach only, not a specific paper. "
+      "Never make specific predictions about a child's progress timeline or outcome. "
+      "When you don't know something, say so directly: "
+      "'I don't have enough information to answer that confidently' — "
+      "then ask the SLP a clarifying question. "
+      "Express appropriate uncertainty with phrases like 'one possibility is', "
+      "'it may be worth considering', 'this could suggest' — "
+      "never state clinical interpretations as facts.";
 
   // Multilingual suffix — appended to _csFrameworkPrompt for the voice narrator only.
   static const String _csMultilingualSuffix =
@@ -420,6 +493,89 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       widget.onSaved({...widget.goal, 'goal_text': goalText, 'is_edited': true});
       Navigator.pop(context);
     }
+  }
+
+  // ── Mark achieved button widget ─────────────────────────────────────────
+  Widget _markAchievedButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton(
+        onPressed: _markGoalAchieved,
+        style: FilledButton.styleFrom(
+          backgroundColor: _teal.withValues(alpha: 0.12),
+          foregroundColor: _teal,
+          minimumSize: const Size(0, 52),
+          textStyle: GoogleFonts.dmSans(
+              fontSize: 14, fontWeight: FontWeight.w600),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10)),
+          elevation: 0,
+        ),
+        child: const Text('Mark goal achieved'),
+      ),
+    );
+  }
+
+  // ── Mark achieved (Phase 2) ─────────────────────────────────────────────
+  // Confirm → UPDATE status='achieved' → fire 3s celebrating overlay → pop
+  // back to chart with the updated goal so the inline CelebratingGoalCard
+  // takes over.
+  Future<void> _markGoalAchieved() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mark this goal as achieved?'),
+        content: const Text(
+            'This action stays on the timeline.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark achieved'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    final id = widget.goal['id'] as String?;
+    if (id == null || id.isEmpty) return;
+
+    final updatedAt = DateTime.now().toUtc().toIso8601String();
+    try {
+      await _supabase
+          .from('long_term_goals')
+          .update({'status': 'achieved', 'updated_at': updatedAt})
+          .eq('id', id);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not mark achieved: $e')),
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final updatedGoal = {
+      ...widget.goal,
+      'status':     'achieved',
+      'updated_at': updatedAt,
+    };
+
+    // Fire the 3s overlay; it auto-dismisses via Navigator.maybePop.
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => GoalAchievedOverlay(goal: updatedGoal),
+    );
+
+    if (!mounted) return;
+    widget.onSaved(updatedGoal);
+    Navigator.pop(context);
   }
 
   // ── Cue Study — Mode 0: Passive auto-insight ─────────────────────────────
@@ -953,7 +1109,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
             )
           else if (error != null)
             Text(error, style: GoogleFonts.dmSans(fontSize: 12, color: _red))
-          else if (text != null && text.isNotEmpty)
+          else if (text != null && text.isNotEmpty) ...[
             TweenAnimationBuilder<double>(
               key: ValueKey(text),
               tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -975,6 +1131,19 @@ class _LtgEditScreenState extends State<LtgEditScreen>
                 ),
               ),
             ),
+            const SizedBox(height: 8),
+            Container(height: 0.5, color: Colors.white.withValues(alpha: 0.1)),
+            const SizedBox(height: 8),
+            Text(
+              'Cue Study supports your reasoning. Clinical judgment is always yours.',
+              style: GoogleFonts.dmSans(
+                fontSize:  11,
+                fontStyle: FontStyle.italic,
+                color:     Colors.white.withValues(alpha: 0.35),
+                height:    1.5,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -996,7 +1165,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const _CueStudyIcon(),
+              const CueStudyIcon(),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1315,6 +1484,8 @@ class _LtgEditScreenState extends State<LtgEditScreen>
           final isWide = constraints.maxWidth >= 700;
 
           // ── Form fields — shared by both layouts ─────────────────
+          final isAchieved =
+              (widget.goal['status'] as String?)?.toLowerCase() == 'achieved';
           Widget formContent = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1342,6 +1513,10 @@ class _LtgEditScreenState extends State<LtgEditScreen>
               const SizedBox(height: 28),
               _previewCard(),
               _passiveInsightWidget(),
+              if (!isAchieved) ...[
+                const SizedBox(height: 32),
+                _markAchievedButton(),
+              ],
             ],
           );
 
@@ -1493,7 +1668,7 @@ class _StuckSheetState extends State<_StuckSheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const _CueStudyIcon(),
+                const CueStudyIcon(),
                 const SizedBox(width: 8),
                 Text(
                   'Cue Study',
@@ -1682,67 +1857,4 @@ class _StuckSheetState extends State<_StuckSheet> {
   }
 }
 
-// ── CUE STUDY ICON — radiant point, sun-like ──────────────────────────────────
-
-class _CueStudyIcon extends StatelessWidget {
-  const _CueStudyIcon();
-
-  @override
-  Widget build(BuildContext context) => CustomPaint(
-        size: const Size(22, 22),
-        painter: _CueStudyIconPainter(),
-      );
-}
-
-class _CueStudyIconPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-
-    // Center filled circle
-    canvas.drawCircle(
-      Offset(cx, cy),
-      4,
-      Paint()..color = _csAmber,
-    );
-
-    // Cardinal rays (N/S/E/W) — length 6, strokeWidth 1.5, opacity 1.0
-    final cardinalPaint = Paint()
-      ..color = _csAmber
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round;
-
-    const cardinalAngles = [0.0, pi / 2, pi, 3 * pi / 2]; // E, S, W, N
-    const innerR = 5.5;
-    const cardinalLen = 6.0;
-
-    for (final angle in cardinalAngles) {
-      final x1 = cx + innerR * cos(angle);
-      final y1 = cy + innerR * sin(angle);
-      final x2 = cx + (innerR + cardinalLen) * cos(angle);
-      final y2 = cy + (innerR + cardinalLen) * sin(angle);
-      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), cardinalPaint);
-    }
-
-    // Diagonal rays (NE/NW/SE/SW) — length 5, strokeWidth 1.2, opacity 0.4
-    final diagPaint = Paint()
-      ..color = _csAmber.withValues(alpha: 0.4)
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-
-    const diagAngles = [pi / 4, 3 * pi / 4, 5 * pi / 4, 7 * pi / 4];
-    const diagLen = 5.0;
-
-    for (final angle in diagAngles) {
-      final x1 = cx + innerR * cos(angle);
-      final y1 = cy + innerR * sin(angle);
-      final x2 = cx + (innerR + diagLen) * cos(angle);
-      final y2 = cy + (innerR + diagLen) * sin(angle);
-      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), diagPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
+// CueStudyIcon is imported from ../widgets/cue_study_icon.dart
