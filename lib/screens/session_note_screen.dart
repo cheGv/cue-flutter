@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import 'debrief_fluency_screen.dart';
+import 'parent_interview_fluency_screen.dart';
 
 class SessionNoteScreen extends StatefulWidget {
   final String clientId;
@@ -34,6 +35,12 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
   Map<String, dynamic>? _latestLiveEntryPayload;
   Map<String, dynamic>? _latestDebriefPayload;
   String? _latestSessionDate;
+
+  // Phase 4.0.6 — parent_interview is recurrent, not session-bound.
+  // Tracks the most recent capture for the client plus the total count.
+  Map<String, dynamic>? _latestParentInterviewPayload;
+  String?               _latestParentInterviewId;
+  int                   _parentInterviewCount = 0;
 
   @override
   void initState() {
@@ -86,13 +93,39 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
         }
       }
 
+      // Phase 4.0.6 — most recent parent_interview for the client (any
+      // session) plus total count.
+      Map<String, dynamic>? latestPI;
+      String?               latestPIId;
+      int                   piCount = 0;
+      if (pop == 'developmental_stuttering') {
+        final piRows = await _supabase
+            .from('assessment_entries')
+            .select('id, payload, created_at')
+            .eq('client_id', widget.clientId)
+            .eq('mode', 'parent_interview')
+            .eq('population_type', 'developmental_stuttering')
+            .order('created_at', ascending: false);
+        final list = (piRows as List);
+        piCount = list.length;
+        if (list.isNotEmpty) {
+          final row = list.first as Map;
+          latestPIId = row['id'] as String?;
+          final p = row['payload'];
+          if (p is Map) latestPI = Map<String, dynamic>.from(p);
+        }
+      }
+
       if (!mounted) return;
       setState(() {
-        _populationType         = pop;
-        _latestLiveEntryPayload = latestLive;
-        _latestDebriefPayload   = latestDebrief;
-        _latestSessionDate      = sessionDate;
-        _populationLoading      = false;
+        _populationType                = pop;
+        _latestLiveEntryPayload        = latestLive;
+        _latestDebriefPayload          = latestDebrief;
+        _latestSessionDate             = sessionDate;
+        _latestParentInterviewPayload  = latestPI;
+        _latestParentInterviewId       = latestPIId;
+        _parentInterviewCount          = piCount;
+        _populationLoading             = false;
       });
     } catch (_) {
       if (!mounted) return;
@@ -114,6 +147,23 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
     );
     if (saved == true && mounted) {
       // Re-load so the summary picks up the new debrief.
+      setState(() => _populationLoading = true);
+      await _loadPopulationAndLatestSession();
+    }
+  }
+
+  Future<void> _openParentInterview({required bool editLatest}) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ParentInterviewFluencyScreen(
+          clientId: widget.clientId,
+          clientName: widget.clientName,
+          editingEntryId: editLatest ? _latestParentInterviewId : null,
+          editingPayload: editLatest ? _latestParentInterviewPayload : null,
+        ),
+      ),
+    );
+    if (saved == true && mounted) {
       setState(() => _populationLoading = true);
       await _loadPopulationAndLatestSession();
     }
@@ -252,11 +302,15 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
         title: 'Session — ${widget.clientName}',
         activeRoute: 'roster',
         body: _FluencySessionSummary(
-          clientName:     widget.clientName,
-          livePayload:    _latestLiveEntryPayload,
-          debriefPayload: _latestDebriefPayload,
-          sessionDate:    _latestSessionDate,
-          onAddDebrief:   _openDebriefScreen,
+          clientName:                  widget.clientName,
+          livePayload:                 _latestLiveEntryPayload,
+          debriefPayload:              _latestDebriefPayload,
+          sessionDate:                 _latestSessionDate,
+          onAddDebrief:                _openDebriefScreen,
+          parentInterviewPayload:      _latestParentInterviewPayload,
+          parentInterviewCount:        _parentInterviewCount,
+          onAddParentInterview:        () => _openParentInterview(editLatest: false),
+          onEditLatestParentInterview: () => _openParentInterview(editLatest: true),
         ),
       );
     }
@@ -935,6 +989,11 @@ class _FluencySessionSummary extends StatelessWidget {
   final Map<String, dynamic>? debriefPayload;
   final String? sessionDate;
   final VoidCallback onAddDebrief;
+  // Phase 4.0.6 — parent interview is recurrent across the assessment phase.
+  final Map<String, dynamic>? parentInterviewPayload;
+  final int parentInterviewCount;
+  final VoidCallback onAddParentInterview;
+  final VoidCallback onEditLatestParentInterview;
 
   const _FluencySessionSummary({
     required this.clientName,
@@ -942,6 +1001,10 @@ class _FluencySessionSummary extends StatelessWidget {
     required this.debriefPayload,
     required this.sessionDate,
     required this.onAddDebrief,
+    required this.parentInterviewPayload,
+    required this.parentInterviewCount,
+    required this.onAddParentInterview,
+    required this.onEditLatestParentInterview,
   });
 
   @override
@@ -980,6 +1043,8 @@ class _FluencySessionSummary extends StatelessWidget {
                 if (livePayload == null) _emptyState() else _content(),
                 const SizedBox(height: 18),
                 _debriefSection(),
+                const SizedBox(height: 18),
+                _parentInterviewSection(),
               ],
             ),
           ),
@@ -1238,6 +1303,10 @@ class _FluencySessionSummary extends StatelessWidget {
       case 'subdued':            return 'subdued';
       case 'neutral':            return 'neutral';
       case 'engaged':            return 'engaged';
+      // Phase 4.0.6 — parent interview context.mode values.
+      case 'in_person': return 'in person';
+      case 'phone':     return 'phone';
+      case 'video':     return 'video';
       default:
         return key.replaceAll('_', ' ');
     }
@@ -1465,5 +1534,272 @@ class _FluencySessionSummary extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // ── Parent interview section ───────────────────────────────────────────────
+
+  Widget _parentInterviewSection() {
+    if (parentInterviewPayload == null) return _parentInterviewEmpty();
+    return _parentInterviewContent(parentInterviewPayload!);
+  }
+
+  Widget _parentInterviewEmpty() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'parent interviews',
+            style: TextStyle(
+              fontSize: 11,
+              color: kCueEyebrowInk,
+              letterSpacing: kCueEyebrowLetterSpacing(11),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'No parent interviews captured yet.',
+            style: TextStyle(fontSize: 13, color: kCueSubtitleInk),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: onAddParentInterview,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: kCueAmberSurface,
+                borderRadius: BorderRadius.circular(kCueChipRadius),
+                border: Border.all(color: kCueAmber, width: 1.2),
+              ),
+              child: Text(
+                '+ add interview',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: kCueAmberText,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _parentInterviewContent(Map<String, dynamic> p) {
+    final ctx = (p['context'] as Map?) ?? const {};
+    final dateStr = ctx['date'] as String?;
+    final mode    = ctx['mode'] as String?;
+    final priorities = (p['family_priorities']  as String?)?.trim();
+    final changes    = (p['recent_changes']     as String?)?.trim();
+    final questions  = (p['family_questions']   as String?)?.trim();
+    final variability = (p['variability_observed_by_family'] as Map?) ?? const {};
+    final easierIn = ((variability['easier_in'] as List?) ?? const [])
+        .map((e) => e.toString()).toList();
+    final harderIn = ((variability['harder_in'] as List?) ?? const [])
+        .map((e) => e.toString()).toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  parentInterviewCount > 1
+                      ? 'parent interviews · $parentInterviewCount captured'
+                      : 'parent interview',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: kCueEyebrowInk,
+                    letterSpacing: kCueEyebrowLetterSpacing(11),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              if (parentInterviewCount > 1)
+                Text(
+                  'most recent',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: kCueSubtitleInk,
+                    letterSpacing: kCueEyebrowLetterSpacing(11),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (dateStr != null) ...[
+            Text(
+              '${_humanLabel(mode ?? 'in_person')} · $dateStr',
+              style: TextStyle(fontSize: 13, color: kCueSubtitleInk),
+            ),
+            const SizedBox(height: 14),
+          ],
+          if (priorities != null && priorities.isNotEmpty) ...[
+            Text('What matters most',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(priorities,
+                style: const TextStyle(
+                    fontSize: 14, color: kCueInk, height: 1.5)),
+            const SizedBox(height: 12),
+          ],
+          if (easierIn.isNotEmpty || harderIn.isNotEmpty) ...[
+            Text('Variability the family observes',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            if (harderIn.isNotEmpty) _piPillRow('harder in', harderIn),
+            if (easierIn.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              _piPillRow('easier in', easierIn),
+            ],
+            const SizedBox(height: 12),
+          ],
+          if (changes != null && changes.isNotEmpty) ...[
+            Text("What's changed recently",
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(changes,
+                style: const TextStyle(
+                    fontSize: 14, color: kCueInk, height: 1.5)),
+            const SizedBox(height: 12),
+          ],
+          if (questions != null && questions.isNotEmpty) ...[
+            Text('Questions the family is sitting with',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(questions,
+                style: const TextStyle(
+                    fontSize: 14, color: kCueInk, height: 1.5)),
+            const SizedBox(height: 12),
+          ],
+          Row(
+            children: [
+              GestureDetector(
+                onTap: onAddParentInterview,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: kCueAmberSurface,
+                    borderRadius: BorderRadius.circular(kCueChipRadius),
+                    border: Border.all(color: kCueAmber, width: 1.2),
+                  ),
+                  child: Text(
+                    '+ add new interview',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: kCueAmberText,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: onEditLatestParentInterview,
+                child: Text(
+                  'edit most recent',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: kCueAmberText,
+                    fontWeight: FontWeight.w500,
+                    decoration: TextDecoration.underline,
+                    decorationColor: kCueAmberText,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _piPillRow(String label, List<String> keys) {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: 4, top: 2),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: kCueEyebrowInk,
+              letterSpacing: kCueEyebrowLetterSpacing(11),
+            ),
+          ),
+        ),
+        ...keys.map((k) => Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: kCueAmberSurface,
+                borderRadius: BorderRadius.circular(kCueChipRadius),
+              ),
+              child: Text(
+                _piContextLabel(k),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: kCueAmberText,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )),
+      ],
+    );
+  }
+
+  String _piContextLabel(String key) {
+    switch (key) {
+      case 'talking_to_strangers':   return 'talking to strangers';
+      case 'reading_aloud':          return 'reading aloud';
+      case 'classroom':              return 'classroom';
+      case 'phone_speaking':         return 'phone speaking';
+      case 'with_siblings':          return 'with siblings';
+      case 'at_home':                return 'at home';
+      case 'with_friends':           return 'with friends';
+      case 'with_unfamiliar_adults': return 'with unfamiliar adults';
+      case 'when_excited':           return 'when excited';
+      case 'when_tired':             return 'when tired';
+      case 'uncertain_question':
+        return "when asked a question they're not sure of";
+      default:
+        return key.replaceAll('_', ' ');
+    }
   }
 }

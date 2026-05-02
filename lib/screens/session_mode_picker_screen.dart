@@ -19,6 +19,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/cue_phase4_tokens.dart';
 import 'debrief_fluency_screen.dart';
 import 'live_entry_fluency_screen.dart';
+import 'parent_interview_fluency_screen.dart';
 
 class SessionModePickerView extends StatelessWidget {
   final String clientId;
@@ -61,11 +62,19 @@ class SessionModePickerView extends StatelessWidget {
     });
   }
 
-  void _comingSoon(BuildContext context, String mode) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('$mode mode lands in the next build session.'),
-      duration: const Duration(seconds: 3),
-    ));
+  void _openParentInterview(BuildContext context) {
+    Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ParentInterviewFluencyScreen(
+          clientId: clientId,
+          clientName: clientName,
+        ),
+      ),
+    ).then((saved) {
+      if (saved == true && context.mounted) {
+        Navigator.pop(context, true);
+      }
+    });
   }
 
   @override
@@ -132,8 +141,8 @@ class SessionModePickerView extends StatelessWidget {
                   subtitle: 'Caregiver conversation.',
                   hint: 'Recurrent surface for caregiver-reported context '
                       'across the assessment phase.',
-                  enabled: false,
-                  onTap: () => _comingSoon(context, 'Parent interview'),
+                  enabled: true,
+                  onTap: () => _openParentInterview(context),
                 ),
               ],
             ),
