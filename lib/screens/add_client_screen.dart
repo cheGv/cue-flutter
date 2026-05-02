@@ -42,7 +42,9 @@ const String _extractSystem =
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AddClientScreen extends StatefulWidget {
-  const AddClientScreen({super.key});
+  final Map<String, dynamic>? existingClient;
+
+  const AddClientScreen({super.key, this.existingClient});
 
   @override
   State<AddClientScreen> createState() => _AddClientScreenState();
@@ -80,7 +82,40 @@ class _AddClientScreenState extends State<AddClientScreen> {
   String?         _extractError;
   Set<String>     _aiFields = {}; // keys of fields populated by AI
 
+  // ── Edit mode helper ─────────────────────────────────────────────────────────
+  bool get _isEditMode => widget.existingClient != null;
+
   // ── Lifecycle ────────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditMode) _populateFromExistingClient(widget.existingClient!);
+  }
+
+  void _populateFromExistingClient(Map<String, dynamic> c) {
+    _nameCtrl.text     = (c['name']                   as String?) ?? '';
+    _ageCtrl.text      = c['age'] != null ? c['age'].toString() : '';
+    _diagCtrl.text     = (c['diagnosis']               as String?) ?? '';
+    _modalityCtrl.text = (c['communication_modality']  as String?) ?? '';
+    _notesCtrl.text    = (c['additional_notes']        as String?) ?? '';
+    _usesAac           = (c['uses_aac']  as bool?)     ?? false;
+
+    // Basic new fields
+    final dobStr = c['date_of_birth'] as String?;
+    if (dobStr != null) _dateOfBirth = DateTime.tryParse(dobStr);
+    _guardianNameCtrl.text = (c['guardian_name']      as String?) ?? '';
+    _guardianWaCtrl.text   = (c['guardian_whatsapp']  as String?) ?? '';
+    _schoolCtrl.text       = (c['school_setting']     as String?) ?? '';
+
+    // Clinical intake
+    _secDiagCtrl.text      = (c['secondary_diagnosis']         as String?) ?? '';
+    _referralCtrl.text     = (c['referral_source']             as String?) ?? '';
+    _prevTherapy           = (c['previous_therapy'] as bool?)  ?? false;
+    _prevDurationCtrl.text = (c['previous_therapy_duration']   as String?) ?? '';
+    _regulatoryCtrl.text   = (c['regulatory_profile']          as String?) ?? '';
+    _baselineCtrl.text     = (c['baseline_summary']            as String?) ?? '';
+  }
 
   @override
   void dispose() {
@@ -322,43 +357,48 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
     final userId = _supabase.auth.currentUser?.id;
     setState(() => _isSaving = true);
+
+    // Build the shared field map (used by both insert and update)
+    final data = <String, dynamic>{
+      'name':                   name,
+      'age':                    int.tryParse(ageText) ?? 0,
+      'diagnosis':              _diagCtrl.text.trim(),
+      'uses_aac':               _usesAac,
+      'communication_modality': _modalityCtrl.text.trim(),
+      'additional_notes':       _notesCtrl.text.trim(),
+      // Basic new
+      if (_dateOfBirth != null)
+        'date_of_birth': _dateOfBirth!.toIso8601String().split('T').first,
+      'guardian_name':    _guardianNameCtrl.text.trim(),
+      'guardian_whatsapp': _guardianWaCtrl.text.trim(),
+      'school_setting':   _schoolCtrl.text.trim(),
+      // Clinical intake
+      'secondary_diagnosis':       _secDiagCtrl.text.trim(),
+      'referral_source':           _referralCtrl.text.trim(),
+      'previous_therapy':          _prevTherapy,
+      if (_prevTherapy)
+        'previous_therapy_duration': _prevDurationCtrl.text.trim(),
+      'regulatory_profile': _regulatoryCtrl.text.trim(),
+      'baseline_summary':   _baselineCtrl.text.trim(),
+    };
+
     try {
-      await _supabase.from('clients').insert({
-        'name':                   name,
-        'age':                    int.tryParse(ageText) ?? 0,
-        'diagnosis':              _diagCtrl.text.trim(),
-        'uses_aac':               _usesAac,
-        'communication_modality': _modalityCtrl.text.trim(),
-        'additional_notes':       _notesCtrl.text.trim(),
-        'total_sessions':         0,
-        'clinician_id': userId,
-        // Basic new
-        if (_dateOfBirth != null)
-          'date_of_birth': _dateOfBirth!.toIso8601String().split('T').first,
-        if (_guardianNameCtrl.text.trim().isNotEmpty)
-          'guardian_name': _guardianNameCtrl.text.trim(),
-        if (_guardianWaCtrl.text.trim().isNotEmpty)
-          'guardian_whatsapp': _guardianWaCtrl.text.trim(),
-        if (_schoolCtrl.text.trim().isNotEmpty)
-          'school_setting': _schoolCtrl.text.trim(),
-        // Clinical intake
-        if (_secDiagCtrl.text.trim().isNotEmpty)
-          'secondary_diagnosis': _secDiagCtrl.text.trim(),
-        if (_referralCtrl.text.trim().isNotEmpty)
-          'referral_source': _referralCtrl.text.trim(),
-        'previous_therapy': _prevTherapy,
-        if (_prevTherapy && _prevDurationCtrl.text.trim().isNotEmpty)
-          'previous_therapy_duration': _prevDurationCtrl.text.trim(),
-        if (_regulatoryCtrl.text.trim().isNotEmpty)
-          'regulatory_profile': _regulatoryCtrl.text.trim(),
-        if (_baselineCtrl.text.trim().isNotEmpty)
-          'baseline_summary': _baselineCtrl.text.trim(),
-      });
+      if (_isEditMode) {
+        final id = widget.existingClient!['id'];
+        await _supabase.from('clients').update(data).eq('id', id);
+      } else {
+        await _supabase.from('clients').insert({
+          ...data,
+          'total_sessions': 0,
+          'clinician_id':   userId,
+        });
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error adding client: $e')),
+          SnackBar(content: Text(
+              _isEditMode ? 'Error updating client: $e' : 'Error adding client: $e')),
         );
       }
     } finally {
@@ -371,7 +411,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
   @override
   Widget build(BuildContext context) {
     return AppLayout(
-      title: 'Add Client',
+      title: _isEditMode ? 'Edit Client' : 'Add Client',
       activeRoute: 'roster',
       body: Center(
         child: ConstrainedBox(
@@ -536,9 +576,9 @@ class _AddClientScreenState extends State<AddClientScreen> {
                               child: CircularProgressIndicator(
                                   color: Colors.white, strokeWidth: 2),
                             )
-                          : const Text(
-                              'Save Client',
-                              style: TextStyle(
+                          : Text(
+                              _isEditMode ? 'Update Client' : 'Save Client',
+                              style: const TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.w600),
                             ),
                     ),

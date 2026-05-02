@@ -29,7 +29,7 @@ const String _systemPrompt =
     'Maximum 8 lines total.';
 
 // ── State machine ──────────────────────────────────────────────────────────────
-enum _Phase { loading, noSessions, loaded, error }
+enum _Phase { loading, notScheduled, noSessions, loaded, error }
 
 // ── Widget ─────────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,21 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
 
   Future<void> _load() async {
     try {
+      // ── Step 0: daily_roster gate ──────────────────────────────────────────
+      // Only generate a brief for clients on today's session list.
+      // daily_roster.client_id is uuid; widget.client['id'] is also uuid.
+      final today = DateTime.now().toIso8601String().split('T').first;
+      final rosterRows = await _supabase
+          .from('daily_roster')
+          .select('id')
+          .eq('client_id', widget.client['id'])
+          .eq('session_date', today)
+          .limit(1);
+      if ((rosterRows as List).isEmpty) {
+        if (mounted) setState(() => _phase = _Phase.notScheduled);
+        return;
+      }
+
       // ── Step 1: sessions existence check ───────────────────────────────────
       // Isolated query — not bundled with other futures so a column-name
       // mismatch or schema difference in other tables can't silently kill it.
@@ -258,6 +273,18 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
 
   @override
   Widget build(BuildContext context) {
+    // notScheduled: plain muted text, no accent border, no background
+    if (_phase == _Phase.notScheduled) {
+      final name = widget.client['name'] as String? ?? 'this client';
+      return Text(
+        'Add $name to today\'s session list to generate a pre-session brief.',
+        style: GoogleFonts.dmSans(
+          fontSize: 13,
+          color: const Color(0xFF9CA3AF),
+        ),
+      );
+    }
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -328,6 +355,10 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
           'Preparing brief...',
           style: GoogleFonts.dmSans(fontSize: 13, color: _skeleton),
         );
+
+      case _Phase.notScheduled:
+        // Handled by build() — should not reach here
+        return const SizedBox.shrink();
 
       case _Phase.noSessions:
         return Text(

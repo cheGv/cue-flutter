@@ -4,12 +4,15 @@ import '../screens/today_screen.dart';
 import '../screens/client_roster_screen.dart';
 import '../screens/narrator_screen.dart';
 import '../screens/login_screen.dart';
-import '../screens/settings_screen.dart';
-
-const double _kSidebarFull = 220;
+import '../screens/slp_profile_screen.dart';
+import '../theme/theme_notifier.dart';
+import '../theme/cue_theme.dart';
+import 'cue_cuttlefish.dart';
+import 'cue_study_fab.dart';
+const double _kSidebarFull      = 220;
 const double _kSidebarCollapsed = 56;
-const double _kDesktopBreak = 1024;
-const double _kTabletBreak = 768;
+const double _kDesktopBreak     = 1024;
+const double _kMobileBreak      = 600;   // below this → bottom nav layout
 
 // ── Public mobile wall (reused by auth screens) ────────────────────────────────
 class MobileWall extends StatelessWidget {
@@ -88,6 +91,8 @@ class AppLayout extends StatelessWidget {
   final String activeRoute;
   final Widget? floatingActionButton;
   final List<Widget> actions;
+  // When provided, replaces the global CueStudyFab (allows context-aware override).
+  final Widget? cueStudyFab;
 
   const AppLayout({
     super.key,
@@ -96,19 +101,49 @@ class AppLayout extends StatelessWidget {
     this.activeRoute = 'roster',
     this.floatingActionButton,
     this.actions = const [],
+    this.cueStudyFab,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F6FA),
-      floatingActionButton: floatingActionButton,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          if (constraints.maxWidth < _kTabletBreak) {
-            return const MobileWall();
+          final isMobile = constraints.maxWidth < _kMobileBreak;
+
+          // ── Mobile layout: bottom nav, no sidebar ──────────────────────────
+          if (isMobile) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _TopBar(title: title, actions: actions, isMobile: true),
+                Expanded(
+                  child: Stack(
+                    children: [
+                      body,
+                      // Per-screen FAB — bottom-right, above bottom nav
+                      if (floatingActionButton != null)
+                        Positioned(
+                          bottom: 72,
+                          right:  16,
+                          child:  floatingActionButton!,
+                        ),
+                      // Cue Study FAB — bottom-left, above bottom nav
+                      Positioned(
+                        bottom: 72,
+                        left:   16,
+                        child:  cueStudyFab ?? const CueStudyFab(),
+                      ),
+                    ],
+                  ),
+                ),
+                _MobileBottomNav(activeRoute: activeRoute),
+              ],
+            );
           }
 
+          // ── Desktop / tablet layout: sidebar + content ─────────────────────
           final sidebarWidth = constraints.maxWidth < _kDesktopBreak
               ? _kSidebarCollapsed
               : _kSidebarFull;
@@ -120,16 +155,34 @@ class AppLayout extends StatelessWidget {
               SizedBox(
                 width: sidebarWidth,
                 child: _AppSidebar(
-                  collapsed: collapsed,
+                  collapsed:   collapsed,
                   activeRoute: activeRoute,
                 ),
               ),
+              // Content area — Stack overlays both FABs over the content
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                child: Stack(
                   children: [
-                    _TopBar(title: title, actions: actions),
-                    Expanded(child: body),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _TopBar(title: title, actions: actions),
+                        Expanded(child: body),
+                      ],
+                    ),
+                    // Per-screen FAB (e.g. narrator mic, add client) — bottom-right
+                    if (floatingActionButton != null)
+                      Positioned(
+                        bottom: 32,
+                        right:  16,
+                        child:  floatingActionButton!,
+                      ),
+                    // Cue Study FAB — bottom-left; context-aware override when provided
+                    Positioned(
+                      bottom: 32,
+                      left:   16,
+                      child:  cueStudyFab ?? const CueStudyFab(),
+                    ),
                   ],
                 ),
               ),
@@ -145,45 +198,59 @@ class AppLayout extends StatelessWidget {
 class _TopBar extends StatelessWidget {
   final String title;
   final List<Widget> actions;
+  final bool isMobile;
 
-  const _TopBar({required this.title, required this.actions});
+  const _TopBar({
+    required this.title,
+    required this.actions,
+    this.isMobile = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final canPop = Navigator.canPop(context);
+    final canPop  = Navigator.canPop(context);
+    final hPad    = isMobile ? 8.0 : 32.0;
+    final fontSize = isMobile ? 16.0 : 20.0;
+
     return Container(
-      height: 60,
+      height: 56,
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: hPad),
       child: Row(
         children: [
           if (canPop) ...[
-            InkWell(
-              onTap: () => Navigator.pop(context),
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.all(6),
-                child: Icon(
-                  Icons.arrow_back_rounded,
-                  color: Colors.grey.shade700,
-                  size: 20,
+            // 44×44 touch target on mobile
+            SizedBox(
+              width:  isMobile ? 44 : 36,
+              height: isMobile ? 44 : 36,
+              child: InkWell(
+                onTap: () => Navigator.pop(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Center(
+                  child: Icon(
+                    Icons.arrow_back_rounded,
+                    color: Colors.grey.shade700,
+                    size: 20,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: isMobile ? 4 : 12),
           ],
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A2E),
+          Expanded(
+            child: Text(
+              title,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize:   fontSize,
+                fontWeight: FontWeight.w600,
+                color:      const Color(0xFF1A1A2E),
+              ),
             ),
           ),
-          const Spacer(),
           ...actions,
         ],
       ),
@@ -217,15 +284,19 @@ class _AppSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNight = Theme.of(context).brightness == Brightness.dark;
+    final sidebarColor =
+        isNight ? CueColors.sidebarDark : CueColors.sidebar;
     return Container(
-      color: const Color(0xFF1B2B4B),
+      color: sidebarColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildLogo(),
+          _buildLogo(isNight),
           const SizedBox(height: 8),
-          ..._kNavItems.map((item) => _buildNavItem(context, item)),
+          ..._kNavItems.map((item) => _buildNavItem(context, item, isNight)),
           const Spacer(),
+          _buildThemeToggle(context),
           _buildSignOut(context),
           const SizedBox(height: 16),
         ],
@@ -233,49 +304,56 @@ class _AppSidebar extends StatelessWidget {
     );
   }
 
-  Widget _buildLogo() {
+  Widget _buildLogo(bool isNight) {
     return Container(
       height: 60,
       padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 20),
       alignment: collapsed ? Alignment.center : Alignment.centerLeft,
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: Colors.white.withOpacity(0.08)),
+          bottom: BorderSide(
+              color: Colors.white.withValues(alpha: 0.08)),
         ),
       ),
       child: collapsed
-          ? Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFF00B4A6).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Center(
-                child: Text(
-                  'C',
-                  style: TextStyle(
-                    color: Color(0xFF00B4A6),
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+          ? const Center(
+              child: SizedBox(
+                width:  22,
+                height: 26,
+                child: CueCuttlefish(size: 22, state: CueState.idle),
               ),
             )
-          : const Text(
-              'Cue',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.3,
-              ),
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: const [
+                SizedBox(
+                  width:  22,
+                  height: 26,
+                  child: CueCuttlefish(size: 22, state: CueState.idle),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Cue',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
             ),
     );
   }
 
-  Widget _buildNavItem(BuildContext context, _NavItem item) {
+  Widget _buildNavItem(
+      BuildContext context, _NavItem item, bool isNight) {
     final isActive = activeRoute == item.route;
+    final activeColor   = CueColors.amber;
+    final inactiveColor = isNight
+        ? const Color(0xFFF0EBE1).withValues(alpha: 0.25)
+        : Colors.white.withValues(alpha: 0.35);
 
     return GestureDetector(
       onTap: () => _navigate(context, item),
@@ -287,7 +365,7 @@ class _AppSidebar extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isActive
-              ? const Color(0xFF00B4A6).withOpacity(0.15)
+              ? activeColor.withValues(alpha: 0.10)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
@@ -295,9 +373,7 @@ class _AppSidebar extends StatelessWidget {
             ? Center(
                 child: Icon(
                   item.icon,
-                  color: isActive
-                      ? const Color(0xFF00B4A6)
-                      : Colors.white.withOpacity(0.6),
+                  color: isActive ? activeColor : inactiveColor,
                   size: 22,
                 ),
               )
@@ -305,26 +381,72 @@ class _AppSidebar extends StatelessWidget {
                 children: [
                   Icon(
                     item.icon,
-                    color: isActive
-                        ? const Color(0xFF00B4A6)
-                        : Colors.white.withOpacity(0.6),
+                    color: isActive ? activeColor : inactiveColor,
                     size: 20,
                   ),
                   const SizedBox(width: 12),
                   Text(
                     item.label,
                     style: TextStyle(
-                      color: isActive
-                          ? const Color(0xFF00B4A6)
-                          : Colors.white.withOpacity(0.7),
+                      color: isActive ? activeColor : inactiveColor,
                       fontSize: 14,
-                      fontWeight:
-                          isActive ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: isActive
+                          ? FontWeight.w500
+                          : FontWeight.w400,
                     ),
                   ),
                 ],
               ),
       ),
+    );
+  }
+
+  Widget _buildThemeToggle(BuildContext context) {
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (ctx, mode, child) {
+        final isNight = mode == ThemeMode.dark;
+        return GestureDetector(
+          onTap: () => themeNotifier.toggle(),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: collapsed ? 0 : 12,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
+            child: collapsed
+                ? Center(
+                    child: Icon(
+                      isNight
+                          ? Icons.light_mode_rounded
+                          : Icons.dark_mode_rounded,
+                      color: Colors.white.withValues(alpha: 0.45),
+                      size: 20,
+                    ),
+                  )
+                : Row(
+                    children: [
+                      Icon(
+                        isNight
+                            ? Icons.light_mode_rounded
+                            : Icons.dark_mode_rounded,
+                        color: Colors.white.withValues(alpha: 0.45),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        isNight ? 'Day mode' : 'Night mode',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.45),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      },
     );
   }
 
@@ -399,9 +521,74 @@ class _AppSidebar extends StatelessWidget {
     } else if (item.route == 'settings') {
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+        MaterialPageRoute(builder: (_) => const SlpProfileScreen()),
         (_) => false,
       );
+    }
+  }
+}
+
+// ── Mobile bottom navigation bar ──────────────────────────────────────────────
+class _MobileBottomNav extends StatelessWidget {
+  final String activeRoute;
+  const _MobileBottomNav({required this.activeRoute});
+
+  static const _kNavIcons = [
+    (icon: Icons.calendar_today_outlined, route: 'today'),
+    (icon: Icons.people_outlined,         route: 'roster'),
+    (icon: Icons.mic_outlined,            route: 'narrator'),
+    (icon: Icons.settings_outlined,       route: 'settings'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 56,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0A1A2F),
+        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
+      ),
+      child: Row(
+        children: _kNavIcons.map((item) {
+          final isActive = activeRoute == item.route;
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => _navigate(context, item.route),
+              behavior: HitTestBehavior.opaque,
+              child: SizedBox(
+                height: 56,
+                child: Center(
+                  child: Icon(
+                    item.icon,
+                    size: 24,
+                    color: isActive
+                        ? const Color(0xFF1D9E75)
+                        : const Color(0xFF8A8A8A),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  void _navigate(BuildContext context, String route) {
+    if (route == activeRoute) return;
+    switch (route) {
+      case 'today':
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const TodayScreen()), (_) => false);
+      case 'roster':
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const ClientRosterScreen()), (_) => false);
+      case 'narrator':
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const NarratorScreen()), (_) => false);
+      case 'settings':
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const SlpProfileScreen()), (_) => false);
     }
   }
 }

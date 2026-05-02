@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'ltg_edit_screen.dart';
 
 // ── constants ──────────────────────────────────────────────────────────────────
 const String _proxyBase = 'https://cue-ai-proxy.onrender.com';
@@ -234,78 +235,17 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   }
 
   void _editGoal(int index) {
-    final goal = _goals[index];
-    final controller = TextEditingController(text: goal['goal_text'] as String? ?? '');
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: _paper,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 24, right: 24, top: 24,
-          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Edit LTG ${index + 1}',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: _ink)),
-            const SizedBox(height: 4),
-            Text('Changes are saved locally until you attest.',
-                style: TextStyle(fontSize: 12, color: _inkGhost)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              maxLines: 6,
-              style: const TextStyle(fontSize: 14, color: _ink, height: 1.55),
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _line),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: _teal, width: 1.5),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel', style: TextStyle(color: _inkGhost)),
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _ink,
-                    foregroundColor: _paper,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _goals[index] = {
-                        ..._goals[index],
-                        'goal_text': controller.text.trim(),
-                        'is_edited': true,
-                      };
-                    });
-                    Navigator.pop(ctx);
-                  },
-                  child: const Text('Save edit'),
-                ),
-              ],
-            ),
-          ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LtgEditScreen(
+          goal: _goals[index],
+          clientName: widget.clientName,
+          onSaved: (updatedGoal) {
+            if (mounted) {
+              setState(() => _goals[index] = updatedGoal);
+            }
+          },
         ),
       ),
     );
@@ -330,7 +270,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
             const SizedBox(width: 8),
             const Text('Cue',
                 style: TextStyle(
-                    fontFamily: 'Georgia',
+                    fontFamily: 'SF Pro Display',
                     fontSize: 17,
                     fontWeight: FontWeight.w500,
                     color: _ink)),
@@ -428,7 +368,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
         RichText(
           text: const TextSpan(
             style: TextStyle(
-                fontFamily: 'Georgia',
+                fontFamily: 'SF Pro Display',
                 fontSize: 30,
                 fontWeight: FontWeight.w400,
                 color: _ink,
@@ -446,7 +386,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
         const Text(
           'Cue has read the chart. You make the call.',
           style: TextStyle(
-              fontFamily: 'Georgia',
+              fontFamily: 'SF Pro Display',
               fontStyle: FontStyle.italic,
               fontSize: 14,
               color: _inkGhost),
@@ -475,7 +415,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
               style: const TextStyle(
                   color: _paper,
                   fontSize: 16,
-                  fontFamily: 'Georgia',
+                  fontFamily: 'SF Pro Display',
                   fontWeight: FontWeight.w500),
             ),
           ),
@@ -485,7 +425,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
             children: [
               Text(widget.clientName,
                   style: const TextStyle(
-                      fontFamily: 'Georgia',
+                      fontFamily: 'SF Pro Display',
                       fontSize: 17,
                       fontWeight: FontWeight.w500,
                       color: _ink)),
@@ -544,7 +484,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
         const SizedBox(width: 12),
         Text(title,
             style: const TextStyle(
-                fontFamily: 'Georgia',
+                fontFamily: 'SF Pro Display',
                 fontSize: 19,
                 fontWeight: FontWeight.w500,
                 color: _ink)),
@@ -569,7 +509,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
           const Text(
             'Primary clinical lens —',
             style: TextStyle(
-                fontFamily: 'Georgia',
+                fontFamily: 'SF Pro Display',
                 fontStyle: FontStyle.italic,
                 fontSize: 13,
                 color: _inkGhost),
@@ -704,7 +644,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
               _loadingMessage,
               key: ValueKey(_loadingMessage),
               style: const TextStyle(
-                  fontFamily: 'Georgia',
+                  fontFamily: 'SF Pro Display',
                   fontStyle: FontStyle.italic,
                   fontSize: 14,
                   color: _inkGhost),
@@ -910,7 +850,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
                   goal['notes'] as String? ??
                       goal['title'] as String? ?? '',
                   style: const TextStyle(
-                      fontFamily: 'Georgia',
+                      fontFamily: 'SF Pro Display',
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: _ink,
@@ -1080,7 +1020,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
             'and acknowledge that Cue served as an authoring assistant, '
             'not a clinical decision-maker.',
             style: TextStyle(
-                fontFamily: 'Georgia',
+                fontFamily: 'SF Pro Display',
                 fontStyle: FontStyle.italic,
                 fontSize: 14,
                 color: _ink,
