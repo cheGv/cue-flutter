@@ -19,6 +19,9 @@ const Color _aiFill   = Color(0xFFEAF6F3); // AI-fill field background
 const String _proxyBase = 'https://cue-ai-proxy.onrender.com';
 
 // ── AI extraction system prompts ─────────────────────────────────────────────
+// Phase 4.0.2: extract prompts now include Layer-01 language fields and the
+// parent's-concern verbatim. population_type is intentionally excluded — it is
+// a clinician routing decision, not a parseable field (§13.16).
 const String _brainDumpSystem =
     'You are a clinical intake assistant for a speech-language pathologist. '
     'Extract client information from the spoken description and return ONLY a '
@@ -26,7 +29,9 @@ const String _brainDumpSystem =
     'found): name, age, date_of_birth (YYYY-MM-DD), diagnosis, '
     'secondary_diagnosis, primary_communication_modality, uses_aac (true/false), '
     'guardian_name, school_setting, referral_source, previous_therapy (true/false), '
-    'previous_therapy_duration, regulatory_profile, baseline_summary. '
+    'previous_therapy_duration, regulatory_profile, baseline_summary, '
+    'primary_language, additional_languages (array of strings), '
+    'primary_concern_verbatim (the parent\'s words about why they came, quoted as closely as possible). '
     'Return valid JSON only, no markdown, no explanation.';
 
 const String _extractSystem =
@@ -36,8 +41,17 @@ const String _extractSystem =
     'name, age, date_of_birth (YYYY-MM-DD), diagnosis, secondary_diagnosis, '
     'primary_communication_modality, uses_aac (true/false), guardian_name, '
     'school_setting, referral_source, previous_therapy (true/false), '
-    'previous_therapy_duration, regulatory_profile, baseline_summary. '
+    'previous_therapy_duration, regulatory_profile, baseline_summary, '
+    'primary_language, additional_languages (array of strings), '
+    'primary_concern_verbatim (the parent\'s or referrer\'s words about the reason for referral, quoted closely). '
     'Return valid JSON only, no markdown, no explanation.';
+
+// Population types selectable in V1. V1.x adds others (acquired_stuttering,
+// cluttering, ssd, voice, language, etc.) as those populations ship.
+const List<({String value, String label})> _populationOptions = [
+  (value: 'developmental_stuttering', label: 'Developmental stuttering'),
+  (value: 'asd_aac',                  label: 'ASD / AAC'),
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -67,6 +81,12 @@ class _AddClientScreenState extends State<AddClientScreen> {
   final _guardianNameCtrl     = TextEditingController();
   final _guardianWaCtrl       = TextEditingController(); // WhatsApp
   final _schoolCtrl           = TextEditingController();
+
+  // ── Layer-01 Phase 4.0.2 fields ────────────────────────────────────────────
+  String _populationType = 'developmental_stuttering'; // default for new clients
+  final _primaryLangCtrl      = TextEditingController();
+  final _additionalLangsCtrl  = TextEditingController(); // comma-separated
+  final _concernVerbatimCtrl  = TextEditingController();
 
   // ── Clinical intake fields ──────────────────────────────────────────────────
   final _secDiagCtrl          = TextEditingController();
@@ -115,6 +135,23 @@ class _AddClientScreenState extends State<AddClientScreen> {
     _prevDurationCtrl.text = (c['previous_therapy_duration']   as String?) ?? '';
     _regulatoryCtrl.text   = (c['regulatory_profile']          as String?) ?? '';
     _baselineCtrl.text     = (c['baseline_summary']            as String?) ?? '';
+
+    // Layer-01 Phase 4.0.2 fields
+    final pop = (c['population_type'] as String?)?.trim();
+    if (pop != null && pop.isNotEmpty) {
+      // Show whatever is on the row even if not in the V1 dropdown set, so
+      // legacy values render and can be re-saved. Unknown values fall back to
+      // 'asd_aac' (the §11 backfill default) so the dropdown has something
+      // valid to show.
+      final known = _populationOptions.any((o) => o.value == pop);
+      _populationType = known ? pop : 'asd_aac';
+    }
+    _primaryLangCtrl.text     = (c['primary_language'] as String?) ?? '';
+    final addLangs = c['additional_languages'];
+    if (addLangs is List) {
+      _additionalLangsCtrl.text = addLangs.map((e) => e.toString()).join(', ');
+    }
+    _concernVerbatimCtrl.text = (c['primary_concern_verbatim'] as String?) ?? '';
   }
 
   @override
@@ -127,6 +164,8 @@ class _AddClientScreenState extends State<AddClientScreen> {
     _secDiagCtrl.dispose();  _referralCtrl.dispose();
     _prevDurationCtrl.dispose();
     _regulatoryCtrl.dispose(); _baselineCtrl.dispose();
+    _primaryLangCtrl.dispose(); _additionalLangsCtrl.dispose();
+    _concernVerbatimCtrl.dispose();
     super.dispose();
   }
 
@@ -232,6 +271,13 @@ class _AddClientScreenState extends State<AddClientScreen> {
       }
     }
 
+    // Per §13.16, AI extraction is a draft layer — only fill when the
+    // clinician hasn't already entered a value. The clinician's own input
+    // is never silently overwritten by the extract path.
+    void fillTextIfEmpty(String key, TextEditingController ctrl) {
+      if (ctrl.text.trim().isEmpty) fillText(key, ctrl);
+    }
+
     fillText('name',                          _nameCtrl);
     fillText('diagnosis',                     _diagCtrl);
     fillText('secondary_diagnosis',           _secDiagCtrl);
@@ -242,6 +288,20 @@ class _AddClientScreenState extends State<AddClientScreen> {
     fillText('previous_therapy_duration',     _prevDurationCtrl);
     fillText('regulatory_profile',            _regulatoryCtrl);
     fillText('baseline_summary',              _baselineCtrl);
+
+    // Layer-01 Phase 4.0.2 — never overwrite clinician-entered values (§13.16)
+    fillTextIfEmpty('primary_language',         _primaryLangCtrl);
+    fillTextIfEmpty('primary_concern_verbatim', _concernVerbatimCtrl);
+
+    // additional_languages: array → comma-separated, only if SLP hasn't typed
+    final addLangs = data['additional_languages'];
+    if (addLangs is List &&
+        addLangs.isNotEmpty &&
+        _additionalLangsCtrl.text.trim().isEmpty) {
+      _additionalLangsCtrl.text =
+          addLangs.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).join(', ');
+      filled.add('additional_languages');
+    }
 
     // Age (numeric)
     if (data['age'] != null) {
@@ -358,6 +418,13 @@ class _AddClientScreenState extends State<AddClientScreen> {
     final userId = _supabase.auth.currentUser?.id;
     setState(() => _isSaving = true);
 
+    // Layer-01 Phase 4.0.2: parse comma-separated languages → text[]
+    final additionalLangs = _additionalLangsCtrl.text
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+
     // Build the shared field map (used by both insert and update)
     final data = <String, dynamic>{
       'name':                   name,
@@ -366,6 +433,11 @@ class _AddClientScreenState extends State<AddClientScreen> {
       'uses_aac':               _usesAac,
       'communication_modality': _modalityCtrl.text.trim(),
       'additional_notes':       _notesCtrl.text.trim(),
+      // Layer-01 Phase 4.0.2 — population routing + parent's words + languages
+      'population_type':            _populationType,
+      'primary_language':           _primaryLangCtrl.text.trim(),
+      'additional_languages':       additionalLangs,
+      'primary_concern_verbatim':   _concernVerbatimCtrl.text.trim(),
       // Basic new
       if (_dateOfBirth != null)
         'date_of_birth': _dateOfBirth!.toIso8601String().split('T').first,
@@ -428,9 +500,11 @@ class _AddClientScreenState extends State<AddClientScreen> {
                 // ── Required ───────────────────────────────────────────────
                 _sectionLabel('Required'),
                 const SizedBox(height: 12),
+                _buildPopulationDropdown(),
+                const SizedBox(height: 16),
                 TextField(
                   controller: _nameCtrl,
-                  decoration: _dec('Full Name *', aiKey: 'name'),
+                  decoration: _dec('Full name *', aiKey: 'name'),
                   textCapitalization: TextCapitalization.words,
                   onChanged: (_) => _clearAi('name'),
                 ),
@@ -446,12 +520,16 @@ class _AddClientScreenState extends State<AddClientScreen> {
                 ),
                 const SizedBox(height: 32),
 
+                // ── Parent's concern ───────────────────────────────────────
+                _buildConcernSection(),
+                const SizedBox(height: 32),
+
                 // ── Basic ──────────────────────────────────────────────────
                 _sectionLabel('Basic'),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _guardianNameCtrl,
-                  decoration: _dec('Parent / Guardian Name',
+                  decoration: _dec('Parent / guardian name',
                       aiKey: 'guardian_name'),
                   textCapitalization: TextCapitalization.words,
                   onChanged: (_) => _clearAi('guardian_name'),
@@ -459,17 +537,35 @@ class _AddClientScreenState extends State<AddClientScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: _guardianWaCtrl,
-                  decoration: _dec('Parent WhatsApp Number',
+                  decoration: _dec('Parent WhatsApp number',
                       hint: '+91 98765 43210'),
                   keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _schoolCtrl,
-                  decoration: _dec('School / Setting',
+                  decoration: _dec('School / setting',
                       aiKey: 'school_setting'),
                   textCapitalization: TextCapitalization.words,
                   onChanged: (_) => _clearAi('school_setting'),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _primaryLangCtrl,
+                  decoration: _dec('Primary language',
+                      hint: 'e.g. Telugu, English, Kannada',
+                      aiKey: 'primary_language'),
+                  textCapitalization: TextCapitalization.words,
+                  onChanged: (_) => _clearAi('primary_language'),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _additionalLangsCtrl,
+                  decoration: _dec('Additional languages',
+                      hint: 'comma-separated, e.g. Hindi, English',
+                      aiKey: 'additional_languages'),
+                  textCapitalization: TextCapitalization.words,
+                  onChanged: (_) => _clearAi('additional_languages'),
                 ),
                 const SizedBox(height: 32),
 
@@ -822,6 +918,74 @@ class _AddClientScreenState extends State<AddClientScreen> {
             onChanged: (_) => _clearAi('previous_therapy_duration'),
           ),
         ],
+      ],
+    );
+  }
+
+  // ── Phase 4.0.2 builders ──────────────────────────────────────────────────────
+
+  Widget _buildPopulationDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButtonFormField<String>(
+          initialValue: _populationType,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Population *',
+            border: InputBorder.none,
+          ),
+          items: _populationOptions
+              .map((o) => DropdownMenuItem<String>(
+                    value: o.value,
+                    child: Text(o.label, style: const TextStyle(color: _ink)),
+                  ))
+              .toList(),
+          onChanged: (v) {
+            if (v != null) setState(() => _populationType = v);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConcernSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Editorial Playfair label — this is a primary clinical artifact (the
+        // family's own framing), so it earns a serif voice. §13.15 / §13.8.
+        Text(
+          "Parent's concern",
+          style: GoogleFonts.playfairDisplay(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: _ink,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'In their words — quote the family as closely as possible.',
+          style: TextStyle(fontSize: 12, color: _ghost),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _concernVerbatimCtrl,
+          decoration: _dec(
+            "What brought you in today?",
+            hint: '"He gets stuck on the first sound when he\'s excited…"',
+            aiKey: 'primary_concern_verbatim',
+          ),
+          maxLines: 4,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: (_) => _clearAi('primary_concern_verbatim'),
+        ),
       ],
     );
   }
