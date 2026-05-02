@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/cue_phase4_tokens.dart';
+import 'debrief_fluency_screen.dart';
 import 'live_entry_fluency_screen.dart';
 
 class SessionModePickerView extends StatelessWidget {
@@ -39,6 +40,21 @@ class SessionModePickerView extends StatelessWidget {
       ),
     ).then((saved) {
       // Bubble up — chart will refresh roster on `true`.
+      if (saved == true && context.mounted) {
+        Navigator.pop(context, true);
+      }
+    });
+  }
+
+  void _openDebrief(BuildContext context) {
+    Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DebriefFluencyScreen(
+          clientId: clientId,
+          clientName: clientName,
+        ),
+      ),
+    ).then((saved) {
       if (saved == true && context.mounted) {
         Navigator.pop(context, true);
       }
@@ -106,8 +122,8 @@ class SessionModePickerView extends StatelessWidget {
                   subtitle: 'Capture after the session.',
                   hint: 'Severity rating, clinical impression, observed '
                       'avoidance — composed once the room is quiet.',
-                  enabled: false,
-                  onTap: () => _comingSoon(context, 'Debrief'),
+                  enabled: true,
+                  onTap: () => _openDebrief(context),
                 ),
                 const SizedBox(height: 12),
                 _modeCard(

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
+import 'debrief_fluency_screen.dart';
 
 class SessionNoteScreen extends StatefulWidget {
   final String clientId;
@@ -25,17 +26,22 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
   bool _isSaving = false;
 
   // Phase 4.0.4 — population routing.
+  // Phase 4.0.5 — extended to also fetch the latest session's debrief
+  // payload (assessment_entries mode='debrief') so the fluency summary
+  // can render live-entry + debrief side by side.
   String? _populationType;
   bool    _populationLoading = true;
   Map<String, dynamic>? _latestLiveEntryPayload;
+  Map<String, dynamic>? _latestDebriefPayload;
+  String? _latestSessionDate;
 
   @override
   void initState() {
     super.initState();
-    _loadPopulationAndLatestLiveEntry();
+    _loadPopulationAndLatestSession();
   }
 
-  Future<void> _loadPopulationAndLatestLiveEntry() async {
+  Future<void> _loadPopulationAndLatestSession() async {
     try {
       final clientRow = await _supabase
           .from('clients')
@@ -45,35 +51,71 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
       final pop =
           (clientRow?['population_type'] as String?) ?? 'asd_aac';
 
-      Map<String, dynamic>? latest;
+      Map<String, dynamic>? latestLive;
+      Map<String, dynamic>? latestDebrief;
+      int?    sessionId;
+      String? sessionDate;
+
       if (pop == 'developmental_stuttering') {
-        final row = await _supabase
+        // Most recent session for this client (by date desc, id desc).
+        final sessionRow = await _supabase
             .from('sessions')
-            .select('population_payload, date')
+            .select('id, date, population_payload')
             .eq('client_id', widget.clientId)
-            .not('population_payload', 'is', null)
             .order('date', ascending: false)
             .order('id', ascending: false)
             .limit(1)
             .maybeSingle();
-        final p = row?['population_payload'];
-        if (p is Map) {
-          latest = Map<String, dynamic>.from(p);
+        if (sessionRow != null) {
+          sessionId   = (sessionRow['id'] as num?)?.toInt();
+          sessionDate = sessionRow['date'] as String?;
+          final p = sessionRow['population_payload'];
+          if (p is Map) latestLive = Map<String, dynamic>.from(p);
+        }
+
+        if (sessionId != null) {
+          final debriefRow = await _supabase
+              .from('assessment_entries')
+              .select('payload')
+              .eq('session_id', sessionId)
+              .eq('mode', 'debrief')
+              .eq('population_type', 'developmental_stuttering')
+              .maybeSingle();
+          final p = debriefRow?['payload'];
+          if (p is Map) latestDebrief = Map<String, dynamic>.from(p);
         }
       }
 
       if (!mounted) return;
       setState(() {
-        _populationType = pop;
-        _latestLiveEntryPayload = latest;
-        _populationLoading = false;
+        _populationType         = pop;
+        _latestLiveEntryPayload = latestLive;
+        _latestDebriefPayload   = latestDebrief;
+        _latestSessionDate      = sessionDate;
+        _populationLoading      = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _populationType = 'asd_aac';
+        _populationType    = 'asd_aac';
         _populationLoading = false;
       });
+    }
+  }
+
+  Future<void> _openDebriefScreen() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DebriefFluencyScreen(
+          clientId: widget.clientId,
+          clientName: widget.clientName,
+        ),
+      ),
+    );
+    if (saved == true && mounted) {
+      // Re-load so the summary picks up the new debrief.
+      setState(() => _populationLoading = true);
+      await _loadPopulationAndLatestSession();
     }
   }
 
@@ -210,8 +252,11 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
         title: 'Session — ${widget.clientName}',
         activeRoute: 'roster',
         body: _FluencySessionSummary(
-          clientName: widget.clientName,
-          payload: _latestLiveEntryPayload,
+          clientName:     widget.clientName,
+          livePayload:    _latestLiveEntryPayload,
+          debriefPayload: _latestDebriefPayload,
+          sessionDate:    _latestSessionDate,
+          onAddDebrief:   _openDebriefScreen,
         ),
       );
     }
@@ -886,11 +931,17 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
 
 class _FluencySessionSummary extends StatelessWidget {
   final String clientName;
-  final Map<String, dynamic>? payload;
+  final Map<String, dynamic>? livePayload;
+  final Map<String, dynamic>? debriefPayload;
+  final String? sessionDate;
+  final VoidCallback onAddDebrief;
 
   const _FluencySessionSummary({
     required this.clientName,
-    required this.payload,
+    required this.livePayload,
+    required this.debriefPayload,
+    required this.sessionDate,
+    required this.onAddDebrief,
   });
 
   @override
@@ -926,7 +977,9 @@ class _FluencySessionSummary extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 22),
-                if (payload == null) _emptyState() else _content(),
+                if (livePayload == null) _emptyState() else _content(),
+                const SizedBox(height: 18),
+                _debriefSection(),
               ],
             ),
           ),
@@ -964,7 +1017,7 @@ class _FluencySessionSummary extends StatelessWidget {
   }
 
   Widget _content() {
-    final p = payload!;
+    final p = livePayload!;
     final total = (p['total_syllables'] as num?)?.toInt() ?? 0;
     final stuttered = (p['stuttered_syllables'] as num?)?.toInt() ?? 0;
     final percent = (p['percent_ss'] as num?)?.toDouble() ?? 0.0;
@@ -1163,8 +1216,254 @@ class _FluencySessionSummary extends StatelessWidget {
       case 'head_movement':   return 'head movement';
       case 'limb_movement':   return 'limb movement';
       case 'audible_tension': return 'audible tension';
+      // Phase 4.0.5 — debrief catalogs.
+      case 'word_substitution':      return 'word substitution';
+      case 'circumlocution':         return 'circumlocution';
+      case 'deferred_speaking_turn': return 'deferred speaking turn';
+      case 'eye_contact_reduction':  return 'eye contact reduction';
+      case 'topic_change':
+        return 'topic change to avoid stuttering moment';
+      case 'silence':                return 'silence / non-response';
+      case 'very_mild':   return 'very mild';
+      case 'mild':        return 'mild';
+      case 'moderate':    return 'moderate';
+      case 'severe':      return 'severe';
+      case 'very_severe': return 'very severe';
+      case 'low':                return 'low comfort';
+      case 'high':               return 'high comfort';
+      case 'unable_to_assess':   return 'unable to assess';
+      case 'limited':            return 'limited';
+      case 'partial':            return 'partial';
+      case 'full':               return 'full';
+      case 'subdued':            return 'subdued';
+      case 'neutral':            return 'neutral';
+      case 'engaged':            return 'engaged';
       default:
         return key.replaceAll('_', ' ');
     }
+  }
+
+  // ── Debrief section ────────────────────────────────────────────────────────
+
+  Widget _debriefSection() {
+    if (debriefPayload == null) return _debriefEmpty();
+    return _debriefContent(debriefPayload!);
+  }
+
+  Widget _debriefEmpty() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'debrief',
+            style: TextStyle(
+              fontSize: 11,
+              color: kCueEyebrowInk,
+              letterSpacing: kCueEyebrowLetterSpacing(11),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'No debrief captured for this session yet.',
+            style: TextStyle(fontSize: 13, color: kCueSubtitleInk),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: onAddDebrief,
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: kCueAmberSurface,
+                borderRadius: BorderRadius.circular(kCueChipRadius),
+                border: Border.all(color: kCueAmber, width: 1.2),
+              ),
+              child: Text(
+                '+ add debrief',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: kCueAmberText,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _debriefContent(Map<String, dynamic> p) {
+    final sev = (p['severity'] as Map?) ?? const {};
+    final band = sev['band'] as String?;
+    final instrument = (sev['instrument_used'] as String?)?.trim();
+    final impact = (p['impact_for_child'] as Map?) ?? const {};
+    final comfort = impact['comfort_today'] as String?;
+    final participation = impact['participation_today'] as String?;
+    final emotional = impact['emotional_response'] as String?;
+    final avoidance = ((p['avoidance_behaviours_today'] as List?) ?? const [])
+        .map((e) => e.toString())
+        .toList();
+    final notes = (p['clinical_notes'] as String?)?.trim();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'debrief',
+            style: TextStyle(
+              fontSize: 11,
+              color: kCueEyebrowInk,
+              letterSpacing: kCueEyebrowLetterSpacing(11),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Severity
+          if (band != null) ...[
+            Text('Severity',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(
+              _humanLabel(band),
+              style: GoogleFonts.playfairDisplay(
+                fontSize: 22,
+                fontStyle: FontStyle.italic,
+                fontWeight: FontWeight.w600,
+                color: kCueInk,
+                height: 1.1,
+              ),
+            ),
+            if (instrument != null && instrument.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                instrument,
+                style: TextStyle(fontSize: 13, color: kCueSubtitleInk),
+              ),
+            ],
+            const SizedBox(height: 14),
+          ],
+
+          // Impact bands
+          if (comfort != null || participation != null || emotional != null) ...[
+            Text('Impact for the child',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 6),
+            if (comfort != null)
+              _impactRow('comfort today', _humanLabel(comfort)),
+            if (participation != null)
+              _impactRow('participation', _humanLabel(participation)),
+            if (emotional != null)
+              _impactRow('emotional response', _humanLabel(emotional)),
+            const SizedBox(height: 12),
+          ],
+
+          // Avoidance pills
+          if (avoidance.isNotEmpty) ...[
+            Text('Avoidance behaviours observed',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: avoidance
+                  .map((k) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: kCueAmberSurface,
+                          borderRadius:
+                              BorderRadius.circular(kCueChipRadius),
+                        ),
+                        child: Text(
+                          _humanLabel(k),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: kCueAmberText,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // Clinical notes
+          if (notes != null && notes.isNotEmpty) ...[
+            Text('Clinical impressions',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: kCueEyebrowInk,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(height: 6),
+            Text(
+              notes,
+              style: const TextStyle(
+                  fontSize: 14, color: kCueInk, height: 1.5),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          GestureDetector(
+            onTap: onAddDebrief,
+            child: Text(
+              'edit debrief',
+              style: TextStyle(
+                fontSize: 12,
+                color: kCueAmberText,
+                fontWeight: FontWeight.w500,
+                decoration: TextDecoration.underline,
+                decorationColor: kCueAmberText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _impactRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(fontSize: 13, color: kCueInk)),
+          ),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 13, color: kCueInk, fontWeight: FontWeight.w500)),
+        ],
+      ),
+    );
   }
 }
