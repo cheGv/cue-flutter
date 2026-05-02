@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 
 class SessionNoteScreen extends StatefulWidget {
@@ -21,6 +23,59 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
   final _supabase = Supabase.instance.client;
   int _currentStep = 0;
   bool _isSaving = false;
+
+  // Phase 4.0.4 — population routing.
+  String? _populationType;
+  bool    _populationLoading = true;
+  Map<String, dynamic>? _latestLiveEntryPayload;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPopulationAndLatestLiveEntry();
+  }
+
+  Future<void> _loadPopulationAndLatestLiveEntry() async {
+    try {
+      final clientRow = await _supabase
+          .from('clients')
+          .select('population_type')
+          .eq('id', widget.clientId)
+          .maybeSingle();
+      final pop =
+          (clientRow?['population_type'] as String?) ?? 'asd_aac';
+
+      Map<String, dynamic>? latest;
+      if (pop == 'developmental_stuttering') {
+        final row = await _supabase
+            .from('sessions')
+            .select('population_payload, date')
+            .eq('client_id', widget.clientId)
+            .not('population_payload', 'is', null)
+            .order('date', ascending: false)
+            .order('id', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        final p = row?['population_payload'];
+        if (p is Map) {
+          latest = Map<String, dynamic>.from(p);
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _populationType = pop;
+        _latestLiveEntryPayload = latest;
+        _populationLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _populationType = 'asd_aac';
+        _populationLoading = false;
+      });
+    }
+  }
 
   // Step 1 – Barrier Analysis
   bool _barrierMotor = false;
@@ -142,6 +197,25 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_populationLoading) {
+      return AppLayout(
+        title: 'Session — ${widget.clientName}',
+        activeRoute: 'roster',
+        body: const SizedBox.shrink(),
+      );
+    }
+
+    if (_populationType == 'developmental_stuttering') {
+      return AppLayout(
+        title: 'Session — ${widget.clientName}',
+        activeRoute: 'roster',
+        body: _FluencySessionSummary(
+          clientName: widget.clientName,
+          payload: _latestLiveEntryPayload,
+        ),
+      );
+    }
+
     return AppLayout(
       title: 'Session — ${widget.clientName}',
       activeRoute: 'roster',
@@ -800,5 +874,297 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
       textAlign: TextAlign.center,
       decoration: _inputDecoration(label).copyWith(hintText: hint),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 4.0.4 — fluency session summary.
+//
+// Read-only view of the latest live-entry payload for a developmental
+// stuttering client. Editing returns to live-entry mode in 4.0.5.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FluencySessionSummary extends StatelessWidget {
+  final String clientName;
+  final Map<String, dynamic>? payload;
+
+  const _FluencySessionSummary({
+    required this.clientName,
+    required this.payload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: kCuePaper,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'session summary',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: kCueEyebrowInk,
+                    letterSpacing: kCueEyebrowLetterSpacing(11),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  clientName,
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 24,
+                    fontStyle: FontStyle.italic,
+                    fontWeight: FontWeight.w600,
+                    color: kCueInk,
+                    height: 1.05,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                if (payload == null) _emptyState() else _content(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No live entry yet.',
+            style: TextStyle(fontSize: 14, color: kCueInk),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Start a session in live-entry mode to capture syllable counts, '
+            'disfluencies, and accessory behaviours.',
+            style: TextStyle(
+                fontSize: 13, color: kCueSubtitleInk, height: 1.45),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _content() {
+    final p = payload!;
+    final total = (p['total_syllables'] as num?)?.toInt() ?? 0;
+    final stuttered = (p['stuttered_syllables'] as num?)?.toInt() ?? 0;
+    final percent = (p['percent_ss'] as num?)?.toDouble() ?? 0.0;
+    final duration = (p['duration_seconds'] as num?)?.toInt() ?? 0;
+    final ctx = (p['sample_context'] as String?)?.trim();
+    final disfluency =
+        (p['disfluency_counts'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final accessories =
+        ((p['accessory_behaviours_observed'] as List?) ?? const [])
+            .map((e) => e.toString())
+            .toList();
+    final state = (p['live_entry_state'] as String?) ?? 'complete';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (ctx != null && ctx.isNotEmpty) ...[
+          Text(
+            ctx,
+            style: TextStyle(fontSize: 14, color: kCueSubtitleInk),
+          ),
+          const SizedBox(height: 8),
+        ],
+        Text(
+          'duration · ${_formatDuration(duration)}'
+          '${state == 'in_progress' ? ' · in progress' : ''}',
+          style: TextStyle(fontSize: 12, color: kCueEyebrowInk),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _heroTile('total syllables', total.toString(), false)),
+            const SizedBox(width: 10),
+            Expanded(child: _heroTile('stuttered', stuttered.toString(), false)),
+            const SizedBox(width: 10),
+            Expanded(
+                flex: 2,
+                child: _heroTile('%SS', percent.toStringAsFixed(1), true)),
+          ],
+        ),
+        const SizedBox(height: 18),
+        if (disfluency.values.any((v) => ((v as num?)?.toInt() ?? 0) > 0))
+          _card(
+            eyebrow: 'disfluency counts',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: disfluency.entries
+                  .where((e) => ((e.value as num?)?.toInt() ?? 0) > 0)
+                  .map((e) => Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _humanLabel(e.key),
+                                style: const TextStyle(
+                                    fontSize: 13, color: kCueInk),
+                              ),
+                            ),
+                            Text(
+                              ((e.value as num?)?.toInt() ?? 0).toString(),
+                              style: GoogleFonts.playfairDisplay(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: kCueInk,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+        if (accessories.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          _card(
+            eyebrow: 'accessory behaviours observed',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: accessories
+                  .map((k) => Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: kCueAmberSurface,
+                          borderRadius:
+                              BorderRadius.circular(kCueChipRadius),
+                        ),
+                        child: Text(
+                          _humanLabel(k),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: kCueAmberText,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+          ),
+        ],
+        const SizedBox(height: 18),
+        Text(
+          'Captured in live-entry mode. Edit by reopening the session in live entry.',
+          style: TextStyle(
+              fontSize: 12, color: kCueEyebrowInk, height: 1.45),
+        ),
+      ],
+    );
+  }
+
+  Widget _heroTile(String eyebrow, String value, bool amber) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: amber ? kCueAmberSurface : kCueSurface,
+        borderRadius: BorderRadius.circular(kCueTileRadius),
+        border: amber
+            ? null
+            : Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            eyebrow,
+            style: TextStyle(
+              fontSize: 11,
+              color: amber ? kCueAmberDeeper : kCueEyebrowInk,
+              letterSpacing: kCueEyebrowLetterSpacing(11),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
+              color: amber ? kCueAmberText : kCueInk,
+              height: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _card({required String eyebrow, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            eyebrow,
+            style: TextStyle(
+              fontSize: 11,
+              color: kCueEyebrowInk,
+              letterSpacing: kCueEyebrowLetterSpacing(11),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(int seconds) {
+    final m = (seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  String _humanLabel(String key) {
+    switch (key) {
+      case 'part_word':    return 'part-word repetition';
+      case 'whole_word':   return 'whole-word repetition';
+      case 'prolongation': return 'prolongation';
+      case 'block':        return 'block';
+      case 'interjection': return 'interjection · other';
+      case 'revision':     return 'revision · other';
+      case 'eye_blink':       return 'eye blink';
+      case 'facial_tension':  return 'facial tension';
+      case 'head_movement':   return 'head movement';
+      case 'limb_movement':   return 'limb movement';
+      case 'audible_tension': return 'audible tension';
+      default:
+        return key.replaceAll('_', ' ');
+    }
   }
 }

@@ -20,19 +20,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../theme/cue_phase4_tokens.dart';
 
-// ── Locked Phase 4.0 visual tokens ────────────────────────────────────────────
-const Color kCuePaper        = Color(0xFFFAF7F0);
-const Color kCueSurface      = Color(0xFFFFFFFF);
-const Color kCueInk          = Color(0xFF1A1A1A);
-const Color kCueAmber        = Color(0xFFEF9F27);
-const Color kCueAmberSurface = Color(0xFFFAEEDA);
-const Color kCueAmberText    = Color(0xFF633806);
-const Color kCueBorder       = Color(0x14000000); // ~0.08α
-
-// Subtitle / eyebrow inks derived as alpha overlays on ink.
-const Color _subtitleInk = Color(0x8C1A1A1A); // ~0.55α
-const Color _eyebrowInk  = Color(0x731A1A1A); // ~0.45α
+// Local aliases for the shared tokens that this file uses heavily.
+const Color _subtitleInk = kCueSubtitleInk;
+const Color _eyebrowInk  = kCueEyebrowInk;
 
 // ── Catalogs ──────────────────────────────────────────────────────────────────
 

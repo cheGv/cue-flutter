@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
 import 'narrate_session_screen.dart';
 import 'report_screen.dart';
+import 'session_mode_picker_screen.dart';
 
 const _bg    = Color(0xFFF2EFE9);
 const _ink   = Color(0xFF0A0A0A);
@@ -34,10 +35,38 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   bool     _stgLoading = true;
   bool     _saving     = false;
 
+  // Phase 4.0.4 — population routing. While null, render a quiet skeleton
+  // so we don't briefly flash the legacy AAC flow before swapping to the
+  // mode picker for developmental_stuttering clients.
+  String? _populationType;
+  bool    _populationLoading = true;
+
   @override
   void initState() {
     super.initState();
     _loadActiveStg();
+    _loadPopulationType();
+  }
+
+  Future<void> _loadPopulationType() async {
+    try {
+      final row = await _supabase
+          .from('clients')
+          .select('population_type')
+          .eq('id', widget.clientId)
+          .maybeSingle();
+      if (!mounted) return;
+      setState(() {
+        _populationType = (row?['population_type'] as String?) ?? 'asd_aac';
+        _populationLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _populationType = 'asd_aac'; // safe fallback — keeps legacy flow
+        _populationLoading = false;
+      });
+    }
   }
 
   Future<void> _loadActiveStg() async {
@@ -155,6 +184,28 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // While the population fetch is in flight, render a blank container
+    // so the legacy AAC body doesn't flash before swapping to the picker.
+    if (_populationLoading) {
+      return AppLayout(
+        title: 'New session — ${widget.clientName}',
+        activeRoute: 'roster',
+        body: const SizedBox.shrink(),
+      );
+    }
+
+    if (_populationType == 'developmental_stuttering') {
+      return AppLayout(
+        title: 'New session — ${widget.clientName}',
+        activeRoute: 'roster',
+        body: SessionModePickerView(
+          clientId:   widget.clientId,
+          clientName: widget.clientName,
+        ),
+      );
+    }
+
+    // ASD/AAC and any other legacy population — existing flow unchanged.
     return AppLayout(
       title:       'New Session — ${widget.clientName}',
       activeRoute: 'roster',

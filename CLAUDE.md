@@ -1016,6 +1016,8 @@ Phase 4.0 V1 ships developmental stuttering only. Other fluency sub-types (acqui
 
 The architectural commitment: ship one population fully — Layer 01 through Layer 06 plus three derived outputs — before any second population begins. Build order is strict and documented in PHASE_4_SPEC.md Section 5.
 
+**Layer 03 re-sequencing (4.0.4):** Phase 4.0.4 ships only Layer 03 live-entry mode + Cue Calc + session-flow navigation + session_note_screen population branching. Layer 03's debrief and parent-interview sub-modes are deferred to 4.0.5 and 4.0.6 respectively. Subsequent build sequence numbers in [PHASE_4_SPEC.md](PHASE_4_SPEC.md) Section 5 shift by two — the master spec's "4.0.5 Layer 04" becomes 4.0.7, and so on. Re-sequencing rationale: Layer 03's three sub-modes are too architecturally rich to land cleanly in one Claude Code context.
+
 ### 14.9 Six-layer architecture is canonical for every population
 
 > **Locked Phase 4.0 Session 2.** Every population Cue serves implements the same six-layer shape. Population-specific concerns live in JSONB `population_payload` columns; the table-level structure and the layer ordering are universal.
