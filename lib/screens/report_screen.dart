@@ -8,8 +8,8 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/session_archive_service.dart';
 import '../widgets/app_layout.dart';
-import '../widgets/archive_dialog.dart';
 import '../widgets/cue_study_icon.dart';
 import 'narrate_session_screen.dart';
 
@@ -601,61 +601,17 @@ class _ReportScreenState extends State<ReportScreen> {
     return {'s': s, 'o': o, 'a': a, 'p': p};
   }
 
-  // ── Phase 4.0.7.10 — archive (soft-delete) this session ────────────────────
+  // ── Phase 4.0.7.10b — archive (soft-delete) thin wrapper ───────────────
+  // Dialog + PATCH lives in session_archive_service.dart; this screen
+  // owns only the navigation choice (pop with `true` so the caller can
+  // refresh its session list).
   Future<void> _archiveSession() async {
-    final id = widget.session['id'];
-    if (id == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Session has no id — nothing to archive.')),
-        );
-      }
-      return;
-    }
-    final attested = widget.session['clinician_attested'] == true;
-    final attestedAt =
-        (widget.session['attested_at'] as String?)?.split('T').first;
-
-    final body = attested
-        ? 'This session was attested${attestedAt != null ? ' on $attestedAt' : ''}. '
-          'Archiving keeps the record but hides it from your active sessions list. '
-          'Required for clinical-legal audit trail.'
-        : "Archived sessions are hidden from the client's history. "
-          'The data stays in your account.';
-
-    final result = await showArchiveDialog(
+    final archived = await archiveSession(
       context: context,
-      title: 'Archive this session?',
-      body: body,
-      reasons: const [
-        'Duplicate generation',
-        'Wrong client',
-        'Test session',
-        'Session did not occur',
-        'Other',
-      ],
-      reasonRequired: attested,
+      session: widget.session,
     );
-    if (!result.confirmed) return;
-
-    try {
-      await _supabase.from('sessions').update({
-        'deleted_at':    DateTime.now().toUtc().toIso8601String(),
-        'deleted_by':    _supabase.auth.currentUser?.id,
-        'delete_reason': result.reason,
-      }).eq('id', id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Session archived.')),
-        );
-        Navigator.of(context).pop(true);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Archive failed: $e')),
-        );
-      }
+    if (archived && mounted) {
+      Navigator.of(context).pop(true);
     }
   }
 

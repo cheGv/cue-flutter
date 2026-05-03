@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/name_formatter.dart';
+import '../services/session_archive_service.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
 import '../theme/cue_typography.dart';
@@ -2021,14 +2022,59 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Session · ${entry.title}',
-            style: GoogleFonts.dmSans(
-              fontSize:    10,
-              fontWeight:  FontWeight.w600,
-              color:       c.teal,
-              letterSpacing: 0.5,
-            ),
+          // Phase 4.0.7.10b — eyebrow row with inline kebab. The popup
+          // is the canonical inline-archive affordance for session cards
+          // on the client profile timeline; previously the SLP had to
+          // open the report screen to reach the same action.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  'Session · ${entry.title}',
+                  style: GoogleFonts.dmSans(
+                    fontSize:    10,
+                    fontWeight:  FontWeight.w600,
+                    color:       c.teal,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 28,
+                height: 28,
+                child: PopupMenuButton<String>(
+                  tooltip: 'More',
+                  iconSize: 16,
+                  padding: EdgeInsets.zero,
+                  icon: Icon(
+                    Icons.more_vert,
+                    size: 16,
+                    color: c.ghost,
+                  ),
+                  onSelected: (value) async {
+                    if (value != 'archive') return;
+                    if (entry.rawData == null) return;
+                    final archived = await archiveSession(
+                      context: context,
+                      session: entry.rawData!,
+                    );
+                    if (archived && mounted) _refreshSpine();
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem<String>(
+                      value: 'archive',
+                      child: Text(
+                        'Archive this session',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           if (entry.subtitle != null && entry.subtitle!.isNotEmpty) ...[
             const SizedBox(height: 5),
