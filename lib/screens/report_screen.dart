@@ -203,9 +203,18 @@ class _ReportScreenState extends State<ReportScreen> {
               })
           .toList();
 
+      // Phase 4.0.7.9i-fix2: send transcript so the proxy can run
+      // narrator-mode (MODE A) when structured fields are empty.
+      // widget.session['transcript'] is the canonical source since
+      // 4.0.7.8a (narrate_session_screen persists it before navigation
+      // and on back-nav hydration).
+      final transcript =
+          (widget.session['transcript'] as String?)?.trim() ?? '';
+
       final bodyMap = {
         'clientName':   name,
         'reportFormat': _reportFormat,
+        'transcript':   transcript,
         'session': {
           'date': date,
           'goal': goal,
@@ -233,22 +242,48 @@ class _ReportScreenState extends State<ReportScreen> {
             data['content']?[0]?['text'] ?? data['report'] ?? response.body;
         final reportText = _cleanText(text.toString());
 
-        // Phase 4.0.7.9a — split clinical and parent halves so the SOAP
-        // parser only sees S/O/A/P content, and the parent block is
-        // captured separately for column persistence + PDF page 2.
-        final split = _splitClinicalAndParent(reportText);
+        // Phase 4.0.7.9i-fix2: parent_summary is now a structured JSON
+        // field on the proxy response. Try the JSON path first; fall
+        // back to the legacy text-section split for any non-JSON
+        // responses (handles regressions and any in-flight callers).
+        String parentSummary;
+        String clinicalText;
+        final reportTrimmed = reportText.trim();
+        if (reportTrimmed.startsWith('{')) {
+          try {
+            final parsed = jsonDecode(reportTrimmed);
+            if (parsed is Map<String, dynamic>) {
+              parentSummary =
+                  (parsed['parent_summary'] as String?)?.trim() ?? '';
+              // The clinical text passed downstream is the full JSON —
+              // _populateSoapFields handles JSON-first extraction itself.
+              clinicalText = reportText;
+            } else {
+              final split = _splitClinicalAndParent(reportText);
+              parentSummary = split.parent;
+              clinicalText  = split.clinical;
+            }
+          } catch (_) {
+            final split = _splitClinicalAndParent(reportText);
+            parentSummary = split.parent;
+            clinicalText  = split.clinical;
+          }
+        } else {
+          final split = _splitClinicalAndParent(reportText);
+          parentSummary = split.parent;
+          clinicalText  = split.clinical;
+        }
+
         setState(() {
           _report = reportText;
           _showNoteFields = true;
         });
-        _populateSoapFields(split.clinical);
+        _populateSoapFields(clinicalText);
 
-        // CHANGE 1: persist the AI output immediately. Without this the
-        // SOAP note + parent summary live only in memory and a tab close
-        // = data loss (live row 60 had transcript-only despite a
-        // successful PDF export). Single transactional PATCH; failure
-        // surfaces a SnackBar but does not block PDF / further edits.
-        await _persistGeneratedReport(parentSummary: split.parent);
+        // Persist the AI output immediately so a tab close ≠ data loss.
+        // _persistGeneratedReport reads the SOAP form controllers (now
+        // populated above) plus the parent_summary we just extracted.
+        await _persistGeneratedReport(parentSummary: parentSummary);
       } else {
         setState(() {
           _error =
@@ -375,7 +410,56 @@ class _ReportScreenState extends State<ReportScreen> {
 
   // ── Note parsing ─────────────────────────────────────────────────────────────
 
+  /// Phase 4.0.7.9i-fix2 — JSON-first SOAP populate. The proxy now
+  /// returns strict JSON {s,o,a,p,parent_summary}; we try that path
+  /// first and fall back to the legacy regex parser only if the
+  /// response doesn't look like JSON or fails to parse. Empty-mode
+  /// (MODE D) is detected and handled gracefully — all four fields
+  /// blanked and a debug line logged so the SLP doesn't see hallucinated
+  /// content for a session with no captured data.
   void _populateSoapFields(String text) {
+    final trimmed = text.trim();
+
+    if (trimmed.startsWith('{')) {
+      try {
+        final parsed = jsonDecode(trimmed);
+        if (parsed is Map<String, dynamic>) {
+          final s = (parsed['s'] as String?)?.trim() ?? '';
+          final o = (parsed['o'] as String?)?.trim() ?? '';
+          final a = (parsed['a'] as String?)?.trim() ?? '';
+          final p = (parsed['p'] as String?)?.trim() ?? '';
+
+          // Empty-mode: surface "no data captured" rather than silently
+          // populating empty fields under a successful-looking response.
+          if (s.isEmpty && o.isEmpty && a.isEmpty && p.isEmpty) {
+            _sCtrl.text = '';
+            _oCtrl.text = '';
+            _aCtrl.text = '';
+            _pCtrl.text = '';
+            debugPrint('[ReportScreen] proxy returned empty SOAP — '
+                'no data captured for this session');
+            return;
+          }
+
+          _sCtrl.text = s;
+          _oCtrl.text = o;
+          _aCtrl.text = a;
+          _pCtrl.text = p;
+          return;
+        }
+      } catch (e) {
+        debugPrint('[ReportScreen] JSON parse failed, falling back '
+            'to regex: $e');
+        // fall through to legacy regex path below
+      }
+    }
+
+    _populateSoapFieldsLegacy(text);
+  }
+
+  /// Pre-4.0.7.9i regex parser. Retained verbatim for backwards
+  /// compatibility with any legacy proxy responses or future regressions.
+  void _populateSoapFieldsLegacy(String text) {
     switch (_reportFormat) {
       case 'DAR':
         final dar = _parseSections(text, {
