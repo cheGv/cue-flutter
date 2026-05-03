@@ -5,3 +5,4 @@
 [build.environment]
   FLUTTER_VERSION = "stable"
   PUB_CACHE = "/opt/build/cache/pub-cache"
+  SECRETS_SCAN_OMIT_PATHS = "flutter/**"
