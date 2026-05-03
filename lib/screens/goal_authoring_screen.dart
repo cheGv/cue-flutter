@@ -54,6 +54,13 @@ class GoalAuthoringScreen extends StatefulWidget {
 class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   final _supabase = Supabase.instance.client;
   final _hypothesisController = TextEditingController();
+
+  /// Phase 4.0.7.17b — current Deepgram partial transcript (replaces on
+  /// every is_final=false push, clears on is_final=true / stop / error).
+  /// Rendered as ghost-italic suffix layered on top of the textarea.
+  /// NOT written into _hypothesisController — the canonical field stays
+  /// clean; only finals land in the controller.
+  String _interimPreview = '';
   final _scrollController = ScrollController();
 
   // Clarifying answers
@@ -563,42 +570,105 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: TextField(
-                controller: _hypothesisController,
-                maxLines: 3,
-                style: const TextStyle(
-                    fontSize: 14, color: _ink, height: 1.55),
-                decoration: InputDecoration(
-                  hintText:
-                      'What\'s your current working hypothesis about this child?',
-                  hintStyle:
-                      const TextStyle(fontSize: 13, color: _inkGhost),
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: _line),
+              // 4.0.7.17b — Stack lets us overlay the ghost-italic
+              // interim suffix on top of the TextField without writing
+              // it into the controller. Field text goes transparent
+              // ONLY while an interim is active; the overlay then
+              // renders both the existing committed text and the ghost
+              // suffix as one Text.rich. When _interimPreview is empty,
+              // the field renders normally — no overlay, no perf cost.
+              child: Stack(
+                children: [
+                  TextField(
+                    controller: _hypothesisController,
+                    maxLines: 3,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: _interimPreview.isEmpty
+                          ? _ink
+                          : Colors.transparent,
+                      height: 1.55,
+                    ),
+                    decoration: InputDecoration(
+                      hintText:
+                          'What\'s your current working hypothesis about this child?',
+                      hintStyle:
+                          const TextStyle(fontSize: 13, color: _inkGhost),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: _line),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide:
+                            const BorderSide(color: _teal, width: 1.5),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: _line),
+                      ),
+                    ),
                   ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide:
-                        const BorderSide(color: _teal, width: 1.5),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: _line),
-                  ),
-                ),
+                  if (_interimPreview.isNotEmpty)
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Padding(
+                          // Matches Material's outlined-TextField default
+                          // content padding (12px each side).
+                          padding: const EdgeInsets.fromLTRB(
+                              12, 12, 12, 12),
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: _hypothesisController.text,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: _ink,
+                                    height: 1.55,
+                                  ),
+                                ),
+                                TextSpan(
+                                  text:
+                                      _hypothesisController.text.isEmpty
+                                          ? _interimPreview
+                                          : ' $_interimPreview',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: _ink.withValues(alpha: 0.5),
+                                    fontStyle: FontStyle.italic,
+                                    height: 1.55,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(width: 10),
-            _MicButton(onTranscribed: (text) {
-              setState(() {
-                final existing = _hypothesisController.text.trim();
-                _hypothesisController.text =
-                    existing.isEmpty ? text : '$existing $text';
-              });
-            }),
+            _MicButton(
+              onTranscribed: (text) {
+                setState(() {
+                  final existing = _hypothesisController.text.trim();
+                  _hypothesisController.text =
+                      existing.isEmpty ? text : '$existing $text';
+                  // Final landed and got committed to the controller —
+                  // drop the ghost suffix so the SLP sees a clean field.
+                  _interimPreview = '';
+                });
+              },
+              onInterim: (text) {
+                setState(() => _interimPreview = text);
+              },
+            ),
           ],
         ),
       ],
@@ -1226,7 +1296,14 @@ class _ClarifyChip extends StatelessWidget {
 ///   - 30-second auto-stop covers SLPs forgetting the mic is hot.
 class _MicButton extends StatefulWidget {
   final ValueChanged<String> onTranscribed;
-  const _MicButton({required this.onTranscribed});
+  /// Phase 4.0.7.17b — fired on every Deepgram is_final=false chunk
+  /// while the user is speaking. Optional; backwards-compatible. The
+  /// emitted text is the proxy's current partial guess and replaces
+  /// (not appends to) any prior interim. Caller is expected to keep
+  /// it as a separate visual preview, NOT to write it into the
+  /// canonical text controller.
+  final ValueChanged<String>? onInterim;
+  const _MicButton({required this.onTranscribed, this.onInterim});
   @override
   State<_MicButton> createState() => _MicButtonState();
 }
@@ -1408,6 +1485,11 @@ class _MicButtonState extends State<_MicButton> {
     if (mounted) {
       setState(() => _isListening = false);
     }
+    // 4.0.7.17b — clear any lingering interim preview when the
+    // recording terminates, regardless of error or success path. The
+    // parent uses this signal to drop the ghost-italic suffix in the
+    // textarea overlay.
+    widget.onInterim?.call('');
     if (!fromError && text.isNotEmpty) {
       widget.onTranscribed(text);
     }
@@ -1421,11 +1503,23 @@ class _MicButtonState extends State<_MicButton> {
       return;
     }
     final type = data['type'];
-    if (type == 'transcript' && data['is_final'] == true) {
+    if (type == 'transcript') {
       final text = (data['text'] as String?)?.trim() ?? '';
-      if (text.isNotEmpty) {
-        if (_final.isNotEmpty) _final.write(' ');
-        _final.write(text);
+      final isFinal = data['is_final'] == true;
+      if (isFinal) {
+        if (text.isNotEmpty) {
+          if (_final.isNotEmpty) _final.write(' ');
+          _final.write(text);
+        }
+        // 4.0.7.17b — a final landed; drop the interim preview so the
+        // ghost suffix doesn't double-render alongside the just-
+        // committed final on the next interim push.
+        widget.onInterim?.call('');
+      } else {
+        // 4.0.7.17b — partial transcript. Each push REPLACES the
+        // current preview (Deepgram's interims are cumulative for the
+        // current utterance, not delta).
+        widget.onInterim?.call(text);
       }
     } else if (type == 'error') {
       _stop(fromError: true);
