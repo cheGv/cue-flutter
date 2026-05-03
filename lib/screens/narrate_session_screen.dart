@@ -215,13 +215,38 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
         }
       }
 
+      // ── Phase 4.0.7.9g-part2: fetch SLP transcription preferences. ─────
+      // Defaults to 'multi' if profile row absent or query fails,
+      // matching the proxy default. Failure is non-fatal — we still
+      // open the WS, just with the default language mode.
+      String languageMode = 'multi';
+      try {
+        final userId = _supabase.auth.currentUser?.id;
+        if (userId != null) {
+          final profile = await _supabase
+              .from('slp_profiles')
+              .select('transcription_language_mode')
+              .eq('clinician_id', userId)
+              .maybeSingle();
+          if (profile != null &&
+              profile['transcription_language_mode'] != null) {
+            languageMode = profile['transcription_language_mode'] as String;
+          }
+        }
+        _log('L3', 'language_mode=$languageMode for this session');
+      } catch (e) {
+        _log('L3', 'language_mode fetch failed (defaulting to multi): $e');
+      }
+
       // ── Layer 3: WebSocket to proxy ───────────────────────────────────
       final wsUrl =
           'wss://cue-ai-proxy.onrender.com/transcribe'
           '?session_id=${widget.sessionId ?? ""}'
+          '&language_mode=${Uri.encodeQueryComponent(languageMode)}'
           '$keywordsQuery';
       _log('L3', 'opening WebSocket, '
-          'url_size=${wsUrl.length}, keywords=$keywordCount');
+          'url_size=${wsUrl.length}, keywords=$keywordCount, '
+          'language_mode=$languageMode');
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
       _wsSendCount = 0;
       _wsRecvCount = 0;
