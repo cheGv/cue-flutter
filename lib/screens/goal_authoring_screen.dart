@@ -9,13 +9,16 @@
 //     ),
 //   ));
 
+import 'dart:async';
 import 'dart:convert';
-import 'dart:js' as js;
 import 'dart:js_interop';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import '../narrate_web_audio.dart';
 import 'ltg_edit_screen.dart';
 
 // ── constants ──────────────────────────────────────────────────────────────────
@@ -1207,6 +1210,20 @@ class _ClarifyChip extends StatelessWidget {
   }
 }
 
+/// Phase 4.0.7.17 — rewired to the same Deepgram WebSocket pipeline that
+/// narrate_session_screen.dart uses. The legacy Web Speech API path
+/// (`window.startSpeechRecognition` / `stopSpeechRecognition`) is gone —
+/// those JS functions don't ship with the Netlify build, so the prior
+/// implementation never produced a transcript. Now we open a WS to the
+/// proxy with `language_mode` set from the SLP's profile, capture audio
+/// via MediaRecorder, accumulate is_final chunks into a buffer, and
+/// fire `onTranscribed` once with the joined text on stop.
+///
+/// Mic-leak hardening from 4.0.7.9j is preserved here:
+///   - `_released` flag is set FIRST in any teardown path so any
+///     in-flight `dataavailable` callbacks short-circuit.
+///   - `_onWebSocketDone` releases media handles on unexpected close.
+///   - 30-second auto-stop covers SLPs forgetting the mic is hot.
 class _MicButton extends StatefulWidget {
   final ValueChanged<String> onTranscribed;
   const _MicButton({required this.onTranscribed});
@@ -1215,24 +1232,232 @@ class _MicButton extends StatefulWidget {
 }
 
 class _MicButtonState extends State<_MicButton> {
+  static const _wsUrlBase = 'wss://cue-ai-proxy.onrender.com/transcribe';
+  static const _autoStop  = Duration(seconds: 30);
+
   bool _isListening = false;
+  bool _released    = false;
+
+  WebSocketChannel? _channel;
+  MediaRecorder?    _recorder;
+  MediaStream?      _mediaStream;
+  Timer?            _autoStopTimer;
+
+  /// Accumulated final transcript chunks for the current recording. Joined
+  /// with single spaces and fired through `widget.onTranscribed` once on
+  /// stop, so the parent textarea sees one append per mic session.
+  final StringBuffer _final = StringBuffer();
+
+  /// Cached after first fetch. Defaults to 'en' on miss/failure to match
+  /// the proxy's safer fallback.
+  String? _languageMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensureLanguageMode();
+  }
+
+  @override
+  void dispose() {
+    _release();
+    super.dispose();
+  }
+
+  Future<void> _ensureLanguageMode() async {
+    if (_languageMode != null) return;
+    try {
+      final uid = Supabase.instance.client.auth.currentUser?.id;
+      if (uid == null) {
+        _languageMode = 'en';
+        return;
+      }
+      final row = await Supabase.instance.client
+          .from('slp_profiles')
+          .select('transcription_language_mode')
+          .eq('clinician_id', uid)
+          .maybeSingle();
+      final v = row?['transcription_language_mode'] as String?;
+      _languageMode = (v != null && v.isNotEmpty) ? v : 'en';
+    } catch (_) {
+      _languageMode = 'en';
+    }
+  }
 
   void _toggle() {
     if (_isListening) {
-      js.context.callMethod('stopSpeechRecognition', []);
+      _stop(fromError: false);
+    } else {
+      _start();
+    }
+  }
+
+  Future<void> _start() async {
+    await _ensureLanguageMode();
+    final lang = _languageMode ?? 'en';
+
+    setState(() {
+      _isListening = true;
+      _released    = false;
+      _final.clear();
+    });
+
+    try {
+      // Open WS to proxy. No session_id, no keywords (4.0.7.18 work).
+      final wsUrl =
+          '$_wsUrlBase?language_mode=${Uri.encodeQueryComponent(lang)}';
+      _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
+      _channel!.stream.listen(
+        _onMessage,
+        onError: _onWebSocketError,
+        onDone:  _onWebSocketDone,
+      );
+
+      // Mic — same constraints as the narrator screen. Mono 16k matches
+      // Deepgram's expected input.
+      final constraints = <String, dynamic>{
+        'audio': {
+          'channelCount':     1,
+          'sampleRate':       16000,
+          'echoCancellation': true,
+          'noiseSuppression': true,
+        },
+      }.jsify();
+      final stream =
+          (await getUserMedia(constraints!).toDart) as MediaStream?;
+      if (stream == null) {
+        throw StateError('getUserMedia returned null');
+      }
+
+      final options  = <String, dynamic>{}.jsify();
+      final recorder = MediaRecorder(stream, options!);
+
+      recorder.onDataAvailable = (BlobEvent event) {
+        if (_released) return;
+        final blob = event.data as Blob;
+        final reader = FileReader();
+        reader.onLoadEnd = (JSAny _) {
+          if (_released) return;
+          final buffer = (reader.result as JSArrayBuffer).toDart;
+          final bytes  = Uint8List.view(buffer);
+          if (_channel != null && _isListening && bytes.isNotEmpty) {
+            try {
+              _channel!.sink.add(bytes);
+            } catch (_) {/* socket dying — ignored, _onWebSocketDone handles */}
+          }
+        }.toJS;
+        reader.readAsArrayBuffer(blob);
+      }.toJS;
+
+      recorder.start(250);
+      _recorder    = recorder;
+      _mediaStream = stream;
+
+      // Auto-stop watchdog — protects against an SLP forgetting the mic
+      // is hot during goal authoring.
+      _autoStopTimer = Timer(_autoStop, () {
+        if (_isListening) _stop(fromError: false);
+      });
+    } catch (e) {
+      _release();
+      if (mounted) {
+        setState(() => _isListening = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't transcribe — please try again."),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Release every media + socket handle. Idempotent. Sets `_released`
+  /// FIRST so any in-flight `dataavailable` / `FileReader.onLoadEnd`
+  /// callbacks short-circuit on the next microtask — same gate pattern
+  /// as `narrate_session_screen.dart` post-4.0.7.9j.
+  void _release() {
+    if (_released) return;
+    _released = true;
+
+    _autoStopTimer?.cancel();
+    _autoStopTimer = null;
+
+    try {
+      final r = _recorder;
+      if (r != null && r.state != 'inactive') r.stop();
+    } catch (_) {}
+    _recorder = null;
+
+    try {
+      final s = _mediaStream;
+      if (s != null) {
+        for (final t in s.getTracks().toDart) {
+          try { t.stop(); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    _mediaStream = null;
+
+    try { _channel?.sink.close(); } catch (_) {}
+    _channel = null;
+  }
+
+  void _stop({required bool fromError}) {
+    final text = _final.toString().trim();
+    _release();
+    if (mounted) {
       setState(() => _isListening = false);
+    }
+    if (!fromError && text.isNotEmpty) {
+      widget.onTranscribed(text);
+    }
+  }
+
+  void _onMessage(dynamic message) {
+    Map<String, dynamic>? data;
+    try {
+      data = jsonDecode(message as String) as Map<String, dynamic>;
+    } catch (_) {
       return;
     }
-    setState(() => _isListening = true);
-    js.context.callMethod('startSpeechRecognition', [
-      ((JSString jsTranscript) {
-        widget.onTranscribed(jsTranscript.toDart);
-        if (mounted) setState(() => _isListening = false);
-      }).toJS,
-      (() {
-        if (mounted) setState(() => _isListening = false);
-      }).toJS,
-    ]);
+    final type = data['type'];
+    if (type == 'transcript' && data['is_final'] == true) {
+      final text = (data['text'] as String?)?.trim() ?? '';
+      if (text.isNotEmpty) {
+        if (_final.isNotEmpty) _final.write(' ');
+        _final.write(text);
+      }
+    } else if (type == 'error') {
+      _stop(fromError: true);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't transcribe — please try again."),
+          ),
+        );
+      }
+    }
+  }
+
+  void _onWebSocketError(dynamic _) {
+    if (!_isListening) return;
+    _stop(fromError: true);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't transcribe — please try again."),
+        ),
+      );
+    }
+  }
+
+  void _onWebSocketDone() {
+    // Unexpected close while we still hold media handles → release for
+    // privacy, fire whatever transcript we accumulated. Mirrors the
+    // 4.0.7.9j pattern from narrate_session_screen.dart.
+    if (!_released && (_recorder != null || _mediaStream != null)) {
+      _stop(fromError: false);
+    }
   }
 
   @override
