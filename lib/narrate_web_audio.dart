@@ -18,9 +18,22 @@ extension type MediaRecorder._(JSObject _) implements JSObject {
 
   external void start(int timeslice);
   external void stop();
+  external String get state;
 
   @JS('ondataavailable')
   external set onDataAvailable(JSFunction fn);
+}
+
+// Phase 4.0.7.6 — needed to fully release the mic on stop. Without calling
+// stop() on each track, the browser keeps the recording indicator on and
+// the audio device pinned even after the WebSocket and MediaRecorder are
+// torn down.
+extension type MediaStream._(JSObject _) implements JSObject {
+  external JSArray<MediaStreamTrack> getTracks();
+}
+
+extension type MediaStreamTrack._(JSObject _) implements JSObject {
+  external void stop();
 }
 
 extension type BlobEvent._(JSObject _) implements JSObject {

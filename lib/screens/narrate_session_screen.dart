@@ -12,6 +12,15 @@ import '../narrate_web_audio.dart';
 import '../widgets/app_layout.dart';
 import 'report_screen.dart';
 
+// Phase 4.0.7.6 — explicit narrator lifecycle.
+//   idle       → no active recording, no transcript yet.
+//   recording  → mic streaming bytes to the proxy.
+//   paused     → mic paused, transcript preserved, can resume from same UI.
+//                The mic toggle moves between recording ↔ paused.
+//   stopped    → terminal. Media + WebSocket fully released. Generate
+//                Report is the only forward action. Mic button is hidden.
+enum _NarrateStage { idle, recording, paused, stopped }
+
 class NarrateSessionScreen extends StatefulWidget {
   final String  clientId;
   final String  clientName;
@@ -40,22 +49,31 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
   // ── State ────────────────────────────────────────────────────────────────
 
   WebSocketChannel? _channel;
+  MediaRecorder?    _recorder;
+  MediaStream?      _mediaStream;
   String  _finalTranscript  = '';
   String  _interimText      = '';
-  bool    _isRecording      = false;
+  _NarrateStage _stage      = _NarrateStage.idle;
   bool    _isConnecting     = false;
   String  _detectedLanguage = '';
   String? _micError;
 
+  bool get _isRecording => _stage == _NarrateStage.recording;
+  bool get _isStopped   => _stage == _NarrateStage.stopped;
+
   // ── Recording ─────────────────────────────────────────────────────────────
 
   Future<void> _startRecording() async {
+    // Resume from a paused state preserves the existing transcript.
+    final isResume = _stage == _NarrateStage.paused;
     setState(() {
-      _isConnecting    = true;
-      _micError        = null;
-      _finalTranscript = '';
-      _interimText     = '';
-      _detectedLanguage = '';
+      _isConnecting     = true;
+      _micError         = null;
+      if (!isResume) {
+        _finalTranscript  = '';
+        _detectedLanguage = '';
+      }
+      _interimText      = '';
     });
 
     try {
@@ -81,7 +99,7 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
         },
       }.jsify();
 
-      final stream = await getUserMedia(constraints!).toDart;
+      final stream = (await getUserMedia(constraints!).toDart) as MediaStream?;
 
       // 4. Create MediaRecorder — let browser choose encoding so Deepgram can auto-detect
       final options  = <String, dynamic>{}.jsify();
@@ -104,8 +122,11 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
 
       recorder.start(250); // 250 ms chunks
 
+      _recorder    = recorder;
+      _mediaStream = stream;
+
       setState(() {
-        _isRecording  = true;
+        _stage        = _NarrateStage.recording;
         _isConnecting = false;
       });
 
@@ -120,11 +141,50 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
     }
   }
 
-  void _stopRecording() {
-    _channel?.sink.close();
+  /// Phase 4.0.7.6 — release every media handle the start path acquired.
+  /// MediaRecorder.stop() flushes pending dataavailable events. Each track
+  /// must be stop()ed independently or the browser keeps the mic indicator
+  /// on. WebSocket sink is closed last so any final bytes flushed by the
+  /// recorder still reach the proxy.
+  void _releaseMediaResources() {
+    try {
+      final r = _recorder;
+      if (r != null && r.state != 'inactive') {
+        r.stop();
+      }
+    } catch (_) {}
+    _recorder = null;
+
+    try {
+      final s = _mediaStream;
+      if (s != null) {
+        for (final t in s.getTracks().toDart) {
+          try { t.stop(); } catch (_) {}
+        }
+      }
+    } catch (_) {}
+    _mediaStream = null;
+
+    try { _channel?.sink.close(); } catch (_) {}
     _channel = null;
+  }
+
+  /// Pause — preserve transcript, free media, allow Resume to restart.
+  /// Called by the mic button while recording.
+  void _pauseRecording() {
+    _releaseMediaResources();
     setState(() {
-      _isRecording = false;
+      _stage       = _NarrateStage.paused;
+      _interimText = '';
+    });
+  }
+
+  /// Terminal stop — Done button. Generate Report becomes the only forward
+  /// action. Mic button is hidden.
+  void _finishRecording() {
+    _releaseMediaResources();
+    setState(() {
+      _stage       = _NarrateStage.stopped;
       _interimText = '';
     });
   }
@@ -150,23 +210,35 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
         });
       }
     } else if (data['type'] == 'error') {
+      _releaseMediaResources();
       setState(() {
-        _micError    = data['message'] as String;
-        _isRecording = false;
+        _micError = data['message'] as String;
+        _stage    = _stage == _NarrateStage.stopped
+            ? _NarrateStage.stopped
+            : _NarrateStage.paused;
       });
     }
   }
 
   void _onWebSocketError(dynamic error) {
+    _releaseMediaResources();
     setState(() {
-      _micError    = 'Connection lost. Tap to retry.';
-      _isRecording = false;
+      _micError = 'Connection lost. Tap to retry.';
+      if (_stage != _NarrateStage.stopped) {
+        _stage = _finalTranscript.isEmpty
+            ? _NarrateStage.idle
+            : _NarrateStage.paused;
+      }
     });
   }
 
   void _onWebSocketDone() {
     if (_isRecording) {
-      setState(() => _isRecording = false);
+      // Server-initiated close while we thought we were live — fall back to
+      // paused so the user can retry without losing transcript.
+      setState(() => _stage = _finalTranscript.isEmpty
+          ? _NarrateStage.idle
+          : _NarrateStage.paused);
     }
   }
 
@@ -224,7 +296,7 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
 
   @override
   void dispose() {
-    _channel?.sink.close();
+    _releaseMediaResources();
     super.dispose();
   }
 
@@ -293,12 +365,14 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
                     const SizedBox(height: 32),
                   ],
 
-                  // ── Mic button ──────────────────────────────────────────
-                  if (_micError == null) ...[
+                  // ── Mic button (hidden in terminal stopped state) ───────
+                  if (_micError == null && !_isStopped) ...[
                     GestureDetector(
                       onTap: _isConnecting
                           ? null
-                          : _isRecording ? _stopRecording : _startRecording,
+                          : _isRecording
+                              ? _pauseRecording
+                              : _startRecording,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         width:  _isRecording ? 80 : 72,
@@ -324,7 +398,7 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
                               )
                             : Icon(
                                 _isRecording
-                                    ? Icons.stop_rounded
+                                    ? Icons.pause_rounded
                                     : Icons.mic_rounded,
                                 color: Colors.white,
                                 size:  32,
@@ -338,16 +412,44 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
                   Text(
                     _isConnecting
                         ? 'Connecting…'
-                        : _isRecording
-                            ? 'Tap to stop'
-                            : _finalTranscript.isEmpty
-                                ? 'Tap the microphone and speak'
-                                : 'Tap to continue recording',
+                        : _isStopped
+                            ? 'Recording stopped. Generate the report below.'
+                            : _isRecording
+                                ? 'Tap to pause'
+                                : _finalTranscript.isEmpty
+                                    ? 'Tap the microphone and speak'
+                                    : 'Paused — tap to resume, or Done to finish',
                     style: TextStyle(
                       fontSize: 13,
                       color:    ink.withValues(alpha: 0.55),
                     ),
+                    textAlign: TextAlign.center,
                   ),
+
+                  // ── Done button — visible once any transcript exists,
+                  // until the SLP commits to terminal stop. Closes the
+                  // WebSocket and releases the mic stream cleanly.
+                  if (!_isStopped &&
+                      !_isConnecting &&
+                      _finalTranscript.trim().isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: _finishRecording,
+                      icon: const Icon(Icons.check_rounded, size: 18),
+                      label: const Text('Done'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF1D9E75),
+                        side: const BorderSide(
+                            color: Color(0xFF1D9E75), width: 1),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 10),
+                        minimumSize: Size.zero,
+                      ),
+                    ),
+                  ],
 
                   // ── Live transcript ─────────────────────────────────────
                   if (_finalTranscript.isNotEmpty ||
@@ -404,8 +506,14 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
                     ),
                   ],
 
-                  // ── Generate report button (>20 words) ──────────────────
-                  if (_wordCount > 20) ...[
+                  // ── Generate report button ──────────────────────────────
+                  // Surfaces once the SLP has committed (Done) to the
+                  // transcript, OR when she has dictated a substantive
+                  // amount mid-session and might want to ship without
+                  // tapping Done first. The Done path is the canonical
+                  // flow — the >20 word path is a safety net.
+                  if ((_isStopped && _finalTranscript.trim().isNotEmpty) ||
+                      _wordCount > 20) ...[
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
