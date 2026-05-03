@@ -6,13 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/case_history_fluency_section.dart';
 
-// ── Design tokens (§5 palette) ────────────────────────────────────────────────
-const Color _ink      = Color(0xFF1B2B4B);
-const Color _ghost    = Color(0xFF6B7690);
-const Color _teal     = Color(0xFF2A8F84);
+// ── Legacy AI-highlight tokens (kept for the AI-extract highlight visuals) ────
+// The rest of the form runs on the locked Phase 4.0 register imported from
+// cue_phase4_tokens.dart. Pre-Phase-4.0 ink/ghost/teal tokens were retired in
+// Phase 4.0.7.1 along with the form's full visual register refactor.
 const Color _aiAccent = Color(0xFF1D9E75); // AI-fill highlight border
 const Color _aiFill   = Color(0xFFEAF6F3); // AI-fill field background
 
@@ -428,7 +429,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(
-            primary: _teal,
+            primary: kCueAmber,
             onPrimary: Colors.white,
             surface: Colors.white,
           ),
@@ -586,196 +587,206 @@ class _AddClientScreenState extends State<AddClientScreen> {
   @override
   Widget build(BuildContext context) {
     return AppLayout(
-      title: _isEditMode ? 'Edit Client' : 'Add Client',
+      title: _isEditMode ? 'Edit client' : 'Add client',
       activeRoute: 'roster',
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 720),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Import from Report ─────────────────────────────────────
-                _buildImportZone(),
-                const SizedBox(height: 32),
+      body: Container(
+        color: kCuePaper,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: SingleChildScrollView(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 48, vertical: 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Import zone (voice + diagnostic upload) ────────────
+                  _buildImportZone(),
+                  const SizedBox(height: 32),
 
-                // ── Required ───────────────────────────────────────────────
-                _sectionLabel('Required'),
-                const SizedBox(height: 12),
-                _buildPopulationDropdown(),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _nameCtrl,
-                  decoration: _dec('Full name *', aiKey: 'name'),
-                  textCapitalization: TextCapitalization.words,
-                  onChanged: (_) => _clearAi('name'),
-                ),
-                const SizedBox(height: 16),
-                _buildDobField(),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _ageCtrl,
-                  decoration: _dec('Age *', aiKey: 'age'),
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => _clearAi('age'),
-                ),
-                const SizedBox(height: 32),
+                  // ── Section 1: Population (no eyebrow) ─────────────────
+                  _buildPopulationDropdown(),
+                  const SizedBox(height: 28),
 
-                // ── Parent's concern ───────────────────────────────────────
-                _buildConcernSection(),
-                const SizedBox(height: 32),
-
-                // ── Layer 02: case history (developmental stuttering only) ─
-                if (_populationType == 'developmental_stuttering') ...[
-                  CaseHistoryFluencySection(
-                    key: ValueKey('case_history_$_caseHistoryRebuildSeq'),
-                    initialPayload: _caseHistoryPayload,
-                    onChanged: (p) => _caseHistoryPayload = p,
+                  // ── Section 2: Required ────────────────────────────────
+                  _eyebrow('required'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _nameCtrl,
+                    decoration: _dec('Full name *', aiKey: 'name'),
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (_) => _clearAi('name'),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDobField(),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _ageCtrl,
+                    decoration: _dec('Age *', aiKey: 'age'),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    onChanged: (_) => _clearAi('age'),
                   ),
                   const SizedBox(height: 32),
-                ],
 
-                // ── Basic ──────────────────────────────────────────────────
-                _sectionLabel('Basic'),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _guardianNameCtrl,
-                  decoration: _dec('Parent / guardian name',
-                      aiKey: 'guardian_name'),
-                  textCapitalization: TextCapitalization.words,
-                  onChanged: (_) => _clearAi('guardian_name'),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _guardianWaCtrl,
-                  decoration: _dec('Parent WhatsApp number',
-                      hint: '+91 98765 43210'),
-                  keyboardType: TextInputType.phone,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _schoolCtrl,
-                  decoration: _dec('School / setting',
-                      aiKey: 'school_setting'),
-                  textCapitalization: TextCapitalization.words,
-                  onChanged: (_) => _clearAi('school_setting'),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _primaryLangCtrl,
-                  decoration: _dec('Primary language',
-                      hint: 'e.g. Telugu, English, Kannada',
-                      aiKey: 'primary_language'),
-                  textCapitalization: TextCapitalization.words,
-                  onChanged: (_) => _clearAi('primary_language'),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _additionalLangsCtrl,
-                  decoration: _dec('Additional languages',
-                      hint: 'comma-separated, e.g. Hindi, English',
-                      aiKey: 'additional_languages'),
-                  textCapitalization: TextCapitalization.words,
-                  onChanged: (_) => _clearAi('additional_languages'),
-                ),
-                const SizedBox(height: 32),
+                  // ── Section 3: Parent's concern ────────────────────────
+                  _buildConcernSection(),
+                  const SizedBox(height: 32),
 
-                // ── Clinical Details ────────────────────────────────────────
-                _sectionLabel('Clinical Details'),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _diagCtrl,
-                  decoration: _dec('Diagnosis', aiKey: 'diagnosis'),
-                  textCapitalization: TextCapitalization.sentences,
-                  onChanged: (_) => _clearAi('diagnosis'),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _modalityCtrl,
-                  decoration: _dec(
-                    'Primary Communication Modality',
-                    hint: 'e.g. Verbal, AAC device, PECS, Sign',
-                    aiKey: 'primary_communication_modality',
+                  // ── Section 4: Layer 02 case history (devstutter only) ─
+                  if (_populationType == 'developmental_stuttering') ...[
+                    CaseHistoryFluencySection(
+                      key: ValueKey('case_history_$_caseHistoryRebuildSeq'),
+                      initialPayload: _caseHistoryPayload,
+                      onChanged: (p) => _caseHistoryPayload = p,
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+
+                  // ── Section 5: Contact and setting ─────────────────────
+                  _eyebrow('contact and setting'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _guardianNameCtrl,
+                    decoration: _dec('Parent or guardian name',
+                        aiKey: 'guardian_name'),
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (_) => _clearAi('guardian_name'),
                   ),
-                  onChanged: (_) =>
-                      _clearAi('primary_communication_modality'),
-                ),
-                const SizedBox(height: 12),
-                _buildAacToggle(),
-                const SizedBox(height: 32),
-
-                // ── Clinical Intake ─────────────────────────────────────────
-                _sectionLabel('Clinical Intake'),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _secDiagCtrl,
-                  decoration: _dec('Secondary Diagnosis (optional)',
-                      aiKey: 'secondary_diagnosis'),
-                  textCapitalization: TextCapitalization.sentences,
-                  onChanged: (_) => _clearAi('secondary_diagnosis'),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _referralCtrl,
-                  decoration: _dec('Referral Source (optional)',
-                      aiKey: 'referral_source'),
-                  textCapitalization: TextCapitalization.sentences,
-                  onChanged: (_) => _clearAi('referral_source'),
-                ),
-                const SizedBox(height: 16),
-                _buildPrevTherapySection(),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _regulatoryCtrl,
-                  decoration: _dec(
-                    'Regulatory / Sensory Profile',
-                    hint: 'Brief description of sensory and regulatory patterns',
-                    aiKey: 'regulatory_profile',
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _guardianWaCtrl,
+                    decoration: _dec('Parent WhatsApp number',
+                        hint: '+91 98765 43210'),
+                    keyboardType: TextInputType.phone,
                   ),
-                  maxLines: 3,
-                  textCapitalization: TextCapitalization.sentences,
-                  onChanged: (_) => _clearAi('regulatory_profile'),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _baselineCtrl,
-                  decoration: _dec(
-                    'Baseline Summary',
-                    hint: 'As of [date], [name] demonstrates...',
-                    aiKey: 'baseline_summary',
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _schoolCtrl,
+                    decoration: _dec('School or setting',
+                        aiKey: 'school_setting'),
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (_) => _clearAi('school_setting'),
                   ),
-                  maxLines: 4,
-                  textCapitalization: TextCapitalization.sentences,
-                  onChanged: (_) => _clearAi('baseline_summary'),
-                ),
-                const SizedBox(height: 32),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _primaryLangCtrl,
+                    decoration: _dec('Primary language',
+                        hint: 'e.g. Telugu, English, Kannada',
+                        aiKey: 'primary_language'),
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (_) => _clearAi('primary_language'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _additionalLangsCtrl,
+                    decoration: _dec('Additional languages',
+                        hint: 'comma-separated, e.g. Hindi, English',
+                        aiKey: 'additional_languages'),
+                    textCapitalization: TextCapitalization.words,
+                    onChanged: (_) => _clearAi('additional_languages'),
+                  ),
+                  const SizedBox(height: 32),
 
-                // ── Additional Notes ────────────────────────────────────────
-                _sectionLabel('Additional Notes'),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _notesCtrl,
-                  decoration: _dec('Notes'),
-                  maxLines: 4,
-                  textCapitalization: TextCapitalization.sentences,
-                ),
-                const SizedBox(height: 36),
+                  // ── Section 6: Population-specific intake ──────────────
+                  // Developmental stuttering: covered by case history above.
+                  // ASD/AAC: legacy fields rendered in Phase 4.0 register
+                  // pending the proper AAC Layer 02 capture surface.
+                  if (_populationType == 'asd_aac') ...[
+                    _eyebrow('AAC and regulatory profile'),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _modalityCtrl,
+                      decoration: _dec(
+                        'Primary communication modality',
+                        hint: 'e.g. Verbal, AAC device, PECS, Sign',
+                        aiKey: 'primary_communication_modality',
+                      ),
+                      onChanged: (_) =>
+                          _clearAi('primary_communication_modality'),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildAacToggle(),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _regulatoryCtrl,
+                      decoration: _dec(
+                        'Regulatory and sensory profile',
+                        hint:
+                            'Brief description of sensory and regulatory patterns',
+                        aiKey: 'regulatory_profile',
+                      ),
+                      maxLines: 3,
+                      textCapitalization: TextCapitalization.sentences,
+                      onChanged: (_) => _clearAi('regulatory_profile'),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _baselineCtrl,
+                      decoration: _dec(
+                        'Baseline summary',
+                        hint: 'As of [date], [name] demonstrates...',
+                        aiKey: 'baseline_summary',
+                      ),
+                      maxLines: 4,
+                      textCapitalization: TextCapitalization.sentences,
+                      onChanged: (_) => _clearAi('baseline_summary'),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
 
-                // ── Save ────────────────────────────────────────────────────
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: SizedBox(
+                  // ── Section 7: Clinical context ────────────────────────
+                  _eyebrow('clinical context'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _diagCtrl,
+                    decoration: _dec('Diagnosis', aiKey: 'diagnosis'),
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => _clearAi('diagnosis'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _secDiagCtrl,
+                    decoration: _dec('Secondary diagnosis (optional)',
+                        aiKey: 'secondary_diagnosis'),
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => _clearAi('secondary_diagnosis'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _referralCtrl,
+                    decoration: _dec('Referral source (optional)',
+                        aiKey: 'referral_source'),
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: (_) => _clearAi('referral_source'),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildPrevTherapySection(),
+                  const SizedBox(height: 32),
+
+                  // ── Section 8: Additional notes ────────────────────────
+                  _eyebrow('additional notes'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _notesCtrl,
+                    decoration: _dec('Notes'),
+                    maxLines: 4,
+                    textCapitalization: TextCapitalization.sentences,
+                  ),
+                  const SizedBox(height: 36),
+
+                  // ── Section 9: Save ────────────────────────────────────
+                  SizedBox(
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: _isSaving ? null : _save,
                       style: FilledButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: kCueInk,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(kCueCardRadius),
                         ),
                       ),
                       child: _isSaving
@@ -786,15 +797,16 @@ class _AddClientScreenState extends State<AddClientScreen> {
                                   color: Colors.white, strokeWidth: 2),
                             )
                           : Text(
-                              _isEditMode ? 'Update Client' : 'Save Client',
+                              _isEditMode ? 'Update client' : 'Save client',
                               style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w600),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600),
                             ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-              ],
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
           ),
         ),
@@ -805,60 +817,76 @@ class _AddClientScreenState extends State<AddClientScreen> {
   // ── Section widgets ───────────────────────────────────────────────────────────
 
   Widget _buildImportZone() {
+    final hasFile = _pickedFile != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionLabel('Import from Report'),
-        const SizedBox(height: 12),
-
-        // Voice intake button
-        OutlinedButton.icon(
-          onPressed: _openBrainDump,
-          icon: const Icon(Icons.mic_rounded, size: 18),
-          label: const Text('Tell Cue about this child'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: _teal,
-            side: const BorderSide(color: _teal),
-            backgroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 48),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
-            textStyle: const TextStyle(fontSize: 14),
+        // Voice intake — Phase 4.0 amber pill
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _openBrainDump,
+            icon: const Icon(Icons.mic_rounded,
+                size: 18, color: kCueAmberDeeper),
+            label: Text(
+              'Tell Cue about this child',
+              style: TextStyle(
+                fontSize: 14,
+                color: kCueAmberDeeper,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: kCueAmberSurface,
+              side: const BorderSide(color: kCueAmber, width: 1),
+              minimumSize: const Size(double.infinity, 48),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(kCueCardRadius)),
+            ),
           ),
         ),
         const SizedBox(height: 12),
 
-        // Upload zone — always visible
+        // Upload zone — muted gray dashed border
         GestureDetector(
           onTap: _isExtracting ? null : _pickFile,
           child: CustomPaint(
             painter: _DashedBorderPainter(
-              color: _pickedFile != null ? _aiAccent : _ghost,
+              color: hasFile ? kCueAmber : const Color(0x2E000000),
             ),
             child: SizedBox(
               height: 80,
               width: double.infinity,
               child: Center(
-                child: _pickedFile != null
+                child: hasFile
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Icon(Icons.description_outlined,
-                              size: 18, color: _ghost),
+                              size: 18, color: kCueMutedInk),
                           const SizedBox(width: 8),
                           Flexible(
                             child: Text(
                               _pickedFile!.name,
                               style: const TextStyle(
-                                  fontSize: 13, color: _ink),
+                                  fontSize: 13, color: kCueInk),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
                       )
-                    : const Text(
-                        'Upload diagnostic report — PDF, Word, or image',
-                        style: TextStyle(fontSize: 13, color: _ghost),
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.file_upload_outlined,
+                              size: 18, color: kCueMutedInk),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Upload diagnostic report — PDF, Word, or image',
+                            style: TextStyle(
+                                fontSize: 13, color: kCueSubtitleInk),
+                          ),
+                        ],
                       ),
               ),
             ),
@@ -866,14 +894,15 @@ class _AddClientScreenState extends State<AddClientScreen> {
         ),
 
         // Actions row — only when a file is selected
-        if (_pickedFile != null) ...[
+        if (hasFile) ...[
           const SizedBox(height: 12),
           Row(
             children: [
               FilledButton(
                 onPressed: _isExtracting ? null : _extractFromFile,
                 style: FilledButton.styleFrom(
-                  backgroundColor: _teal,
+                  backgroundColor: kCueInk,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 20, vertical: 10),
                   shape: RoundedRectangleBorder(
@@ -892,11 +921,12 @@ class _AddClientScreenState extends State<AddClientScreen> {
               const SizedBox(width: 12),
               TextButton(
                 onPressed: () => setState(() {
-                  _pickedFile   = null;
+                  _pickedFile = null;
                   _extractError = null;
                 }),
-                child: const Text('Remove',
-                    style: TextStyle(color: _ghost, fontSize: 13)),
+                child: Text('Remove',
+                    style: TextStyle(
+                        color: kCueSubtitleInk, fontSize: 13)),
               ),
             ],
           ),
@@ -916,38 +946,37 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
   Widget _buildDobField() {
     final ai = _aiFields.contains('date_of_birth');
+    final hasValue = _dateOfBirth != null;
     return GestureDetector(
       onTap: _pickDob,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 15),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
         decoration: BoxDecoration(
-          color: ai ? _aiFill : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(10),
+          color: ai ? _aiFill : kCueSurface,
+          borderRadius: BorderRadius.circular(kCueCardRadius),
           border: Border.all(
-            color: ai ? _aiAccent : Colors.grey.shade300,
-            width: ai ? 2 : 1,
+            color: ai ? _aiAccent : kCueBorder,
+            width: ai ? 1.2 : kCueCardBorderW,
           ),
         ),
         child: Row(
           children: [
             Expanded(
               child: Text(
-                _dateOfBirth != null
+                hasValue
                     ? '${_dateOfBirth!.day.toString().padLeft(2, '0')} / '
-                      '${_dateOfBirth!.month.toString().padLeft(2, '0')} / '
-                      '${_dateOfBirth!.year}'
-                    : 'Date of Birth',
+                        '${_dateOfBirth!.month.toString().padLeft(2, '0')} / '
+                        '${_dateOfBirth!.year}'
+                    : 'Date of birth',
                 style: TextStyle(
-                  fontSize: 16,
-                  color: _dateOfBirth != null
-                      ? Colors.black87
-                      : Colors.grey.shade600,
+                  fontSize: 14,
+                  color: hasValue ? kCueInk : kCueSubtitleInk,
                 ),
               ),
             ),
-            Icon(Icons.calendar_today_outlined,
-                size: 18, color: Colors.grey.shade500),
+            const Icon(Icons.calendar_today_outlined,
+                size: 18, color: kCueMutedInk),
           ],
         ),
       ),
@@ -958,19 +987,22 @@ class _AddClientScreenState extends State<AddClientScreen> {
     final ai = _aiFields.contains('uses_aac');
     return Container(
       decoration: BoxDecoration(
-        color: ai ? _aiFill : Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(10),
+        color: ai ? _aiFill : kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
         border: Border.all(
-          color: ai ? _aiAccent : Colors.grey.shade300,
-          width: ai ? 2 : 1,
+          color: ai ? _aiAccent : kCueBorder,
+          width: ai ? 1.2 : kCueCardBorderW,
         ),
       ),
       child: SwitchListTile(
-        title: const Text('Uses AAC Device'),
+        title: const Text(
+          'Uses an AAC device',
+          style: TextStyle(fontSize: 14, color: kCueInk),
+        ),
         subtitle: Text(
           _usesAac ? 'Yes' : 'No',
           style: TextStyle(
-            color: _usesAac ? Colors.teal : Colors.grey.shade500,
+            color: _usesAac ? kCueAmberDeep : kCueSubtitleInk,
             fontSize: 13,
           ),
         ),
@@ -979,8 +1011,10 @@ class _AddClientScreenState extends State<AddClientScreen> {
           _usesAac = v;
           _clearAi('uses_aac');
         }),
-        activeThumbColor: Colors.teal,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        activeThumbColor: kCueAmber,
+        activeTrackColor: kCueAmberSurface,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kCueCardRadius)),
       ),
     );
   }
@@ -992,19 +1026,22 @@ class _AddClientScreenState extends State<AddClientScreen> {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: ai ? _aiFill : Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(10),
+            color: ai ? _aiFill : kCueSurface,
+            borderRadius: BorderRadius.circular(kCueCardRadius),
             border: Border.all(
-              color: ai ? _aiAccent : Colors.grey.shade300,
-              width: ai ? 2 : 1,
+              color: ai ? _aiAccent : kCueBorder,
+              width: ai ? 1.2 : kCueCardBorderW,
             ),
           ),
           child: SwitchListTile(
-            title: const Text('Previous therapy history'),
+            title: const Text(
+              'Previous therapy history',
+              style: TextStyle(fontSize: 14, color: kCueInk),
+            ),
             subtitle: Text(
               _prevTherapy ? 'Yes' : 'No',
               style: TextStyle(
-                color: _prevTherapy ? Colors.teal : Colors.grey.shade500,
+                color: _prevTherapy ? kCueAmberDeep : kCueSubtitleInk,
                 fontSize: 13,
               ),
             ),
@@ -1013,9 +1050,10 @@ class _AddClientScreenState extends State<AddClientScreen> {
               _prevTherapy = v;
               _clearAi('previous_therapy');
             }),
-            activeThumbColor: Colors.teal,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            activeThumbColor: kCueAmber,
+            activeTrackColor: kCueAmberSurface,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(kCueCardRadius)),
           ),
         ),
         if (_prevTherapy) ...[
@@ -1041,22 +1079,26 @@ class _AddClientScreenState extends State<AddClientScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade300),
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField<String>(
           initialValue: _populationType,
           isExpanded: true,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Population *',
+            labelStyle:
+                const TextStyle(color: kCueSubtitleInk, fontSize: 14),
             border: InputBorder.none,
           ),
+          style: const TextStyle(fontSize: 14, color: kCueInk),
           items: _populationOptions
               .map((o) => DropdownMenuItem<String>(
                     value: o.value,
-                    child: Text(o.label, style: const TextStyle(color: _ink)),
+                    child: Text(o.label,
+                        style: const TextStyle(color: kCueInk)),
                   ))
               .toList(),
           onChanged: (v) {
@@ -1068,50 +1110,62 @@ class _AddClientScreenState extends State<AddClientScreen> {
   }
 
   Widget _buildConcernSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Editorial Playfair label — this is a primary clinical artifact (the
-        // family's own framing), so it earns a serif voice. §13.15 / §13.8.
-        Text(
-          "Parent's concern",
-          style: GoogleFonts.playfairDisplay(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: _ink,
-            fontStyle: FontStyle.italic,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+      decoration: BoxDecoration(
+        color: kCuePaper,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Editorial Playfair label — this is a primary clinical artifact
+          // (the family's own framing), so it earns a serif voice. §13.15.
+          Text(
+            "Parent's concern",
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: kCueInk,
+              fontStyle: FontStyle.italic,
+              height: 1.05,
+            ),
           ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'In their words — quote the family as closely as possible.',
-          style: TextStyle(fontSize: 12, color: _ghost),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _concernVerbatimCtrl,
-          decoration: _dec(
-            "What brought you in today?",
-            hint: '"He gets stuck on the first sound when he\'s excited…"',
-            aiKey: 'primary_concern_verbatim',
+          const SizedBox(height: 6),
+          Text(
+            'In their words — quote the family as closely as possible.',
+            style: TextStyle(
+                fontSize: 13, color: kCueSubtitleInk, height: 1.45),
           ),
-          maxLines: 4,
-          textCapitalization: TextCapitalization.sentences,
-          onChanged: (_) => _clearAi('primary_concern_verbatim'),
-        ),
-      ],
+          const SizedBox(height: 14),
+          TextField(
+            controller: _concernVerbatimCtrl,
+            decoration: _dec(
+              'What brought you in today?',
+              hint: '"He gets stuck on the first sound when he\'s excited…"',
+              aiKey: 'primary_concern_verbatim',
+            ),
+            maxLines: 4,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (_) => _clearAi('primary_concern_verbatim'),
+          ),
+        ],
+      ),
     );
   }
 
   // ── Form helpers ──────────────────────────────────────────────────────────────
 
-  Widget _sectionLabel(String label) => Text(
-        label.toUpperCase(),
+  // Lowercase tracked eyebrow per Phase 4.0 register.
+  Widget _eyebrow(String label) => Text(
+        label,
         style: TextStyle(
           fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: Colors.teal.shade600,
-          letterSpacing: 1.1,
+          fontWeight: FontWeight.w500,
+          color: kCueEyebrowInk,
+          letterSpacing: kCueEyebrowLetterSpacing(11),
         ),
       );
 
@@ -1119,22 +1173,24 @@ class _AddClientScreenState extends State<AddClientScreen> {
     final ai = aiKey != null && _aiFields.contains(aiKey);
     return InputDecoration(
       labelText: label,
+      labelStyle: const TextStyle(color: kCueSubtitleInk, fontSize: 14),
       hintText: hint,
+      hintStyle: const TextStyle(color: kCueEyebrowInk, fontSize: 13),
       filled: true,
-      fillColor: ai ? _aiFill : Colors.grey.shade50,
+      fillColor: ai ? _aiFill : kCueSurface,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        borderSide: const BorderSide(color: kCueBorder, width: kCueCardBorderW),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(kCueCardRadius),
         borderSide: ai
-            ? const BorderSide(color: _aiAccent, width: 2)
-            : BorderSide(color: Colors.grey.shade300),
+            ? const BorderSide(color: _aiAccent, width: 1.2)
+            : const BorderSide(color: kCueBorder, width: kCueCardBorderW),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: Colors.teal, width: 2),
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        borderSide: const BorderSide(color: kCueAmber, width: 1.2),
       ),
     );
   }
