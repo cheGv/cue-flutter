@@ -338,13 +338,14 @@ class _CuttlefishPainter extends CustomPainter {
   // Sparkles at 4 positions, opacity 0/1 cycle. Star paths pop in/out.
   // ─────────────────────────────────────────────────────────────────────────
   void _paintCelebrating(Canvas canvas) {
-    // 1s sub-cycle bounce (peak at 25%)
-    final p1     = _phase(1.0);
-    final bounce = (p1 < 0.25)
-        ? p1 / 0.25
-        : 1 - (p1 - 0.25) / 0.75;
-    final bodyY  = -3.0 * bounce;
-    final rotDeg = (p1 < 0.25 ? 0.0 : (p1 < 0.6 ? -3.0 : 3.0));
+    // 4.0.7.16 — calmer celebration motion. Use _bell (smooth
+    // ease-in-out) on a longer 2.5s period with reduced
+    // amplitude. Removes the hard-switching rotation flinch
+    // that read as shake.
+    final p1     = _phase(2.5);
+    final bounce = _bell(p1);
+    final bodyY  = -1.8 * bounce;
+    final rotDeg = math.sin(p1 * 2 * math.pi) * 1.2;
 
     canvas.save();
     canvas.translate(0, bodyY);
