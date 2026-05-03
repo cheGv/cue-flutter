@@ -59,6 +59,12 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
   WebSocketChannel? _channel;
   MediaRecorder?    _recorder;
   MediaStream?      _mediaStream;
+  // Phase 4.0.7.9j — set true the moment any release path runs. Gates
+  // the dataavailable handler so flushed-mid-error chunks short-circuit
+  // immediately instead of trickling through the L2 / L3 logging path
+  // (and, more importantly, never sneak a sink.add into a dying socket).
+  // Reset to false at the start of every fresh _startRecording.
+  bool _released = false;
   String  _finalTranscript  = '';
   String  _interimText      = '';
   _NarrateStage _stage      = _NarrateStage.idle;
@@ -215,6 +221,20 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
         }
       }
 
+      // 4.0.7.9j-DIAG: keywords temporarily disabled to bisect Deepgram
+      // 400 on WebSocket upgrade. The RPC fetch above still runs (so
+      // we can confirm the data path works and measure payload size in
+      // the L3 log), but we drop the param before opening the socket.
+      // If WS opens cleanly with this in place, keywords are the
+      // trigger and the proxy-side sanitizer needs review. Restore
+      // (`keywordsQuery` un-overwritten) once Deepgram side is confirmed.
+      if (keywordsQuery.isNotEmpty) {
+        _log('L3', 'keyword param BYPASSED for diagnosis '
+            '(would have been ${keywordsQuery.length} chars, '
+            '$keywordCount terms)');
+        keywordsQuery = '';
+      }
+
       // ── Phase 4.0.7.9g-part2: fetch SLP transcription preferences. ─────
       // Defaults to 'multi' if profile row absent or query fails,
       // matching the proxy default. Failure is non-fatal — we still
@@ -299,12 +319,18 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
           'state=${recorder.state}');
 
       recorder.onDataAvailable = (BlobEvent event) {
+        // Phase 4.0.7.9j — gate. After release fires, MediaRecorder may
+        // still flush already-captured frames. Without this guard those
+        // frames trickle into the FileReader -> sink.add path and leak
+        // into the dying socket; they also flood the L2 / L3 logs.
+        if (_released) return;
         final blob = event.data as Blob;
         final blobSize = blob.size;
         final blobType = blob.type;
 
         final reader = FileReader();
         reader.onLoadEnd = (JSAny _) {
+          if (_released) return;
           final buffer = (reader.result as JSArrayBuffer).toDart;
           final bytes  = Uint8List.view(buffer);
           _l2ChunkCount++;
@@ -351,6 +377,7 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
       }.toJS;
 
       recorder.start(250);
+      _released = false;
       _log('L2', 'MediaRecorder started, timeslice=250ms, '
           'state=${recorder.state}');
 
@@ -389,6 +416,16 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
   /// on. WebSocket sink is closed last so any final bytes flushed by the
   /// recorder still reach the proxy.
   void _releaseMediaResources() {
+    // Idempotent: every error path can call this without worrying about
+    // double-release. The flag is set BEFORE any stop() calls so any
+    // dataavailable / FileReader callbacks already in flight see
+    // _released=true and bail out on the very next microtask.
+    if (_released) {
+      _log('L1', 'release requested but already released — no-op');
+      return;
+    }
+    _released = true;
+
     try {
       final r = _recorder;
       if (r != null) {
@@ -536,18 +573,34 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
         'WebSocket CLOSE, code=$code, reason="$reason", '
         'sendCount=$_wsSendCount, recvCount=$_wsRecvCount, '
         'stage=${_stage.name}');
-    if (_isRecording) {
-      // Server-initiated close while we thought we were live — fall back to
-      // paused so the user can retry without losing transcript.
+
+    // Phase 4.0.7.9j — privacy. Until this commit, an unexpected close
+    // (Deepgram 400 on upgrade, network drop, Render restart) flipped
+    // stage to paused/idle but left the MediaRecorder + MediaStream
+    // alive — mic indicator stayed on, dataavailable kept firing. Now
+    // we treat any close that arrives while we still hold media handles
+    // as an error and fully release.
+    final wasUnexpected = !_released &&
+        (_recorder != null || _mediaStream != null);
+    if (wasUnexpected) {
       _log('L3',
-          'unexpected close while recording — falling back to paused/idle');
+          'unexpected close while media handles still held — '
+          'releasing recorder + tracks for privacy');
+      _releaseMediaResources();
       setState(() {
-        _setStage(
-          _finalTranscript.isEmpty
-              ? _NarrateStage.idle
-              : _NarrateStage.paused,
-          'websocket closed mid-recording',
+        _setError(
+          'Connection lost. Tap to retry.',
+          'WebSocket closed unexpectedly while recording '
+          '(code=$code, reason="$reason")',
         );
+        if (_stage != _NarrateStage.stopped) {
+          _setStage(
+            _finalTranscript.isEmpty
+                ? _NarrateStage.idle
+                : _NarrateStage.paused,
+            'websocket closed mid-recording',
+          );
+        }
       });
     }
   }
