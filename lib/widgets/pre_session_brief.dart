@@ -82,6 +82,7 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
           .from('sessions')
           .select()
           .eq('client_id', widget.client['id'])
+          .isFilter('deleted_at', null)
           .order('date', ascending: false)
           .limit(1);
 

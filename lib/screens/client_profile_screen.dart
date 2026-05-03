@@ -213,6 +213,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           .from('clients')
           .select()
           .eq('id', id)
+          .isFilter('deleted_at', null)
           .single();
       if (mounted) {
         setState(() => _client = Map<String, dynamic>.from(row));
@@ -258,7 +259,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 .from('sessions')
                 .select('id')
                 .eq('user_id', uid)
-                .eq('date', todayStr);
+                .eq('date', todayStr)
+                .isFilter('deleted_at', null);
             sessionCount = (rows as List).length;
           } catch (_) {/* leave 0 */}
         }
@@ -362,6 +364,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         .from('sessions')
         .select()
         .eq('client_id', _client['id'])
+        .isFilter('deleted_at', null)
         .order('date', ascending: false);
     return List<Map<String, dynamic>>.from(response);
   }

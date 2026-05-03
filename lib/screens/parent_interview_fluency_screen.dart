@@ -150,6 +150,7 @@ class _ParentInterviewFluencyScreenState
             .from('sessions')
             .select('id')
             .eq('client_id', widget.clientId)
+            .isFilter('deleted_at', null)
             .order('date', ascending: false)
             .order('id', ascending: false)
             .limit(1)

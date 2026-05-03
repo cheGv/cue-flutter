@@ -227,6 +227,7 @@ class _TodayScreenState extends State<TodayScreen> {
           .select('id, client_id, date, soap_note, notes, created_at')
           .eq('user_id', uid)
           .inFilter('client_id', clientIds)
+          .isFilter('deleted_at', null)
           .order('date', ascending: false);
 
       final byClient = <String, Map<String, dynamic>?>{
@@ -264,7 +265,8 @@ class _TodayScreenState extends State<TodayScreen> {
             .from('sessions')
             .select('id, soap_note, notes')
             .eq('user_id', uid)
-            .gte('date', sevenDaysAgo),
+            .gte('date', sevenDaysAgo)
+            .isFilter('deleted_at', null),
         _supabase
             .from('long_term_goals')
             .select('id')
@@ -321,6 +323,7 @@ class _TodayScreenState extends State<TodayScreen> {
           .from('sessions')
           .select()
           .eq('client_id', clientId)
+          .isFilter('deleted_at', null)
           .order('date', ascending: false)
           .limit(1);
       if (sessions.isEmpty) return;

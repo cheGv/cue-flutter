@@ -153,6 +153,7 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
           .from('sessions')
           .select('transcript')
           .eq('id', widget.sessionId!)
+          .isFilter('deleted_at', null)
           .maybeSingle();
       final saved = (row?['transcript'] as String?)?.trim();
       if (saved != null && saved.isNotEmpty && mounted) {

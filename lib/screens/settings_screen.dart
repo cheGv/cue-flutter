@@ -2,6 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
 
+// TODO(phase-4.0.7.x): Add "Restore archived clients/sessions" surface.
+//   Soft-delete shipped in 4.0.7.10 (clients.deleted_at, sessions.deleted_at
+//   /deleted_by/delete_reason). Each archived row remains in the database
+//   with the timestamp; this screen needs a section that lists them and
+//   provides a single-tap restore that nulls deleted_at. Sessions need to
+//   surface delete_reason for context in the restore picker.
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 

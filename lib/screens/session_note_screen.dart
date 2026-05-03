@@ -54,6 +54,7 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
           .from('clients')
           .select('population_type')
           .eq('id', widget.clientId)
+          .isFilter('deleted_at', null)
           .maybeSingle();
       final pop =
           (clientRow?['population_type'] as String?) ?? 'asd_aac';
@@ -69,6 +70,7 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
             .from('sessions')
             .select('id, date, population_payload')
             .eq('client_id', widget.clientId)
+            .isFilter('deleted_at', null)
             .order('date', ascending: false)
             .order('id', ascending: false)
             .limit(1)

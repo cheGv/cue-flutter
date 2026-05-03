@@ -48,6 +48,7 @@ import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
 import '../theme/cue_typography.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/archive_dialog.dart';
 import '../widgets/cue_amber_link.dart';
 import '../widgets/cue_cuttlefish.dart';
 import 'add_client_screen.dart';
@@ -227,6 +228,7 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
           .eq('user_id', uid)
           .gte('date', threeDays)
           .lte('date', todayStr)
+          .isFilter('deleted_at', null)
           .order('date', ascending: false),
       // (b) Today's daily_roster — Trigger 1
       _supabase
@@ -254,7 +256,8 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
       _supabase
           .from('sessions')
           .select('id, client_id, date')
-          .eq('user_id', uid),
+          .eq('user_id', uid)
+          .isFilter('deleted_at', null),
     ]);
 
     final undocumentedRows =
@@ -499,6 +502,50 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
     _load();
   }
 
+  /// Phase 4.0.7.10 — soft-delete the client (sets deleted_at). Sessions
+  /// and goals stay intact; the row simply disappears from this list (the
+  /// fetch query already filters `deleted_at IS NULL`).
+  Future<void> _archiveClient(Map<String, dynamic> client) async {
+    final id   = client['id']?.toString();
+    final name = (client['name'] as String?) ?? 'this client';
+    if (id == null || id.isEmpty) return;
+
+    final result = await showArchiveDialog(
+      context: context,
+      title: 'Archive $name?',
+      body:
+          'Archived clients are hidden from your list. Their sessions and '
+          'goals stay intact. You can restore them later from settings. '
+          'This cannot be undone from this screen.',
+      reasons: const [
+        'Wrong record',
+        'Duplicate',
+        'Test client',
+        'Other',
+      ],
+    );
+    if (!result.confirmed) return;
+
+    try {
+      await _supabase
+          .from('clients')
+          .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$name archived.')),
+        );
+      }
+      _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Archive failed: $e')),
+        );
+      }
+    }
+  }
+
   // ── Build ────────────────────────────────────────────────────────────────
 
   @override
@@ -734,6 +781,7 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
             lastSessionDate: _lastSessionDate,
             activeGoalCount: _activeGoalCount,
             onTap:           _openClient,
+            onArchive:       _archiveClient,
             shortDate:       _shortDate,
           ),
       ],
@@ -811,6 +859,7 @@ class _AllClientsList extends StatefulWidget {
   final Map<String, DateTime?>             lastSessionDate;
   final Map<String, int>                   activeGoalCount;
   final ValueChanged<Map<String, dynamic>> onTap;
+  final ValueChanged<Map<String, dynamic>> onArchive;
   final _DateFormatter                     shortDate;
 
   const _AllClientsList({
@@ -818,6 +867,7 @@ class _AllClientsList extends StatefulWidget {
     required this.lastSessionDate,
     required this.activeGoalCount,
     required this.onTap,
+    required this.onArchive,
     required this.shortDate,
   });
 
@@ -945,6 +995,28 @@ class _AllClientsListState extends State<_AllClientsList> {
                 const SizedBox(width: CueGap.s12),
                 _ActiveGoalPill(count: goalN),
               ],
+              // Phase 4.0.7.10 — kebab menu for archive. Sits inside the
+              // row card; tap goes to a popup, not the row's onTap.
+              const SizedBox(width: CueGap.s4),
+              PopupMenuButton<String>(
+                tooltip: 'More',
+                icon: Icon(
+                  Icons.more_vert,
+                  size: 18,
+                  color: CueColors.inkPrimary
+                      .withValues(alpha: CueAlpha.subtitleText),
+                ),
+                padding: EdgeInsets.zero,
+                onSelected: (value) {
+                  if (value == 'archive') widget.onArchive(client);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'archive',
+                    child: Text('Archive client'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

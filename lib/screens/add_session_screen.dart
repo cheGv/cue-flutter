@@ -48,6 +48,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
           .from('clients')
           .select('population_type')
           .eq('id', widget.clientId)
+          .isFilter('deleted_at', null)
           .maybeSingle();
       if (!mounted) return;
       setState(() {

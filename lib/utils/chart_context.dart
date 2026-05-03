@@ -33,10 +33,12 @@ Future<String> buildChartContext(
 
   // ── Sessions (need these for cadence + RECENT SESSIONS) ─────────────────
   // Fetch enough for both the cadence calculation and the last-20 block.
+  // Phase 4.0.7.10 — exclude soft-deleted sessions from cadence + history.
   final sessionsRaw = await supabase
       .from('sessions')
       .select()
       .eq('client_id', clientId)
+      .isFilter('deleted_at', null)
       .order('created_at', ascending: false)
       .limit(40);
   final sessions = List<Map<String, dynamic>>.from(sessionsRaw);

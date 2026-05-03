@@ -127,6 +127,7 @@ class _DebriefFluencyScreenState extends State<DebriefFluencyScreen> {
           .from('sessions')
           .select('id, date')
           .eq('client_id', widget.clientId)
+          .isFilter('deleted_at', null)
           .order('date', ascending: false)
           .order('id', ascending: false)
           .limit(1)
@@ -136,7 +137,8 @@ class _DebriefFluencyScreenState extends State<DebriefFluencyScreen> {
       final allRows = await _supabase
           .from('sessions')
           .select('id')
-          .eq('client_id', widget.clientId);
+          .eq('client_id', widget.clientId)
+          .isFilter('deleted_at', null);
       final number = (allRows as List).length;
 
       int?    sessionId;
