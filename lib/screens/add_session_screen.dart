@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import 'narrate_session_screen.dart';
 import 'report_screen.dart';
 import 'session_mode_picker_screen.dart';
-
-const _bg    = Color(0xFFF2EFE9);
-const _ink   = Color(0xFF0A0A0A);
-const _ghost = Color(0xFF8A8A8A);
-const _muted = Color(0xFFB0ADA6);
-const _line  = Color(0xFFD8D5CE);
-const _teal  = Color(0xFF1D9E75);
 
 class AddSessionScreen extends StatefulWidget {
   final String clientId;
@@ -170,10 +164,10 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
           colorScheme: const ColorScheme.light(
-            primary:   _teal,
+            primary:   kCueAmber,
             onPrimary: Colors.white,
             surface:   Colors.white,
-            onSurface: _ink,
+            onSurface: kCueInk,
           ),
         ),
         child: child!,
@@ -205,18 +199,18 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       );
     }
 
-    // ASD/AAC and any other legacy population — existing flow unchanged.
+    // ASD/AAC and any other legacy population — Phase 4.0 register.
     return AppLayout(
-      title:       'New Session — ${widget.clientName}',
+      title:       'New session — ${widget.clientName}',
       activeRoute: 'roster',
       body: LayoutBuilder(
         builder: (context, constraints) {
           final hPad = constraints.maxWidth > 560 ? 48.0 : 24.0;
           return Container(
-            color: _bg,
+            color: kCuePaper,
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 480),
+                constraints: const BoxConstraints(maxWidth: 560),
                 child: SingleChildScrollView(
                   padding: EdgeInsets.symmetric(
                       horizontal: hPad, vertical: 40),
@@ -227,9 +221,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
                       const SizedBox(height: 32),
                       _buildDatePicker(),
                       const SizedBox(height: 40),
-                      _buildNarratorButton(),
-                      const SizedBox(height: 12),
-                      _buildManualButton(),
+                      _buildEntryModeRow(),
                     ],
                   ),
                 ),
@@ -243,29 +235,23 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
 
   Widget _buildStgCard() {
     return Container(
-      decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: _teal, width: 1.5)),
+      decoration: BoxDecoration(
+        color: kCuePaper,
+        border: const Border(
+            left: BorderSide(color: kCueAmber, width: 1.5)),
       ),
       padding: const EdgeInsets.only(left: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            "TODAY'S FOCUS",
-            style: GoogleFonts.dmSans(
-              fontSize:   10,
-              fontWeight: FontWeight.w700,
-              color:      _teal,
-              letterSpacing: 1.0,
-            ),
-          ),
+          _eyebrow("today's focus"),
           const SizedBox(height: 6),
           if (_stgLoading)
             Container(
               width:  200,
               height: 14,
               decoration: BoxDecoration(
-                color:        _line,
+                color:        kCueBorder,
                 borderRadius: BorderRadius.circular(3),
               ),
             )
@@ -275,7 +261,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
               style: GoogleFonts.dmSans(
                 fontSize:   15,
                 fontWeight: FontWeight.w500,
-                color:      _ink,
+                color:      kCueInk,
                 height:     1.45,
               ),
             )
@@ -285,7 +271,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
               style: GoogleFonts.dmSans(
                 fontSize:   14,
                 fontStyle:  FontStyle.italic,
-                color:      _ghost,
+                color:      kCueSubtitleInk,
                 height:     1.45,
               ),
             ),
@@ -298,15 +284,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'SESSION DATE',
-          style: GoogleFonts.dmSans(
-            fontSize:   10,
-            fontWeight: FontWeight.w700,
-            color:      _ghost,
-            letterSpacing: 1.0,
-          ),
-        ),
+        _eyebrow('session date'),
         const SizedBox(height: 8),
         GestureDetector(
           onTap: _pickDate,
@@ -314,22 +292,23 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
             padding: const EdgeInsets.symmetric(
                 horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
-              border:       Border.all(color: _line),
-              borderRadius: BorderRadius.circular(10),
+              color: kCueSurface,
+              border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+              borderRadius: BorderRadius.circular(kCueCardRadius),
             ),
             child: Row(
               children: [
                 const Icon(Icons.calendar_today_outlined,
-                    size: 16, color: _ghost),
+                    size: 16, color: kCueMutedInk),
                 const SizedBox(width: 12),
                 Text(
                   _formatDate(_selectedDate),
                   style: GoogleFonts.dmSans(
-                      fontSize: 14, color: _ink),
+                      fontSize: 14, color: kCueInk),
                 ),
                 const Spacer(),
                 const Icon(Icons.unfold_more,
-                    size: 16, color: _muted),
+                    size: 16, color: kCueEyebrowInk),
               ],
             ),
           ),
@@ -338,50 +317,111 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     );
   }
 
-  Widget _buildNarratorButton() {
+  // Two co-equal primary entry modes. Voice and typing carry equal weight —
+  // SLPs in noisy clinics or family-present environments need typing as a
+  // first-class path, not a hidden alternative under the narrator CTA.
+  Widget _buildEntryModeRow() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Stack vertically on very narrow widths; otherwise side-by-side.
+        if (constraints.maxWidth < 360) {
+          return Column(
+            children: [
+              _entryModeButton(
+                icon:  Icons.mic_rounded,
+                label: 'Narrate session',
+                onTap: _saving ? null : _startNarrator,
+              ),
+              const SizedBox(height: 12),
+              _entryModeButton(
+                icon:  Icons.edit_outlined,
+                label: 'Type session notes',
+                onTap: _saving ? null : _addManually,
+              ),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(
+              child: _entryModeButton(
+                icon:  Icons.mic_rounded,
+                label: 'Narrate session',
+                onTap: _saving ? null : _startNarrator,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _entryModeButton(
+                icon:  Icons.edit_outlined,
+                label: 'Type session notes',
+                onTap: _saving ? null : _addManually,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _entryModeButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onTap,
+  }) {
+    final showSpinner = _saving;
     return SizedBox(
-      width: double.infinity,
+      height: 56,
       child: FilledButton(
-        onPressed: _saving ? null : _startNarrator,
+        onPressed: onTap,
         style: FilledButton.styleFrom(
-          backgroundColor:         _teal,
-          disabledBackgroundColor: _teal.withValues(alpha: 0.5),
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          backgroundColor: kCueInk,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: kCueInk.withValues(alpha: 0.5),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(kCueCardRadius),
           ),
         ),
-        child: _saving
+        child: showSpinner
             ? const SizedBox(
-                width:  20,
-                height: 20,
+                width:  18,
+                height: 18,
                 child:  CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 2),
               )
-            : Text(
-                'Start Narrator →',
-                style: GoogleFonts.dmSans(
-                  fontSize:   16,
-                  fontWeight: FontWeight.w500,
-                  color:      Colors.white,
-                ),
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, size: 18, color: Colors.white),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.dmSans(
+                        fontSize:   15,
+                        fontWeight: FontWeight.w500,
+                        color:      Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
               ),
       ),
     );
   }
 
-  Widget _buildManualButton() {
-    return Center(
-      child: TextButton(
-        onPressed: _saving ? null : _addManually,
-        style: TextButton.styleFrom(foregroundColor: _ghost),
-        child: Text(
-          'Add notes manually',
-          style: GoogleFonts.dmSans(fontSize: 13, color: _ghost),
+  // Lowercase tracked eyebrow per Phase 4.0 register.
+  Widget _eyebrow(String label) => Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w500,
+          color: kCueEyebrowInk,
+          letterSpacing: kCueEyebrowLetterSpacing(11),
         ),
-      ),
-    );
-  }
+      );
 
   String _formatDate(DateTime d) {
     const months = [
