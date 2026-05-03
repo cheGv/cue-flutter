@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/day_state_service.dart';
 import '../services/name_formatter.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
@@ -72,11 +73,33 @@ class _TodayScreenState extends State<TodayScreen> {
   int _weekDocumentedCount  = 0;
   int _weekGoalsAchieved    = 0;
 
+  // ── Phase 4.0.7.5: SLP-controlled day state ─────────────────────────────
+  // Loaded on init and after any close/reopen. Default open until the row
+  // is loaded so the screen never flashes the closed surface for SLPs who
+  // have never tapped Good night Cue.
+  DayStateRecord _dayState = DayStateRecord.open;
+
   @override
   void initState() {
     super.initState();
     _slpFirstName = _resolveSlpFirstName();
     _load();
+    _loadDayState();
+  }
+
+  Future<void> _loadDayState() async {
+    final s = await DayStateService.instance.loadToday();
+    if (mounted) setState(() => _dayState = s);
+  }
+
+  Future<void> _closeDay() async {
+    final s = await DayStateService.instance.closeToday();
+    if (mounted) setState(() => _dayState = s);
+  }
+
+  Future<void> _reopenDay() async {
+    final s = await DayStateService.instance.reopenToday();
+    if (mounted) setState(() => _dayState = s);
   }
 
   /// Read the SLP's first name from Supabase auth metadata. Tries common
@@ -690,14 +713,6 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ── Build ───────────────────────────────────────────────────────────────────
 
-  // ── End-of-day detection ────────────────────────────────────────────────
-  // True when every roster row for today has session_documented = true AND
-  // there is at least one row. This is the "good work today" moment.
-  bool get _isEndOfDay {
-    if (_rosterRows.isEmpty) return false;
-    return _rosterRows.every((r) => (r['session_documented'] as bool?) == true);
-  }
-
   @override
   Widget build(BuildContext context) {
     return AppLayout(
@@ -710,19 +725,35 @@ class _TodayScreenState extends State<TodayScreen> {
                 color: CueColors.amber,
               ),
             )
-          : (_isEndOfDay
+          : (_dayState.state == CueDayState.closed
               ? _buildEndOfDayResting()
               : LayoutBuilder(
                   builder: (context, constraints) {
                     final hPad = constraints.maxWidth > 700 ? 48.0 : 24.0;
+                    final isNight =
+                        Theme.of(context).brightness == Brightness.dark;
+                    final pageBg = isNight
+                        ? CueColors.backgroundDark
+                        : _paper;
                     return ColoredBox(
-                      color: _paper,
+                      color: pageBg,
                       child: ListView(
-                        padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 96),
+                        padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 32),
                         children: [
+                          if (_dayState.state == CueDayState.reopened)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: _ReopenedPill(),
+                              ),
+                            ),
                           if (_yesterdayMissed.isNotEmpty)
                             _buildYesterdayReminder(),
                           _buildTodayZone(),
+                          const SizedBox(height: 32),
+                          _buildGoodNightFooter(isNight: isNight),
+                          const SizedBox(height: 32),
                         ],
                       ),
                     );
@@ -731,31 +762,94 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
-  // ── End-of-day resting moment ──────────────────────────────────────────
-  // Forces night-mode visual regardless of user setting — end of day IS
-  // night. Centered Cue resting + stat pill + "Cue will prepare tomorrow's
-  // briefs overnight." footnote.
+  // ── Good night Cue footer (open + reopened states) ─────────────────────
+  Widget _buildGoodNightFooter({required bool isNight}) {
+    final dividerColor = isNight
+        ? const Color(0x14FFFFFF)
+        : const Color(0x14000000);
+    final borderColor = isNight
+        ? const Color(0x2EFFFFFF) // rgba(255,255,255,0.18)
+        : const Color(0x2E000000); // rgba(0,0,0,0.18)
+    final textColor = isNight ? CueColors.inkDark : CueColors.inkPrimary;
+    final mutedColor = isNight
+        ? CueColors.inkTertiaryDark
+        : CueColors.inkPrimary.withValues(alpha: 0.5);
+
+    final helperText = _dayState.state == CueDayState.reopened
+        ? 'close again when you\'re really done'
+        : 'tap when you\'re done for today · you can reopen anytime';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Container(height: 0.5, color: dividerColor),
+        const SizedBox(height: 18),
+        // Outline pill — transparent fill, 0.5px border.
+        InkWell(
+          onTap: _closeDay,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            decoration: BoxDecoration(
+              color:        Colors.transparent,
+              border:       Border.all(color: borderColor, width: 0.5),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'Good night Cue',
+              style: CueType.custom(
+                fontSize: 11,
+                weight:   FontWeight.w500,
+                color:    textColor,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          helperText,
+          style: CueType.custom(
+            fontSize: 9.5,
+            weight:   FontWeight.w400,
+            color:    mutedColor,
+          ).copyWith(fontStyle: FontStyle.italic),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  // ── End-of-day resting moment (closed state) ───────────────────────────
+  // Theme-aware: day and night both render the same shape in their own
+  // palette. Stat row dimmed to 65%. Reopen pill below.
   Widget _buildEndOfDayResting() {
-    // Counts
+    final isNight = Theme.of(context).brightness == Brightness.dark;
+
     final sessionsDone = _rosterRows.length;
     int goalsHit = 0;
     int pending  = 0;
     for (final r in _rosterRows) {
       final goalMet = (r['goal_met'] as String?)?.toLowerCase();
       if (goalMet == 'yes' || goalMet == 'met') goalsHit++;
-      // "Pending" = anything flagged for tomorrow follow-up. Without a
-      // dedicated column we infer from next_session_focus presence.
       final next = (r['next_session_focus'] as String?)?.trim();
       if (next != null && next.isNotEmpty) pending++;
     }
 
+    final pageBg = isNight ? CueColors.backgroundDark : _paper;
+    final headlineColor = isNight ? CueColors.inkDark : CueColors.inkPrimary;
+    final mutedColor    = isNight
+        ? CueColors.inkSecondaryDark
+        : CueColors.inkPrimary.withValues(alpha: 0.55);
+    final tertiaryColor = isNight
+        ? CueColors.inkTertiaryDark
+        : CueColors.inkPrimary.withValues(alpha: 0.40);
+    final pillBorder = isNight
+        ? const Color(0x2EFFFFFF)
+        : const Color(0x2E000000);
+
     return Stack(
       children: [
-        // Forced near-black background — end of day IS night.
-        const Positioned.fill(
-          child: ColoredBox(color: CueColors.backgroundDark),
-        ),
-        // Soft amber halo beneath the cuttlefish.
+        Positioned.fill(child: ColoredBox(color: pageBg)),
         Positioned.fill(
           child: Center(
             child: Container(
@@ -781,27 +875,58 @@ class _TodayScreenState extends State<TodayScreen> {
               const SizedBox(height: 24),
               Text(
                 'Good work today.',
-                style: CueType.displayMedium
-                    .copyWith(color: CueColors.inkDark),
+                style: CueType.displayMedium.copyWith(
+                  fontSize: 22,
+                  color:    headlineColor,
+                ),
               ),
               const SizedBox(height: 6),
               Text(
                 'See you tomorrow.',
-                style: CueType.bodyLarge
-                    .copyWith(color: CueColors.inkSecondaryDark),
+                style: CueType.custom(
+                  fontSize: 12,
+                  weight:   FontWeight.w400,
+                  color:    mutedColor,
+                ),
               ),
               const SizedBox(height: 28),
-              _StatPill(
-                sessions: sessionsDone,
-                goalsHit: goalsHit,
-                pending:  pending,
+              Opacity(
+                opacity: 0.65,
+                child: _StatPill(
+                  sessions: sessionsDone,
+                  goalsHit: goalsHit,
+                  pending:  pending,
+                  inkColor: tertiaryColor,
+                ),
               ),
               const SizedBox(height: 14),
               Text(
                 'Cue will prepare tomorrow\'s briefs overnight.',
                 style: CueType.bodySmall.copyWith(
-                  color:     CueColors.inkTertiaryDark,
+                  color:     tertiaryColor,
                   fontStyle: FontStyle.italic,
+                ),
+              ),
+              const SizedBox(height: 20),
+              InkWell(
+                onTap: _reopenDay,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    color:        Colors.transparent,
+                    border:       Border.all(color: pillBorder, width: 0.5),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '↺ Reopen — there\'s more',
+                    style: CueType.custom(
+                      fontSize: 11,
+                      weight:   FontWeight.w500,
+                      color:    headlineColor,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1364,14 +1489,17 @@ class _TodayScreenState extends State<TodayScreen> {
 
 class _StatPill extends StatelessWidget {
   final int sessions, goalsHit, pending;
+  final Color? inkColor;
   const _StatPill({
     required this.sessions,
     required this.goalsHit,
     required this.pending,
+    this.inkColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final labelColor = inkColor ?? CueColors.inkTertiaryDark;
     return Container(
       decoration: BoxDecoration(
         color: CueColors.amber.withValues(alpha: 0.08),
@@ -1384,17 +1512,17 @@ class _StatPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _stat('$sessions', sessions == 1 ? 'Session' : 'Sessions'),
+          _stat('$sessions', sessions == 1 ? 'Session' : 'Sessions', labelColor),
           _divider(),
-          _stat('$goalsHit', goalsHit == 1 ? 'Goal hit' : 'Goals hit'),
+          _stat('$goalsHit', goalsHit == 1 ? 'Goal hit' : 'Goals hit', labelColor),
           _divider(),
-          _stat('$pending', 'Pending'),
+          _stat('$pending', 'Pending', labelColor),
         ],
       ),
     );
   }
 
-  Widget _stat(String n, String label) {
+  Widget _stat(String n, String label, Color labelColor) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Column(
@@ -1404,8 +1532,7 @@ class _StatPill extends StatelessWidget {
               style: CueType.displaySmall.copyWith(color: CueColors.amber)),
           const SizedBox(height: 2),
           Text(label.toUpperCase(),
-              style: CueType.labelSmall.copyWith(
-                  color: CueColors.inkTertiaryDark)),
+              style: CueType.labelSmall.copyWith(color: labelColor)),
         ],
       ),
     );
@@ -1416,6 +1543,32 @@ class _StatPill extends StatelessWidget {
         height: 24,
         color:  CueColors.amber.withValues(alpha: 0.20),
       );
+}
+
+// ── Phase 4.0.7.5 reopened indicator ────────────────────────────────────────
+// Small blue pill rendered top-right of the Today content when day state is
+// reopened. Visual weight is intentionally low — it's a hint, not a banner.
+class _ReopenedPill extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    const blue = Color(0xFF85B7EB);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color:        blue.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        'reopened',
+        style: CueType.custom(
+          fontSize:      9.5,
+          weight:        FontWeight.w500,
+          color:         blue,
+          letterSpacing: 0.4,
+        ),
+      ),
+    );
+  }
 }
 
 // ── This-week pulse card ─────────────────────────────────────────────────────
