@@ -456,11 +456,20 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
   // ── Generate & navigate ───────────────────────────────────────────────────
 
   Future<void> _generateAndNavigate() async {
-    // Save transcript to session record if we have an id
+    // Phase 4.0.7.8a — single transactional PATCH with every column the
+    // narrator stage owns. Column is `transcript` (not narrator_transcript
+    // — that name killed every Generate Report attempt with PGRST204).
+    // ai_generated is left false here; ReportScreen flips it true after
+    // the AI proxy returns a SOAP note. `status` intentionally omitted —
+    // valid enum values for that column are not known to this layer; the
+    // SOAP-save / attestation paths in report_screen own status writes.
     if (widget.sessionId != null) {
       await _supabase
           .from('sessions')
-          .update({'narrator_transcript': _finalTranscript.trim()})
+          .update({
+            'transcript':   _finalTranscript.trim(),
+            'ai_generated': false,
+          })
           .eq('id', widget.sessionId!);
     }
 
@@ -471,8 +480,8 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
       MaterialPageRoute(
         builder: (_) => ReportScreen(
           session: {
-            'id':                  widget.sessionId,
-            'narrator_transcript': _finalTranscript.trim(),
+            'id':         widget.sessionId,
+            'transcript': _finalTranscript.trim(),
           },
           clientName: widget.clientName,
           clientId:   widget.clientId,

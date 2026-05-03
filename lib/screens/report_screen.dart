@@ -487,8 +487,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   bool get _hasTranscript {
-    final v = (widget.session['narrator_transcript']
-            ?? widget.session['transcript']) as String?;
+    final v = widget.session['transcript'] as String?;
     return v != null && v.trim().isNotEmpty;
   }
 
