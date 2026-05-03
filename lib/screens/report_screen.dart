@@ -232,11 +232,23 @@ class _ReportScreenState extends State<ReportScreen> {
         final text =
             data['content']?[0]?['text'] ?? data['report'] ?? response.body;
         final reportText = _cleanText(text.toString());
+
+        // Phase 4.0.7.9a — split clinical and parent halves so the SOAP
+        // parser only sees S/O/A/P content, and the parent block is
+        // captured separately for column persistence + PDF page 2.
+        final split = _splitClinicalAndParent(reportText);
         setState(() {
           _report = reportText;
           _showNoteFields = true;
         });
-        _populateSoapFields(reportText);
+        _populateSoapFields(split.clinical);
+
+        // CHANGE 1: persist the AI output immediately. Without this the
+        // SOAP note + parent summary live only in memory and a tab close
+        // = data loss (live row 60 had transcript-only despite a
+        // successful PDF export). Single transactional PATCH; failure
+        // surfaces a SnackBar but does not block PDF / further edits.
+        await _persistGeneratedReport(parentSummary: split.parent);
       } else {
         setState(() {
           _error =
@@ -249,6 +261,84 @@ class _ReportScreenState extends State<ReportScreen> {
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Phase 4.0.7.9a helpers ──────────────────────────────────────────────────
+
+  /// Split the AI-generated report text into a clinical half (containing
+  /// S/O/A/P or DAR/COAST sections) and a parent communication half. The
+  /// proxy prompt emits a `PAGE 2 — PARENT COMMUNICATION SUMMARY` header
+  /// to delineate the two; we look for that or any tolerant variant. Pre-
+  /// fix this content was concatenated into the P field by the SOAP
+  /// parser and the parent block only landed in the PDF by lucky regex
+  /// match downstream.
+  ({String clinical, String parent}) _splitClinicalAndParent(String text) {
+    final headerPatterns = <RegExp>[
+      RegExp(r'PARENT\s+COMMUNICATION\s+SUMMARY', caseSensitive: false),
+      RegExp(r'PARENT\s+SUMMARY',                 caseSensitive: false),
+      RegExp(r'PAGE\s*2',                          caseSensitive: false),
+    ];
+    int? splitStart;
+    int? bodyStart;
+    for (final p in headerPatterns) {
+      final m = p.firstMatch(text);
+      if (m != null) {
+        splitStart = m.start;
+        // skip to end of the header line
+        final nl = text.indexOf('\n', m.end);
+        bodyStart = nl >= 0 ? nl + 1 : m.end;
+        break;
+      }
+    }
+    if (splitStart == null || bodyStart == null) {
+      return (clinical: text, parent: '');
+    }
+    final clinical = text.substring(0, splitStart).trim();
+    final parent   = text.substring(bodyStart).trim();
+    return (clinical: clinical, parent: parent);
+  }
+
+  /// Persist the freshly-generated AI output. Single transactional PATCH
+  /// with all five fields the report flow owns at this stage. Mirrors
+  /// the values into widget.session so subsequent reads (PDF, SOAP form,
+  /// _hasSavedNote getter) see consistent state without a round-trip.
+  Future<void> _persistGeneratedReport({required String parentSummary}) async {
+    final sessionId = widget.session['id'];
+    if (sessionId == null) {
+      print('[ReportScreen] persist skipped — session id is null');
+      return;
+    }
+    try {
+      final noteJson = jsonEncode({
+        's': _sCtrl.text.trim(),
+        'o': _oCtrl.text.trim(),
+        'a': _aCtrl.text.trim(),
+        'p': _pCtrl.text.trim(),
+      });
+      await _supabase.from('sessions').update({
+        'soap_note':          noteJson,
+        'parent_summary':     parentSummary,
+        'ai_generated':       true,
+        'clinician_attested': false,
+        'attested_at':        null,
+      }).eq('id', sessionId);
+
+      // Mirror locally so the rest of this screen reads consistent state.
+      widget.session['soap_note']          = noteJson;
+      widget.session['parent_summary']     = parentSummary;
+      widget.session['ai_generated']       = true;
+      widget.session['clinician_attested'] = false;
+      widget.session['attested_at']        = null;
+    } catch (e) {
+      print('[ReportScreen] persist on generation failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Couldn't save report — try regenerating"),
+          ),
+        );
+      }
     }
   }
 
@@ -624,69 +714,80 @@ class _ReportScreenState extends State<ReportScreen> {
     final now = DateTime.now();
     final generatedDate =
         '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
-    final cleanText = _cleanText(_report ?? '');
 
-    final pdf = pw.Document();
-    pdf.addPage(
-      pw.MultiPage(
-        pageFormat: PdfPageFormat.a4,
-        margin: pw.EdgeInsets.zero,
-        build: (context) => [
-          pw.Container(
-            width: double.infinity,
-            color: PdfColors.teal,
-            padding: const pw.EdgeInsets.fromLTRB(40, 20, 40, 18),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text(
-                  'Cue',
-                  style: pw.TextStyle(
-                    fontSize: 22,
-                    fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.white,
-                  ),
+    // CHANGE 2: PDF body now sources from the SLP-editable form
+    // controllers, not the raw _report blob. Any in-form edits land in
+    // the export. Format-aware via _noteFields (SOAP / DAR / COAST /
+    // Narrative) so the section labels match what the SLP saw on screen.
+    final clinicalSections = _buildPdfSections(
+      s: _sCtrl.text,
+      o: _oCtrl.text,
+      a: _aCtrl.text,
+      p: _pCtrl.text,
+    );
+
+    // CHANGE 3 fallback chain: SLP-edited controller wins; failing that
+    // the persisted parent_summary column; failing that, omit page 2.
+    String parentSummary = _parentUpdateController.text.trim();
+    if (parentSummary.isEmpty) {
+      final col = (widget.session['parent_summary'] as String?)?.trim();
+      if (col != null && col.isNotEmpty) parentSummary = col;
+    }
+    if (parentSummary.isEmpty) {
+      print('[ReportScreen] parent summary empty in both '
+          '_parentUpdateController and session.parent_summary — '
+          'omitting PDF page 2');
+    }
+
+    pw.Widget headerBar() => pw.Container(
+          width: double.infinity,
+          color: PdfColors.teal,
+          padding: const pw.EdgeInsets.fromLTRB(40, 20, 40, 18),
+          child: pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Cue',
+                style: pw.TextStyle(
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
+                  color: PdfColors.white,
                 ),
-                pw.SizedBox(height: 3),
-                pw.Text(
-                  'Clinical Session Report',
-                  style: const pw.TextStyle(
-                      fontSize: 10, color: PdfColors.white),
-                ),
-              ],
-            ),
+              ),
+              pw.SizedBox(height: 3),
+              pw.Text(
+                'Clinical Session Report',
+                style: const pw.TextStyle(
+                    fontSize: 10, color: PdfColors.white),
+              ),
+            ],
           ),
-          pw.Container(
-            width: double.infinity,
-            color: PdfColors.teal50,
-            padding: const pw.EdgeInsets.fromLTRB(40, 10, 40, 10),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(
-                  'Client: ${widget.clientName}',
-                  style: pw.TextStyle(
-                    fontSize: 11,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
+        );
+
+    pw.Widget subBar() => pw.Container(
+          width: double.infinity,
+          color: PdfColors.teal50,
+          padding: const pw.EdgeInsets.fromLTRB(40, 10, 40, 10),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text(
+                'Client: ${widget.clientName}',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
                 ),
-                pw.Text(
-                  'Session Date: $sessionDate',
-                  style: const pw.TextStyle(
-                      fontSize: 11, color: PdfColors.grey700),
-                ),
-              ],
-            ),
+              ),
+              pw.Text(
+                'Session Date: $sessionDate',
+                style: const pw.TextStyle(
+                    fontSize: 11, color: PdfColors.grey700),
+              ),
+            ],
           ),
-          pw.Padding(
-            padding: const pw.EdgeInsets.fromLTRB(40, 24, 40, 24),
-            child: pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: _buildPdfSections(cleanText),
-            ),
-          ),
-        ],
-        footer: (context) => pw.Container(
+        );
+
+    pw.Widget footerBar(pw.Context ctx) => pw.Container(
           padding: const pw.EdgeInsets.fromLTRB(40, 8, 40, 12),
           decoration: const pw.BoxDecoration(
             border: pw.Border(
@@ -708,9 +809,66 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
             ],
           ),
-        ),
+        );
+
+    final pdf = pw.Document();
+
+    // ── Page 1 — clinical SOAP / DAR / COAST / Narrative ─────────────
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: pw.EdgeInsets.zero,
+        footer: footerBar,
+        build: (context) => [
+          headerBar(),
+          subBar(),
+          pw.Padding(
+            padding: const pw.EdgeInsets.fromLTRB(40, 24, 40, 24),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: clinicalSections,
+            ),
+          ),
+        ],
       ),
     );
+
+    // ── Page 2 — parent communication summary (only if non-empty) ────
+    if (parentSummary.isNotEmpty) {
+      pdf.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          margin: pw.EdgeInsets.zero,
+          footer: footerBar,
+          build: (context) => [
+            headerBar(),
+            subBar(),
+            pw.Padding(
+              padding: const pw.EdgeInsets.fromLTRB(40, 24, 40, 24),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'PARENT COMMUNICATION SUMMARY',
+                    style: pw.TextStyle(
+                      fontSize: 11,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.teal800,
+                    ),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text(
+                    parentSummary,
+                    style: const pw.TextStyle(
+                        fontSize: 11, lineSpacing: 2),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     final bytes = await pdf.save();
     final content = base64Encode(bytes);
@@ -725,42 +883,43 @@ class _ReportScreenState extends State<ReportScreen> {
     anchor.remove();
   }
 
-  List<pw.Widget> _buildPdfSections(String text) {
+  /// CHANGE 2: structured-input PDF section builder. Replaces the
+  /// previous regex-driven "scan a single text blob for ALL-CAPS
+  /// headers" approach. Iterates _noteFields so the labels respect the
+  /// SLP's chosen report format (SOAP / DAR / COAST / Narrative).
+  /// Empty fields are skipped — no blank section headers.
+  List<pw.Widget> _buildPdfSections({
+    required String s,
+    required String o,
+    required String a,
+    required String p,
+  }) {
+    final values = <TextEditingController, String>{
+      _sCtrl: s.trim(),
+      _oCtrl: o.trim(),
+      _aCtrl: a.trim(),
+      _pCtrl: p.trim(),
+    };
     final widgets = <pw.Widget>[];
-    final headerRe = RegExp(r'^([A-Z][A-Z /\-]+):(.*)$');
-
-    for (final rawLine in text.split('\n')) {
-      final line = rawLine.trim();
-      if (line.isEmpty) {
-        widgets.add(pw.SizedBox(height: 6));
-        continue;
-      }
-      final match = headerRe.firstMatch(line);
-      if (match != null) {
-        if (widgets.isNotEmpty) widgets.add(pw.SizedBox(height: 14));
-        widgets.add(pw.Text(
-          '${match.group(1)!}:',
-          style: pw.TextStyle(
-            fontSize: 11,
-            fontWeight: pw.FontWeight.bold,
-            color: PdfColors.teal800,
-          ),
-        ));
-        final inline = match.group(2)?.trim() ?? '';
-        if (inline.isNotEmpty) {
-          widgets.add(pw.SizedBox(height: 3));
-          widgets.add(pw.Text(
-            inline,
-            style: const pw.TextStyle(fontSize: 11, lineSpacing: 2),
-          ));
-        }
-        widgets.add(pw.SizedBox(height: 4));
-      } else {
-        widgets.add(pw.Text(
-          line,
-          style: const pw.TextStyle(fontSize: 11, lineSpacing: 2),
-        ));
-      }
+    var first = true;
+    for (final field in _noteFields) {
+      final body = values[field.ctrl] ?? '';
+      if (body.isEmpty) continue;
+      if (!first) widgets.add(pw.SizedBox(height: 14));
+      first = false;
+      widgets.add(pw.Text(
+        field.label.toUpperCase(),
+        style: pw.TextStyle(
+          fontSize: 11,
+          fontWeight: pw.FontWeight.bold,
+          color: PdfColors.teal800,
+        ),
+      ));
+      widgets.add(pw.SizedBox(height: 4));
+      widgets.add(pw.Text(
+        body,
+        style: const pw.TextStyle(fontSize: 11, lineSpacing: 2),
+      ));
     }
     return widgets;
   }
