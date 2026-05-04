@@ -556,8 +556,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     }
     if (!mounted) return;
 
+    // Phase 4.0.7.23-completion — pass the client's clinical_area
+    // through so the deep editor's CueReasoningPanel auto-prefills
+    // its domain chips. _client is fetched via select() (full row),
+    // so clinical_area is already available without query change.
     final goalMap = <String, dynamic>{
       'client_id': _client['id'].toString(),
+      if (_client['clinical_area'] != null)
+        'clinical_area': _client['clinical_area'] as String,
       ...ltg,
     };
 

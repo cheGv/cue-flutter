@@ -18,6 +18,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import '../constants/clinical_areas.dart';
 import '../narrate_web_audio.dart';
 import 'ltg_edit_screen.dart';
 
@@ -34,39 +35,10 @@ const Color _amber     = Color(0xFFD68A2B);
 const Color _amberSoft = Color(0xFFF4E4C4);
 const Color _line      = Color(0xFFE6DDCA);
 
-// Phase 4.0.7.23 — 14 clinical areas matching the framework library
-// taxonomy and the clients.clinical_area schema CHECK constraint.
-// Order is intentional (general pediatric → autism → speech sound →
-// motor speech → fluency → voice → adult split → dysphagia → AAC →
-// social → hearing → literacy → multilingual). Reused by any screen
-// that needs to render or pre-fill a clinical area pick.
-const List<({String code, String label})> kClinicalAreas = [
-  (code: 'pediatric-language',       label: 'Pediatric Language'),
-  (code: 'autism-developmental',     label: 'Autism + Developmental'),
-  (code: 'speech-sound-disorders',   label: 'Speech Sound Disorders'),
-  (code: 'pediatric-motor-speech',   label: 'Pediatric Motor Speech'),
-  (code: 'fluency',                  label: 'Fluency'),
-  (code: 'voice',                    label: 'Voice'),
-  (code: 'adult-language-cognitive', label: 'Adult Language & Cognitive'),
-  (code: 'adult-motor-speech',       label: 'Adult Motor Speech'),
-  (code: 'dysphagia',                label: 'Dysphagia'),
-  (code: 'aac',                      label: 'AAC'),
-  (code: 'social-pragmatic',         label: 'Social Communication'),
-  (code: 'hearing-aural-rehab',      label: 'Hearing & Aural Rehab'),
-  (code: 'literacy',                 label: 'Literacy'),
-  (code: 'multilingual',             label: 'Multilingual'),
-];
-
-/// Resolves a clinical_area short_code to its SLP-facing display label,
-/// or returns the code as-is if no match (defensive against future
-/// schema drift).
-String clinicalAreaLabel(String? code) {
-  if (code == null || code.isEmpty) return '';
-  for (final a in kClinicalAreas) {
-    if (a.code == code) return a.label;
-  }
-  return code;
-}
+// Phase 4.0.7.23-completion — kClinicalAreas + clinicalAreaLabel
+// extracted to lib/constants/clinical_areas.dart so add_client and
+// future screens share one source. See that file for the canonical
+// list and ordering rationale.
 
 // ── main screen ───────────────────────────────────────────────────────────────
 class GoalAuthoringScreen extends StatefulWidget {
@@ -348,6 +320,10 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
         builder: (_) => LtgEditScreen(
           goal: {
             'client_id': widget.clientId,
+            // Phase 4.0.7.23-completion — pass clinical_area through
+            // so the deep editor's CueReasoningPanel auto-prefills
+            // its domain chips on first open.
+            if (_clinicalArea != null) 'clinical_area': _clinicalArea,
             ..._goals[index],
           },
           clientName: widget.clientName,

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../constants/clinical_areas.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/case_history_fluency_section.dart';
@@ -108,6 +109,13 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
   // ── Layer-01 Phase 4.0.2 fields ────────────────────────────────────────────
   String _populationType = 'developmental_stuttering'; // default for new clients
+
+  /// Phase 4.0.7.23-completion — primary clinical area selection.
+  /// Required for new client creation (form validation gates on this
+  /// being non-null). On insert/update, persisted to clients.clinical_area
+  /// AND derived legacy population_type written for fluency-screen
+  /// back-compat. Cleared from the schema in 4.0.7.23b.
+  String? _clinicalArea;
   final _primaryLangCtrl      = TextEditingController();
   final _additionalLangsCtrl  = TextEditingController(); // comma-separated
   final _concernVerbatimCtrl  = TextEditingController();
@@ -204,6 +212,14 @@ class _AddClientScreenState extends State<AddClientScreen> {
       // valid to show.
       final known = _populationOptions.any((o) => o.value == pop);
       _populationType = known ? pop : 'asd_aac';
+    }
+    // Phase 4.0.7.23-completion — pre-fill the new clinical_area
+    // dropdown from the row. Falls back to null when the column is
+    // missing (legacy pre-migration rows); validation will force the
+    // SLP to pick before save.
+    final ca = (c['clinical_area'] as String?)?.trim();
+    if (ca != null && ca.isNotEmpty) {
+      _clinicalArea = ca;
     }
     _primaryLangCtrl.text     = (c['primary_language'] as String?) ?? '';
     final addLangs = c['additional_languages'];
@@ -484,6 +500,15 @@ class _AddClientScreenState extends State<AddClientScreen> {
       );
       return;
     }
+    // Phase 4.0.7.23-completion — clinical area gates new client
+    // creation. Without it, the row lands without a domain anchor
+    // and downstream Cue Reasoning + goal generation can't scope.
+    if (_clinicalArea == null || _clinicalArea!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a clinical area')),
+      );
+      return;
+    }
 
     final userId = _supabase.auth.currentUser?.id;
     setState(() => _isSaving = true);
@@ -503,8 +528,14 @@ class _AddClientScreenState extends State<AddClientScreen> {
       'uses_aac':               _usesAac,
       'communication_modality': _modalityCtrl.text.trim(),
       'additional_notes':       _notesCtrl.text.trim(),
-      // Layer-01 Phase 4.0.2 — population routing + parent's words + languages
-      'population_type':            _populationType,
+      // Phase 4.0.7.23-completion — write BOTH the new clinical_area
+      // (the canonical 14-domain pick) and the legacy population_type
+      // derived from it. Fluency-routing screens still consume
+      // population_type until 4.0.7.23b migrates them off.
+      'clinical_area': _clinicalArea,
+      'population_type': _clinicalArea != null
+          ? (legacyPopulationTypeFor(_clinicalArea!) ?? _populationType)
+          : _populationType,
       'primary_language':           _primaryLangCtrl.text.trim(),
       'additional_languages':       additionalLangs,
       'primary_concern_verbatim':   _concernVerbatimCtrl.text.trim(),
@@ -605,7 +636,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
                   const SizedBox(height: 32),
 
                   // ── Section 1: Population (no eyebrow) ─────────────────
-                  _buildPopulationDropdown(),
+                  _buildClinicalAreaPicker(),
                   const SizedBox(height: 28),
 
                   // ── Section 2: Required ────────────────────────────────
@@ -1075,6 +1106,63 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
   // ── Phase 4.0.2 builders ──────────────────────────────────────────────────────
 
+  /// Phase 4.0.7.23-completion — replaces the two-option
+  /// population_type chip picker (asd_aac / developmental_stuttering)
+  /// with the canonical 14-domain dropdown. Same Phase 4.0 register
+  /// as the old population dropdown for visual continuity.
+  Widget _buildClinicalAreaPicker() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButtonFormField<String>(
+          initialValue: _clinicalArea,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Primary clinical area *',
+            labelStyle:
+                TextStyle(color: kCueSubtitleInk, fontSize: 14),
+            border: InputBorder.none,
+          ),
+          style: const TextStyle(fontSize: 14, color: kCueInk),
+          hint: const Text(
+            'Pick the area that best frames this client',
+            style: TextStyle(
+                color: kCueSubtitleInk, fontStyle: FontStyle.italic),
+          ),
+          items: [
+            for (final a in kClinicalAreas)
+              DropdownMenuItem<String>(
+                value: a.code,
+                child: Text(a.label,
+                    style: const TextStyle(color: kCueInk)),
+              ),
+          ],
+          onChanged: (v) {
+            if (v == null) return;
+            setState(() {
+              _clinicalArea = v;
+              // Phase 4.0.7.23-completion — keep legacy
+              // _populationType in sync so any in-form preview that
+              // still reads it (case history fluency section, etc.)
+              // shows the right register before save.
+              final derived = legacyPopulationTypeFor(v);
+              if (derived != null) _populationType = derived;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  // Phase 4.0.7.23-completion — _buildPopulationDropdown kept dormant
+  // for the 4.0.7.23b cleanup pass. No live call site after this
+  // commit; replaced by _buildClinicalAreaPicker above.
+  // ignore: unused_element
   Widget _buildPopulationDropdown() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
