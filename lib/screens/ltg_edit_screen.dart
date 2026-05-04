@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../widgets/cue_reasoning_panel.dart';
 import '../widgets/cue_study_icon.dart';
 import '../widgets/goal_achieved_overlay.dart';
 
@@ -217,6 +218,15 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   late final TextEditingController _conditionCtrl;
   late final TextEditingController _criterionCtrl;
   late final TextEditingController _customTimelineCtrl;
+
+  /// Phase 4.0.7.20e — buffered rationale from CueReasoningPanel's
+  /// "Cite in rationale" action, written into long_term_goals on the
+  /// next save when the goal row has no id at the moment of citation.
+  /// In practice this screen is always opened with a saved LTG (the
+  /// kebab on the chart's goal card pushes it), so this stays null
+  /// most of the time. Defensive — covers the new-goal flow if the
+  /// editor is ever reused for a creation path.
+  String? _pendingEvidenceRationale;
 
   String? _timeline;
   bool _dirty        = false;
@@ -482,10 +492,18 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     final id = widget.goal['id'] as String?;
     if (id != null && id.isNotEmpty) {
       try {
+        // Phase 4.0.7.20e — fold any pending evidence_rationale buffered
+        // from the CueReasoningPanel's "Cite in rationale" action.
+        final updates = <String, dynamic>{'goal_text': goalText};
+        if (_pendingEvidenceRationale != null &&
+            _pendingEvidenceRationale!.isNotEmpty) {
+          updates['evidence_rationale'] = _pendingEvidenceRationale;
+        }
         await _supabase
             .from('long_term_goals')
-            .update({'goal_text': goalText})
+            .update(updates)
             .eq('id', id);
+        _pendingEvidenceRationale = null;
       } catch (_) {}
     }
 
@@ -785,6 +803,13 @@ class _LtgEditScreenState extends State<LtgEditScreen>
 
   // ── Cue Study shared API helper ───────────────────────────────────────────
 
+  @Deprecated(
+      'Replaced by CueReasoningService in 4.0.7.20e. The mode helpers '
+      'below (_fetchPassiveInsight, _fetchTagExplanation, _fetchReview, '
+      '_fetchSession) all routed through this. With the new panel '
+      'rendered in place of _cueStudyScrollContent, those helpers no '
+      'longer have UI buttons binding them. Will be removed in '
+      '4.0.7.20f after the new panel proves out.')
   Future<String?> _callCueStudy({
     required String systemPrompt,
     required String userMessage,
@@ -1149,8 +1174,86 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     );
   }
 
+  // ── Phase 4.0.7.20e — CueReasoningPanel integration ─────────────────────
+  // Replaces the cramped CUE STUDY sidebar (_cueStudyPanel +
+  // _cueStudyScrollContent) at both the wide-layout and narrow-layout
+  // render sites. The old methods stay alive (deprecated) for one
+  // commit cycle so the cleanup pass in 4.0.7.20f has a reference.
+
+  /// V1: empty list — the SLP picks domains via chips inside the panel.
+  /// Smarter inference (population_type → domain map, clinical_lens →
+  /// domain map) is 4.0.7.20g work.
+  List<String> _inferInitialDomains() => const [];
+
+  Widget _buildCueReasoningPanel() {
+    final clientId = (widget.goal['client_id'] as String?) ?? '';
+    final ltgId    = widget.goal['id'] as String?;
+    return CueReasoningPanel(
+      clientId:        clientId,
+      ltgId:           ltgId,
+      stgId:           null,
+      initialDomains:  _inferInitialDomains(),
+      onApplyRevision: (revisionText) {
+        // The LTG editor decomposes goal_text into action / condition /
+        // criterion / timeline. A model "suggested revision" arrives as
+        // a single complete goal sentence. Drop it into _actionCtrl and
+        // clear the structured fields so the SLP can re-decompose if
+        // she wants. This is honest — pretending we can re-parse the
+        // sentence into the four slots would silently corrupt structure.
+        setState(() {
+          _actionCtrl.text    = revisionText;
+          _conditionCtrl.text = '';
+          _criterionCtrl.text = '';
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Revision applied to the action field — review and split the structured parts.'),
+            ),
+          );
+        }
+      },
+      onCiteInRationale: (rationaleText) async {
+        if (ltgId != null && ltgId.isNotEmpty) {
+          try {
+            await Supabase.instance.client
+                .from('long_term_goals')
+                .update({'evidence_rationale': rationaleText})
+                .eq('id', ltgId);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Rationale cited and saved.')),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Could not save rationale: $e')),
+              );
+            }
+          }
+        } else {
+          // No id yet — buffer the rationale for the next save.
+          setState(() => _pendingEvidenceRationale = rationaleText);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Rationale queued — will save when you save the goal.'),
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
+
   // ── Cue Study: intelligence panel (fixed header in wide layout) ──────────────
 
+  @Deprecated(
+      'Replaced by CueReasoningPanel in 4.0.7.20e. Will be removed in '
+      '4.0.7.20f after the new panel proves out.')
   Widget _cueStudyPanel() {
     return Container(
       decoration: BoxDecoration(
@@ -1301,6 +1404,9 @@ class _LtgEditScreenState extends State<LtgEditScreen>
 
   // ── Cue Study: scrollable response cards + frameworks ─────────────────────
 
+  @Deprecated(
+      'Replaced by CueReasoningPanel in 4.0.7.20e. Will be removed in '
+      '4.0.7.20f after the new panel proves out.')
   Widget _cueStudyScrollContent() {
     final tagCardVisible      = _openTagName != null;
     final reviewCardVisible   = _reviewLoading  || _reviewText  != null || _reviewError  != null;
@@ -1427,10 +1533,16 @@ class _LtgEditScreenState extends State<LtgEditScreen>
 
   // ── Narrow-mode: panel + scroll content stacked ───────────────────────────
 
+  @Deprecated(
+      'Replaced by inline CueReasoningPanel render in 4.0.7.20e. Will '
+      'be removed in 4.0.7.20f.')
+  // ignore: deprecated_member_use_from_same_package, unused_element
   Widget _cueStudySection() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ignore: deprecated_member_use_from_same_package
           _cueStudyPanel(),
+          // ignore: deprecated_member_use_from_same_package
           _cueStudyScrollContent(),
         ],
       );
@@ -1532,32 +1644,22 @@ class _LtgEditScreenState extends State<LtgEditScreen>
                     child: formContent,
                   ),
                 ),
-                // Right: 360px fixed-width Cue Study column
+                // Right: Cue Reasoning panel (520px, full-height,
+                // self-managing scroll). Replaces the prior 360px
+                // narrow CUE STUDY column shipped pre-4.0.7.20e.
                 SizedBox(
-                  width: 360,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Fixed header: intelligence panel (always visible)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: _cueStudyPanel(),
-                      ),
-                      // Scrollable: response cards + frameworks
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
-                          child: _cueStudyScrollContent(),
-                        ),
-                      ),
-                    ],
-                  ),
+                  width: 520,
+                  child: _buildCueReasoningPanel(),
                 ),
               ],
             );
           }
 
           // ── Narrow (< 700px): single scrolling column ──────────
+          // The reasoning panel manages its own internal scrolling
+          // (conversation thread Expanded-flexible); we constrain its
+          // outer height so it fits inside the page-level scroll
+          // without consuming an unbounded viewport.
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 60),
             child: Column(
@@ -1565,7 +1667,10 @@ class _LtgEditScreenState extends State<LtgEditScreen>
               children: [
                 formContent,
                 const SizedBox(height: 28),
-                _cueStudySection(),
+                SizedBox(
+                  height: 560,
+                  child: _buildCueReasoningPanel(),
+                ),
                 const SizedBox(height: 40),
               ],
             ),
