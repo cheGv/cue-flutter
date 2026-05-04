@@ -19,6 +19,9 @@ class VoiceAssessment {
   final String? baselineAssessmentId;
   final Map<String, dynamic> caseHistoryPayload;
   final Map<String, dynamic> laryngealExamPayload;
+  // Phase 4.0.7.24b — narrative jsonb columns for Sections 6 / 7.
+  final Map<String, dynamic> functionalVoicePayload;
+  final Map<String, dynamic> taskBasedPayload;
   final DateTime createdAt;
 
   const VoiceAssessment({
@@ -29,22 +32,25 @@ class VoiceAssessment {
     this.baselineAssessmentId,
     required this.caseHistoryPayload,
     required this.laryngealExamPayload,
+    this.functionalVoicePayload = const {},
+    this.taskBasedPayload       = const {},
     required this.createdAt,
   });
 
   factory VoiceAssessment.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic> mapOf(String key) => (json[key] is Map)
+        ? Map<String, dynamic>.from(json[key] as Map)
+        : <String, dynamic>{};
     return VoiceAssessment(
-      id:                   (json['id']         ?? '').toString(),
-      clientId:             (json['client_id']  ?? '').toString(),
-      visitId:              json['visit_id'] as String?,
-      isBaseline:           json['is_baseline'] == true,
-      baselineAssessmentId: json['baseline_assessment_id'] as String?,
-      caseHistoryPayload: (json['case_history_payload'] is Map)
-          ? Map<String, dynamic>.from(json['case_history_payload'] as Map)
-          : <String, dynamic>{},
-      laryngealExamPayload: (json['laryngeal_exam_payload'] is Map)
-          ? Map<String, dynamic>.from(json['laryngeal_exam_payload'] as Map)
-          : <String, dynamic>{},
+      id:                     (json['id']         ?? '').toString(),
+      clientId:               (json['client_id']  ?? '').toString(),
+      visitId:                json['visit_id'] as String?,
+      isBaseline:             json['is_baseline'] == true,
+      baselineAssessmentId:   json['baseline_assessment_id'] as String?,
+      caseHistoryPayload:     mapOf('case_history_payload'),
+      laryngealExamPayload:   mapOf('laryngeal_exam_payload'),
+      functionalVoicePayload: mapOf('functional_voice_payload'),
+      taskBasedPayload:       mapOf('task_based_payload'),
       createdAt: _parseTs(json['created_at']) ?? DateTime.now(),
     );
   }
