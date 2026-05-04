@@ -16,6 +16,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/reasoning_message.dart';
 import '../models/reasoning_thread.dart';
 import '../services/cue_reasoning_service.dart';
@@ -344,6 +345,16 @@ class _CueReasoningPanelState extends State<CueReasoningPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _renderContent(m, isUser: isUser),
+          // Phase 4.0.7.20k — citation chip wrap below assistant
+          // messages. The markdown body renders raw `[framework: …]`
+          // tokens as literal text inside the bubble; this chip Wrap
+          // surfaces them as clickable affordances right below.
+          // Option B per the 4.0.7.20k spec — inline chip-positioning
+          // polish is 4.0.7.20l work.
+          if (!isUser && m.frameworkIds.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            _buildCitationChipWrap(m.frameworkIds),
+          ],
           if (!isUser) ...[
             const SizedBox(height: 8),
             _buildAssistantActions(m),
@@ -357,36 +368,105 @@ class _CueReasoningPanelState extends State<CueReasoningPanel> {
     );
   }
 
-  /// Render the message text, replacing `[framework: short_code]` patterns
-  /// with small clickable amber chips that pop a framework-detail dialog.
+  /// Render the message body. User messages render as plain selectable
+  /// rich text (users don't write markdown). Assistant messages render
+  /// via flutter_markdown so the model's bold/italic/lists/headers/code
+  /// blocks land styled instead of as raw asterisks. Citation chips
+  /// surface separately below the bubble — the markdown body shows the
+  /// raw `[framework: …]` tokens as plain text.
   Widget _renderContent(ReasoningMessage m, {required bool isUser}) {
-    final color = isUser ? _ink : Colors.white.withValues(alpha: 0.92);
-    final pattern = RegExp(r'\[framework:\s*([a-zA-Z0-9_-]+)\s*\]');
-    final spans = <InlineSpan>[];
-    int cursor = 0;
-    for (final match in pattern.allMatches(m.content)) {
-      if (match.start > cursor) {
-        spans.add(TextSpan(text: m.content.substring(cursor, match.start)));
-      }
-      final code = match.group(1)!.toLowerCase();
-      spans.add(WidgetSpan(
-        alignment: PlaceholderAlignment.middle,
-        child: _buildCitationChip(code),
-      ));
-      cursor = match.end;
-    }
-    if (cursor < m.content.length) {
-      spans.add(TextSpan(text: m.content.substring(cursor)));
-    }
-    return SelectableText.rich(
-      TextSpan(
-        children: spans,
-        style: TextStyle(
+    if (isUser) {
+      return SelectableText(
+        m.content,
+        style: const TextStyle(
           fontSize: 13,
-          color: color,
+          color: _ink,
           height: 1.6,
         ),
+      );
+    }
+    const baseColor = Color(0xEBFFFFFF); // white at ~0.92α
+    final styleSheet = MarkdownStyleSheet(
+      p: const TextStyle(
+        color: baseColor,
+        fontSize: 13,
+        height: 1.6,
       ),
+      strong: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+      ),
+      em: const TextStyle(
+        color: baseColor,
+        fontStyle: FontStyle.italic,
+      ),
+      listBullet: const TextStyle(
+        color: baseColor,
+        fontSize: 13,
+        height: 1.6,
+      ),
+      h1: const TextStyle(
+          color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700,
+          height: 1.4),
+      h2: const TextStyle(
+          color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700,
+          height: 1.4),
+      h3: const TextStyle(
+          color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600,
+          height: 1.4),
+      code: TextStyle(
+        color: _csAmber,
+        fontFamily: 'monospace',
+        fontSize: 12,
+        backgroundColor: const Color(0xFF0A1422),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: const Color(0xFF0A1422),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      codeblockPadding: const EdgeInsets.all(10),
+      blockquote: TextStyle(
+        color: Colors.white.withValues(alpha: 0.65),
+        fontStyle: FontStyle.italic,
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        border: Border(
+          left: BorderSide(
+              color: _csAmber.withValues(alpha: 0.5), width: 2),
+        ),
+      ),
+      a: const TextStyle(
+        color: _csAmber,
+        decoration: TextDecoration.underline,
+      ),
+      // Tighten paragraph spacing so the markdown body sits flush
+      // inside the existing bubble padding.
+      pPadding: EdgeInsets.zero,
+      h1Padding: const EdgeInsets.only(top: 4, bottom: 2),
+      h2Padding: const EdgeInsets.only(top: 4, bottom: 2),
+      h3Padding: const EdgeInsets.only(top: 4, bottom: 2),
+    );
+    return MarkdownBody(
+      data:           m.content,
+      styleSheet:     styleSheet,
+      softLineBreak:  true,
+      selectable:     true,
+      shrinkWrap:     true,
+    );
+  }
+
+  /// Phase 4.0.7.20k — chip Wrap rendered below an assistant message
+  /// for each cited framework short_code. Reuses the existing
+  /// _buildCitationChip widget so taps still pop the framework-detail
+  /// dialog with the cached metadata.
+  Widget _buildCitationChipWrap(List<String> codes) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final code in codes) _buildCitationChip(code.toLowerCase()),
+      ],
     );
   }
 
