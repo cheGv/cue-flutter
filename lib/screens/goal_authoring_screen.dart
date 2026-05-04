@@ -245,11 +245,22 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   }
 
   void _editGoal(int index) {
+    // Phase 4.0.7.20j — inject client_id into the draft goal map
+    // because the proxy's /api/generate-goals response doesn't include
+    // it on each goal. The new CueReasoningPanel inside LtgEditScreen
+    // needs client_id to call the reasoning-respond edge function.
+    // Note: ltg_id is intentionally absent here — these are drafts
+    // pre-attestation, so the panel will create a thread anchored to
+    // the client only and the "Cite in rationale" affordance routes
+    // to a SnackBar (see ltg_edit_screen.dart's onCiteInRationale).
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => LtgEditScreen(
-          goal: _goals[index],
+          goal: {
+            'client_id': widget.clientId,
+            ..._goals[index],
+          },
           clientName: widget.clientName,
           onSaved: (updatedGoal) {
             if (mounted) {

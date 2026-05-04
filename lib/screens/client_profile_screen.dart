@@ -540,20 +540,37 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     }
   }
 
-  // Legacy LTG editor route — replaced in Phase 1 by _openCueStudyForGoal.
-  // Preserved as dead code per spec ("we may reference it").
-  // ignore: unused_element
-  void _openLtgEdit(Map<String, dynamic> ltg) {
-    Navigator.push(
-      context,
+  /// Phase 4.0.7.20j — deep-reasoning navigation from the inline editor.
+  /// Saves any pending text changes first, then pushes LtgEditScreen
+  /// with full context (client_id is injected because draft-goal call
+  /// sites elsewhere cannot guarantee it on the goal map). On return,
+  /// the spine is refreshed so any rationale / structured edits the
+  /// SLP committed inside the deep editor land on the chart.
+  Future<void> _openLtgInDeepReasoning(
+      Map<String, dynamic> ltg, String ltgId) async {
+    // Persist whatever the SLP has typed in the inline editor before
+    // we navigate — the deep editor reads from the database, not from
+    // the inline controller.
+    if (_editingLtgId == ltgId) {
+      await _saveLtg(ltgId);
+    }
+    if (!mounted) return;
+
+    final goalMap = <String, dynamic>{
+      'client_id': _client['id'].toString(),
+      ...ltg,
+    };
+
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => LtgEditScreen(
-          goal:       ltg,
+          goal:       goalMap,
           clientName: _client['name'] as String? ?? '',
-          onSaved:    (_) { if (mounted) _refreshSpine(); },
+          onSaved:    (_) {/* spine refresh happens on pop below */},
         ),
       ),
     );
+    if (mounted) _refreshSpine();
   }
 
   Future<void> _openEditClient() async {
@@ -1689,6 +1706,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             domain:     domain,
                             onCancel:   _closeAllEdits,
                             onSave:     () => _saveLtg(ltgId),
+                            // Phase 4.0.7.20j — only surface the
+                            // "Open with Cue Reasoning" affordance
+                            // when the LTG has a real id (which is
+                            // always true on this surface — drafts
+                            // live on goal_authoring, not here).
+                            onOpenWithReasoning: ltgId.isEmpty
+                                ? null
+                                : () => _openLtgInDeepReasoning(ltg, ltgId),
                           )
                         else
                           GestureDetector(
@@ -2320,12 +2345,19 @@ class _LtgInlineEditor extends StatelessWidget {
   final String       domain;
   final VoidCallback onCancel;
   final VoidCallback onSave;
+  /// Phase 4.0.7.20j — optional deep-reasoning escape hatch. When
+  /// non-null, an "Open with Cue Reasoning" button renders between
+  /// Cancel and Save goal. Tapping saves the inline edit, then pushes
+  /// LtgEditScreen with the structured editor + CueReasoningPanel.
+  /// Hidden (null) for drafts and any goal without a real id.
+  final VoidCallback? onOpenWithReasoning;
 
   const _LtgInlineEditor({
     required this.controller,
     required this.domain,
     required this.onCancel,
     required this.onSave,
+    this.onOpenWithReasoning,
   });
 
   @override
@@ -2398,6 +2430,26 @@ class _LtgInlineEditor extends StatelessWidget {
                 child: Text('Cancel',
                     style: GoogleFonts.dmSans(fontSize: 13)),
               ),
+              if (onOpenWithReasoning != null) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  onPressed: onOpenWithReasoning,
+                  icon: Icon(Icons.subdirectory_arrow_right_rounded,
+                      size: 14, color: c.teal),
+                  label: Text('Open with Cue Reasoning',
+                      style: GoogleFonts.dmSans(
+                          fontSize: 12, color: c.teal)),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: c.teal,
+                    side: BorderSide(
+                        color: c.teal.withValues(alpha: 0.45)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    minimumSize:   Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ],
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: onSave,

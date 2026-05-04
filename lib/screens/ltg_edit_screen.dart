@@ -220,12 +220,18 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   late final TextEditingController _customTimelineCtrl;
 
   /// Phase 4.0.7.20e — buffered rationale from CueReasoningPanel's
-  /// "Cite in rationale" action, written into long_term_goals on the
-  /// next save when the goal row has no id at the moment of citation.
-  /// In practice this screen is always opened with a saved LTG (the
-  /// kebab on the chart's goal card pushes it), so this stays null
-  /// most of the time. Defensive — covers the new-goal flow if the
-  /// editor is ever reused for a creation path.
+  /// "Cite in rationale" action.
+  ///
+  /// 4.0.7.20j: no longer assigned. The buffer-then-save-on-next-save
+  /// strategy silently discarded text on draft goals because _save()
+  /// PATCHes by id (also null for drafts). Replaced with a SnackBar
+  /// telling the SLP to save first. Field + the read inside _save()
+  /// stay as harmless dead code so the cleanup pass in 4.0.7.20f can
+  /// remove them with the rest of the deprecated bin.
+  @Deprecated(
+      'Replaced by SnackBar prompt in 4.0.7.20j. Will be removed in '
+      '4.0.7.20f.')
+  // ignore: unused_field
   String? _pendingEvidenceRationale;
 
   String? _timeline;
@@ -1215,33 +1221,39 @@ class _LtgEditScreenState extends State<LtgEditScreen>
         }
       },
       onCiteInRationale: (rationaleText) async {
-        if (ltgId != null && ltgId.isNotEmpty) {
-          try {
-            await Supabase.instance.client
-                .from('long_term_goals')
-                .update({'evidence_rationale': rationaleText})
-                .eq('id', ltgId);
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Rationale cited and saved.')),
-              );
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Could not save rationale: $e')),
-              );
-            }
-          }
-        } else {
-          // No id yet — buffer the rationale for the next save.
-          setState(() => _pendingEvidenceRationale = rationaleText);
+        // Phase 4.0.7.20j — when the goal has no id (draft path from
+        // goal_authoring's ✎ edit), the inline editor here can't
+        // PATCH evidence_rationale. The previous behavior buffered
+        // the text into _pendingEvidenceRationale and hoped _save()
+        // would persist it; but _save() PATCHes by id which is also
+        // null for drafts, so the rationale was silently discarded
+        // on screen pop. Honest path: tell the SLP to save first.
+        if (ltgId == null || ltgId.isEmpty) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
-                    'Rationale queued — will save when you save the goal.'),
+                    'Save the goal first, then cite the rationale.'),
+                duration: Duration(seconds: 4),
               ),
+            );
+          }
+          return;
+        }
+        try {
+          await Supabase.instance.client
+              .from('long_term_goals')
+              .update({'evidence_rationale': rationaleText})
+              .eq('id', ltgId);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Rationale cited and saved.')),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not save rationale: $e')),
             );
           }
         }
