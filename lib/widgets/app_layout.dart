@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/today_screen.dart';
 import '../screens/client_roster_screen.dart';
+import '../screens/assessing_screen.dart';
 import '../screens/narrator_screen.dart';
 import '../screens/login_screen.dart';
 import '../screens/slp_profile_screen.dart';
@@ -203,11 +204,15 @@ class _NavItem {
   const _NavItem({required this.icon, required this.label, required this.route});
 }
 
+// Phase 4.0.7.24 — Assessing slot inserted between Clients and
+// Narrator. Assessment-only engagement is a parallel surface to
+// therapy clients, not a phase within Clients.
 const _kNavItems = [
-  _NavItem(icon: Icons.today_rounded,         label: 'Today',    route: 'today'),
-  _NavItem(icon: Icons.people_outline_rounded, label: 'Clients', route: 'roster'),
-  _NavItem(icon: Icons.mic_rounded,            label: 'Narrator', route: 'narrator'),
-  _NavItem(icon: Icons.settings_outlined,      label: 'Settings', route: 'settings'),
+  _NavItem(icon: Icons.today_rounded,           label: 'Today',     route: 'today'),
+  _NavItem(icon: Icons.people_outline_rounded,  label: 'Clients',   route: 'roster'),
+  _NavItem(icon: Icons.assignment_outlined,     label: 'Assessing', route: 'assessing'),
+  _NavItem(icon: Icons.mic_rounded,             label: 'Narrator',  route: 'narrator'),
+  _NavItem(icon: Icons.settings_outlined,       label: 'Settings',  route: 'settings'),
 ];
 
 class _AppSidebar extends StatelessWidget {
@@ -449,6 +454,12 @@ class _AppSidebar extends StatelessWidget {
         MaterialPageRoute(builder: (_) => const ClientRosterScreen()),
         (_) => false,
       );
+    } else if (item.route == 'assessing') {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const AssessingScreen()),
+        (_) => false,
+      );
     } else if (item.route == 'narrator') {
       Navigator.pushAndRemoveUntil(
         context,
@@ -470,9 +481,14 @@ class _MobileBottomNav extends StatelessWidget {
   final String activeRoute;
   const _MobileBottomNav({required this.activeRoute});
 
+  // Phase 4.0.7.24 — 5th slot for Assessing. Tight at 320px (each tab
+  // gets ~64px), but acceptable for V1; the "hide Settings on mobile,
+  // move to a profile dropdown" alternative is deferred to 4.0.7.22n
+  // mobile audit follow-up.
   static const _kNavIcons = [
     (icon: Icons.calendar_today_outlined, route: 'today'),
     (icon: Icons.people_outlined,         route: 'roster'),
+    (icon: Icons.assignment_outlined,     route: 'assessing'),
     (icon: Icons.mic_outlined,            route: 'narrator'),
     (icon: Icons.settings_outlined,       route: 'settings'),
   ];
@@ -520,6 +536,9 @@ class _MobileBottomNav extends StatelessWidget {
       case 'roster':
         Navigator.pushAndRemoveUntil(context,
             MaterialPageRoute(builder: (_) => const ClientRosterScreen()), (_) => false);
+      case 'assessing':
+        Navigator.pushAndRemoveUntil(context,
+            MaterialPageRoute(builder: (_) => const AssessingScreen()), (_) => false);
       case 'narrator':
         Navigator.pushAndRemoveUntil(context,
             MaterialPageRoute(builder: (_) => const NarratorScreen()), (_) => false);

@@ -190,10 +190,15 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _fetchClients() async {
+    // Phase 4.0.7.24 — restrict the Clients sidebar to therapy
+    // engagements. Assessment-only cases live under the new Assessing
+    // sidebar. Legacy rows backfilled to engagement_type='therapy' so
+    // existing clients stay visible here.
     final response = await _supabase
         .from('clients')
         .select()
         .isFilter('deleted_at', null)
+        .eq('engagement_type', 'therapy')
         .order('name', ascending: true);
     return List<Map<String, dynamic>>.from(response);
   }
