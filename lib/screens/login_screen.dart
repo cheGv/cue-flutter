@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'client_roster_screen.dart';
 import 'signup_screen.dart';
-import '../widgets/app_layout.dart';
 
 // ── LoginScreen ────────────────────────────────────────────────────────────────
 class LoginScreen extends StatefulWidget {

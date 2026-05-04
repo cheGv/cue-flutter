@@ -34,6 +34,40 @@ const Color _amber     = Color(0xFFD68A2B);
 const Color _amberSoft = Color(0xFFF4E4C4);
 const Color _line      = Color(0xFFE6DDCA);
 
+// Phase 4.0.7.23 — 14 clinical areas matching the framework library
+// taxonomy and the clients.clinical_area schema CHECK constraint.
+// Order is intentional (general pediatric → autism → speech sound →
+// motor speech → fluency → voice → adult split → dysphagia → AAC →
+// social → hearing → literacy → multilingual). Reused by any screen
+// that needs to render or pre-fill a clinical area pick.
+const List<({String code, String label})> kClinicalAreas = [
+  (code: 'pediatric-language',       label: 'Pediatric Language'),
+  (code: 'autism-developmental',     label: 'Autism + Developmental'),
+  (code: 'speech-sound-disorders',   label: 'Speech Sound Disorders'),
+  (code: 'pediatric-motor-speech',   label: 'Pediatric Motor Speech'),
+  (code: 'fluency',                  label: 'Fluency'),
+  (code: 'voice',                    label: 'Voice'),
+  (code: 'adult-language-cognitive', label: 'Adult Language & Cognitive'),
+  (code: 'adult-motor-speech',       label: 'Adult Motor Speech'),
+  (code: 'dysphagia',                label: 'Dysphagia'),
+  (code: 'aac',                      label: 'AAC'),
+  (code: 'social-pragmatic',         label: 'Social Communication'),
+  (code: 'hearing-aural-rehab',      label: 'Hearing & Aural Rehab'),
+  (code: 'literacy',                 label: 'Literacy'),
+  (code: 'multilingual',             label: 'Multilingual'),
+];
+
+/// Resolves a clinical_area short_code to its SLP-facing display label,
+/// or returns the code as-is if no match (defensive against future
+/// schema drift).
+String clinicalAreaLabel(String? code) {
+  if (code == null || code.isEmpty) return '';
+  for (final a in kClinicalAreas) {
+    if (a.code == code) return a.label;
+  }
+  return code;
+}
+
 // ── main screen ───────────────────────────────────────────────────────────────
 class GoalAuthoringScreen extends StatefulWidget {
   final String clientId;
@@ -63,10 +97,22 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   String _interimPreview = '';
   final _scrollController = ScrollController();
 
-  // Clarifying answers
-  String _processorType  = 'gestalt';
-  bool   _aacPrimary     = false;
-  bool   _regulationFirst = true;
+  // Phase 4.0.7.23 — primary clinical area dropdown selection. Replaces
+  // the four-lens chip picker (gestalt/analytic/aac/regulation). Read
+  // from clients.clinical_area on init; persisted back on change.
+  String? _clinicalArea;
+
+  // Phase 4.0.7.23 — legacy clarifying-answers state retained at module
+  // default values so the existing /api/generate-goals proxy still
+  // receives the four legacy fields it expects. Server-side switchover
+  // to consume `clinical_area` is 4.0.7.23a; this state cleanup is
+  // 4.0.7.23b. Not surfaced in UI any more.
+  // ignore: unused_field
+  final String _processorType  = 'unknown';
+  // ignore: unused_field
+  final bool   _aacPrimary     = false;
+  // ignore: unused_field
+  final bool   _regulationFirst = false;
 
   // UI state
   bool   _isGenerating = false;
@@ -96,6 +142,43 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   void initState() {
     super.initState();
     _fetchRciNumber();
+    _loadClinicalArea();
+  }
+
+  /// Phase 4.0.7.23 — pull the client's existing clinical_area to
+  /// pre-select the dropdown. New clients (or clients whose row was
+  /// migrated without a backfill) have null → dropdown shows the
+  /// hint text and the SLP picks before generating.
+  Future<void> _loadClinicalArea() async {
+    try {
+      final row = await _supabase
+          .from('clients')
+          .select('clinical_area')
+          .eq('id', widget.clientId)
+          .maybeSingle();
+      final v = (row?['clinical_area'] as String?)?.trim();
+      if (mounted && v != null && v.isNotEmpty) {
+        setState(() => _clinicalArea = v);
+      }
+    } catch (_) {/* leave null — SLP picks manually */}
+  }
+
+  /// Persist a new clinical_area selection to clients. Failure is
+  /// non-fatal — the in-memory state still drives the goal-generation
+  /// request, and the next save attempt will retry implicitly.
+  Future<void> _persistClinicalArea(String code) async {
+    try {
+      await _supabase
+          .from('clients')
+          .update({'clinical_area': code})
+          .eq('id', widget.clientId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save clinical area: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -146,6 +229,12 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
         },
         body: jsonEncode({
           'client_id': widget.clientId,
+          // Phase 4.0.7.23 — new fields the server-side 4.0.7.23a will
+          // consume. The legacy clarifying_answers block stays in the
+          // payload for back-compat until 23a switches over.
+          if (_clinicalArea != null) 'clinical_area': _clinicalArea,
+          if (_clinicalArea != null)
+            'clinical_area_label': clinicalAreaLabel(_clinicalArea),
           'clarifying_answers': {
             'processor_type':   _processorType,
             'aac_primary':      _aacPrimary,
@@ -332,7 +421,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
             // Layer 01 — Clarifying
             _buildLayerHeader('LAYER 01', 'Clinical framing'),
             const SizedBox(height: 14),
-            _buildClarifyingChips(),
+            _buildClinicalAreaPicker(),
             const SizedBox(height: 24),
 
             // Optional hypothesis
@@ -515,52 +604,63 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
     );
   }
 
-  Widget _buildClarifyingChips() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        border: Border.all(color: _line, style: BorderStyle.solid),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          const Text(
-            'Primary clinical lens —',
-            style: TextStyle(
-                fontFamily: 'SF Pro Display',
-                fontStyle: FontStyle.italic,
-                fontSize: 13,
-                color: _inkGhost),
+  /// Phase 4.0.7.23 — primary clinical area dropdown. Replaces the
+  /// four-lens chip picker that was authored when Cue was an
+  /// autism-and-AAC-only product. The 14 areas mirror the framework
+  /// library taxonomy and the clients.clinical_area schema CHECK
+  /// constraint. Selection is persisted to the clients row immediately.
+  Widget _buildClinicalAreaPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Primary clinical area',
+          style: TextStyle(
+              fontSize:    11,
+              letterSpacing: 0.4,
+              color:       _inkGhost,
+              fontWeight:  FontWeight.w500),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color:        Colors.white,
+            border:       Border.all(color: _line),
+            borderRadius: BorderRadius.circular(10),
           ),
-          _ClarifyChip(
-            label: 'Gestalt processor',
-            selected: _processorType == 'gestalt',
-            onTap: () => setState(() => _processorType =
-                _processorType == 'gestalt' ? 'unknown' : 'gestalt'),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: _clinicalArea,
+              hint: const Text(
+                'Pick the area that best frames this client',
+                style: TextStyle(
+                    fontSize: 13, color: _inkGhost,
+                    fontStyle: FontStyle.italic),
+              ),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                  color: _inkGhost),
+              style: const TextStyle(
+                  fontSize: 14, color: _ink, height: 1.55),
+              dropdownColor: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              items: [
+                for (final a in kClinicalAreas)
+                  DropdownMenuItem<String>(
+                    value: a.code,
+                    child: Text(a.label),
+                  ),
+              ],
+              onChanged: (code) {
+                if (code == null) return;
+                setState(() => _clinicalArea = code);
+                _persistClinicalArea(code);
+              },
+            ),
           ),
-          _ClarifyChip(
-            label: 'Analytic processor',
-            selected: _processorType == 'analytic',
-            onTap: () => setState(() => _processorType =
-                _processorType == 'analytic' ? 'unknown' : 'analytic'),
-          ),
-          _ClarifyChip(
-            label: 'AAC primary',
-            selected: _aacPrimary,
-            onTap: () => setState(() => _aacPrimary = !_aacPrimary),
-          ),
-          _ClarifyChip(
-            label: 'Regulation-first',
-            selected: _regulationFirst,
-            amber: true,
-            onTap: () =>
-                setState(() => _regulationFirst = !_regulationFirst),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -1237,9 +1337,15 @@ class _ArcLogo extends StatelessWidget {
   }
 }
 
+// Phase 4.0.7.23 — _ClarifyChip retained as the visual register for
+// the four-lens picker that was replaced by the clinical-area
+// dropdown. Kept dormant so 4.0.7.23b cleanup has a reference; remove
+// when that commit lands.
+// ignore: unused_element
 class _ClarifyChip extends StatelessWidget {
   final String label;
   final bool selected;
+  // ignore: unused_element_parameter
   final bool amber;
   final VoidCallback onTap;
 

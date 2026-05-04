@@ -1186,10 +1186,16 @@ class _LtgEditScreenState extends State<LtgEditScreen>
   // render sites. The old methods stay alive (deprecated) for one
   // commit cycle so the cleanup pass in 4.0.7.20f has a reference.
 
-  /// V1: empty list — the SLP picks domains via chips inside the panel.
-  /// Smarter inference (population_type → domain map, clinical_lens →
-  /// domain map) is 4.0.7.20g work.
-  List<String> _inferInitialDomains() => const [];
+  /// Phase 4.0.7.23 — pre-fill the Cue Reasoning panel's domain chips
+  /// with the client's clinical_area when the goal map carries it.
+  /// Joined-through field on the LTG row when the parent screen pushes
+  /// LtgEditScreen with `goal: { 'client_id': …, 'clinical_area': …, … }`.
+  /// Falls back to empty list (panel hint visible, SLP picks manually).
+  List<String> _inferInitialDomains() {
+    final code = (widget.goal['clinical_area'] as String?)?.trim();
+    if (code == null || code.isEmpty) return const [];
+    return [code];
+  }
 
   Widget _buildCueReasoningPanel() {
     final clientId = (widget.goal['client_id'] as String?) ?? '';
