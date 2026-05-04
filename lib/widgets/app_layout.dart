@@ -17,75 +17,9 @@ const double _kDesktopBreak     = 1024;
 // compact header). Above 768 we keep the desktop sidebar.
 const double _kMobileBreak      = 768;
 
-// ── Public mobile wall (reused by auth screens) ────────────────────────────────
-class MobileWall extends StatelessWidget {
-  const MobileWall({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF00897B),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Center(
-                  child: Text(
-                    'C',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 42,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Cue',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 0.3,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Cue works best on desktop',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Please open Cue on a computer for the full experience.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.8),
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+// Phase 4.0.7.22a-hotfix — `MobileWall` removed. Pre-pivot guard that
+// blocked auth screens below 768 px with "Cue works best on desktop".
+// Mobile chrome shipped in 2a75655 so the guard contradicted strategy.
 
 // ── Main shell ─────────────────────────────────────────────────────────────────
 class AppLayout extends StatelessWidget {

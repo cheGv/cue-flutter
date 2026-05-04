@@ -78,11 +78,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-
-    // Mobile wall
-    if (width < 768) return const MobileWall();
-
+    // Phase 4.0.7.22a-hotfix — pre-pivot desktop guard removed.
+    // Mobile chrome ships in 2a75655; the guard contradicted strategy.
     return Scaffold(
       backgroundColor: const Color(0xFF00897B),
       body: Center(
