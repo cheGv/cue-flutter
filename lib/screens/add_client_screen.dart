@@ -116,6 +116,33 @@ class _AddClientScreenState extends State<AddClientScreen> {
   /// AND derived legacy population_type written for fluency-screen
   /// back-compat. Cleared from the schema in 4.0.7.23b.
   String? _clinicalArea;
+
+  // ── Phase 4.0.7.24a — domain-aware label helpers ────────────────────────
+  // The intake form was authored when Cue was an autism-pediatric
+  // product, so labels assumed "child" and "parent". With 14 areas
+  // covering adult language/cognitive, adult motor speech, dysphagia,
+  // voice, etc., that framing is wrong for half the dropdown. These
+  // helpers resolve the right word from _clinicalArea; build() reads
+  // them so a dropdown change re-renders all affected labels live.
+  static const Set<String> _kPediatricAreas = {
+    'pediatric-language',
+    'autism-developmental',
+    'speech-sound-disorders',
+    'pediatric-motor-speech',
+    'literacy',
+  };
+
+  String _personLabel() {
+    if (_clinicalArea == null) return 'client';
+    return _kPediatricAreas.contains(_clinicalArea) ? 'child' : 'client';
+  }
+
+  String _concernSourceLabel() {
+    if (_clinicalArea == null) return 'Caregiver concern';
+    return _kPediatricAreas.contains(_clinicalArea)
+        ? "Parent's concern"
+        : 'Client / caregiver concern';
+  }
   final _primaryLangCtrl      = TextEditingController();
   final _additionalLangsCtrl  = TextEditingController(); // comma-separated
   final _concernVerbatimCtrl  = TextEditingController();
@@ -270,6 +297,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => _BrainDumpSheet(
         token: token,
+        personLabel: _personLabel(),
         onPopulated: (data) => _populateFromAi(data, sourceLabel: 'voice'),
       ),
     );
@@ -860,7 +888,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
             icon: const Icon(Icons.mic_rounded,
                 size: 18, color: kCueAmberDeeper),
             label: Text(
-              'Tell Cue about this child',
+              'Tell Cue about this ${_personLabel()}',
               style: TextStyle(
                 fontSize: 14,
                 color: kCueAmberDeeper,
@@ -1212,7 +1240,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
           // Editorial Playfair label — this is a primary clinical artifact
           // (the family's own framing), so it earns a serif voice. §13.15.
           Text(
-            "Parent's concern",
+            _concernSourceLabel(),
             style: GoogleFonts.playfairDisplay(
               fontSize: 22,
               fontWeight: FontWeight.w600,
@@ -1223,7 +1251,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'In their words — quote the family as closely as possible.',
+            'In their words — quote them as closely as possible.',
             style: TextStyle(
                 fontSize: 13, color: kCueSubtitleInk, height: 1.45),
           ),
@@ -1288,9 +1316,14 @@ class _AddClientScreenState extends State<AddClientScreen> {
 
 class _BrainDumpSheet extends StatefulWidget {
   final String? token;
+  final String personLabel; // 4.0.7.24a — 'child' or 'client'
   final void Function(Map<String, dynamic> data) onPopulated;
 
-  const _BrainDumpSheet({required this.token, required this.onPopulated});
+  const _BrainDumpSheet({
+    required this.token,
+    required this.personLabel,
+    required this.onPopulated,
+  });
 
   @override
   State<_BrainDumpSheet> createState() => _BrainDumpSheetState();
@@ -1503,7 +1536,7 @@ class _BrainDumpSheetState extends State<_BrainDumpSheet> {
 
               // Title
               Text(
-                'Tell me about this child',
+                'Tell me about this ${widget.personLabel}',
                 style: GoogleFonts.dmSans(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
