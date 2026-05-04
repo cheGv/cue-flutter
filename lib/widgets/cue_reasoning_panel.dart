@@ -253,6 +253,23 @@ class _CueReasoningPanelState extends State<CueReasoningPanel> {
             ),
           ),
           const SizedBox(height: 10),
+          // Phase 4.0.7.20m — token-cost hint. Visible only when no
+          // domains are selected, disappears the moment the SLP picks
+          // her first chip. The framework loader on the proxy side
+          // pulls ALL 60 entries when domains_active is empty (~6.5K
+          // input tokens per call); 1-2 domain chips drops it ~70%.
+          if (_domainsActive.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Select 1–2 relevant domains to focus Cue Reasoning',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: Colors.white.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
           SizedBox(
             height: 28,
             child: ListView.separated(
