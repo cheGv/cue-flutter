@@ -9,7 +9,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
-import '../widgets/case_history_fluency_section.dart';
+import '../widgets/intake/fluency_intake_section.dart';
+import '../widgets/intake/generic_intake_placeholder.dart';
 
 // ── Legacy AI-highlight tokens (kept for the AI-extract highlight visuals) ────
 // The rest of the form runs on the locked Phase 4.0 register imported from
@@ -157,8 +158,12 @@ class _AddClientScreenState extends State<AddClientScreen> {
   final _additionalLangsCtrl  = TextEditingController(); // comma-separated
   final _concernVerbatimCtrl  = TextEditingController();
 
-  // ── Layer-02 Phase 4.0.3 (case history, developmental stuttering only) ─────
-  Map<String, dynamic> _caseHistoryPayload = const {};
+  // ── Layer-02 Phase 4.0.3 / 4.0.7.24a-fix2 (per-domain intake payload) ──
+  // Holds whatever the active intake widget (FluencyIntakeSection today;
+  // VoiceIntakeSection / SsdIntakeSection / etc. as they ship in
+  // 4.0.7.24c-l) emits. Persisted as
+  // case_history_entries.payload.domain_payload.
+  Map<String, dynamic> _domainSpecificPayload = const {};
   String? _existingCaseHistoryId; // uuid of loaded case_history_entries row
   // Bumped to force the section to re-seed when AI extract or async-load
   // delivers a new initial payload.
@@ -207,9 +212,24 @@ class _AddClientScreenState extends State<AddClientScreen> {
       if (row == null || !mounted) return;
       setState(() {
         _existingCaseHistoryId = row['id'] as String?;
-        final p = row['payload'];
-        _caseHistoryPayload =
-            (p is Map) ? Map<String, dynamic>.from(p) : const {};
+        final raw = row['payload'];
+        // 4.0.7.24a-fix2 — payloads written by this commit wrap the
+        // domain payload under a `domain_payload` key alongside
+        // concern_verbatim. Pre-fix2 rows stored the fluency map at
+        // the top level, so unwrap if present, otherwise fall back to
+        // the flat shape so existing fluency clients still re-load.
+        Map<String, dynamic> domain = const {};
+        if (raw is Map) {
+          final m = Map<String, dynamic>.from(raw);
+          final dp = m['domain_payload'];
+          if (dp is Map) {
+            domain = Map<String, dynamic>.from(dp);
+          } else if (!m.containsKey('domain_payload') &&
+              !m.containsKey('concern_verbatim')) {
+            domain = m;
+          }
+        }
+        _domainSpecificPayload = domain;
         _caseHistoryRebuildSeq++;
       });
     } catch (_) {
@@ -419,10 +439,10 @@ class _AddClientScreenState extends State<AddClientScreen> {
     // Layer-02 case history: only seed if the SLP hasn't started filling it
     // yet (§13.16 — never silently overwrite clinician-entered structure).
     final caseHistoryFromAi = data['case_history'];
-    if (_caseHistoryPayload.isEmpty &&
+    if (_domainSpecificPayload.isEmpty &&
         caseHistoryFromAi is Map &&
         caseHistoryFromAi.isNotEmpty) {
-      _caseHistoryPayload = Map<String, dynamic>.from(caseHistoryFromAi);
+      _domainSpecificPayload = Map<String, dynamic>.from(caseHistoryFromAi);
       _caseHistoryRebuildSeq++;
       filled.add('case_history');
     }
@@ -619,20 +639,29 @@ class _AddClientScreenState extends State<AddClientScreen> {
         clientId = inserted['id'] as String;
       }
 
-      // Layer 02 persistence — only for developmental_stuttering. Soft-fails
-      // with a SnackBar; the client save itself has already landed.
-      if (_populationType == 'developmental_stuttering') {
+      // Layer 02 persistence — gates on clinical_area = 'fluency' as of
+      // 4.0.7.24a-fix2 (the canonical anchor; legacy population_type is
+      // a derived mirror). Payload now wraps the domain capture under
+      // `domain_payload` alongside `concern_verbatim` so future per-
+      // domain widgets (4.0.7.24c-l) can drop in without reshuffling
+      // the row schema. Soft-fails with a SnackBar; the client save
+      // itself has already landed.
+      if (_clinicalArea == 'fluency' && _domainSpecificPayload.isNotEmpty) {
+        final wrappedPayload = <String, dynamic>{
+          'concern_verbatim': _concernVerbatimCtrl.text.trim(),
+          'domain_payload':   _domainSpecificPayload,
+        };
         try {
           if (_existingCaseHistoryId != null) {
             await _supabase
                 .from('case_history_entries')
-                .update({'payload': _caseHistoryPayload})
+                .update({'payload': wrappedPayload})
                 .eq('id', _existingCaseHistoryId!);
           } else {
             await _supabase.from('case_history_entries').insert({
               'client_id':       clientId,
               'population_type': 'developmental_stuttering',
-              'payload':         _caseHistoryPayload,
+              'payload':         wrappedPayload,
               'created_by': ?userId,
             });
           }
@@ -714,15 +743,12 @@ class _AddClientScreenState extends State<AddClientScreen> {
                   _buildConcernSection(),
                   const SizedBox(height: 32),
 
-                  // ── Section 4: Layer 02 case history (devstutter only) ─
-                  if (_populationType == 'developmental_stuttering') ...[
-                    CaseHistoryFluencySection(
-                      key: ValueKey('case_history_$_caseHistoryRebuildSeq'),
-                      initialPayload: _caseHistoryPayload,
-                      onChanged: (p) => _caseHistoryPayload = p,
-                    ),
-                    const SizedBox(height: 32),
-                  ],
+                  // ── Section 4: Per-domain intake (4.0.7.24a-fix2) ──────
+                  // Router resolves the right capture surface from the
+                  // clinical_area dropdown above. Switching the dropdown
+                  // live re-renders this section with the matching
+                  // widget (or the placeholder for unbuilt domains).
+                  ..._buildIntakeForArea(_clinicalArea),
 
                   // ── Section 5: Contact and setting ─────────────────────
                   _eyebrow('contact and setting'),
@@ -1152,6 +1178,38 @@ class _AddClientScreenState extends State<AddClientScreen> {
         ],
       ],
     );
+  }
+
+  // ── Phase 4.0.7.24a-fix2 — domain-aware intake router ─────────────────
+  // Picks the matching intake widget for the current clinical_area
+  // pick. Returns a list so the caller can spread it (`...`) into a
+  // Column without rendering an extra container. Empty list when no
+  // area is picked yet — the SLP must pick before the section
+  // materializes. Future domain widgets land here as new case arms.
+  List<Widget> _buildIntakeForArea(String? clinicalArea) {
+    if (clinicalArea == null || clinicalArea.isEmpty) {
+      return const [];
+    }
+    final Widget section;
+    switch (clinicalArea) {
+      case 'fluency':
+        section = FluencyIntakeSection(
+          key: ValueKey('intake_fluency_$_caseHistoryRebuildSeq'),
+          initialPayload: _domainSpecificPayload,
+          onChanged: (p) => _domainSpecificPayload = p,
+        );
+        break;
+      // 4.0.7.24c-l — voice, ssd, dysphagia, adult-language-cognitive,
+      // adult-motor-speech, etc. drop in here as their intake widgets
+      // ship.
+      default:
+        section = GenericIntakePlaceholder(
+          key: ValueKey('intake_placeholder_$clinicalArea'),
+          clinicalArea: clinicalArea,
+          clinicalAreaLabel: clinicalAreaLabel(clinicalArea),
+        );
+    }
+    return [section, const SizedBox(height: 32)];
   }
 
   // ── Phase 4.0.2 builders ──────────────────────────────────────────────────────
