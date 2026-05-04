@@ -11,6 +11,7 @@ import '../theme/cue_typography.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/cue_amber_link.dart';
 import '../widgets/cue_cuttlefish.dart';
+import '../widgets/today_brief_card.dart';
 import 'client_profile_screen.dart';
 
 // ── Legacy local palette ─────────────────────────────────────────────────────
@@ -222,9 +223,17 @@ class _TodayScreenState extends State<TodayScreen> {
     if (clientIds.isEmpty) return;
     try {
       // sessions.client_id is text in this schema; pass strings.
+      // Phase 4.0.7.22a — extended select for the Today's Brief card.
+      // The card needs target_behaviour, activity_name, accuracy
+      // counts, next_session_focus, and client_affect on top of the
+      // legacy soap_note/notes/date columns.
       final rows = await _supabase
           .from('sessions')
-          .select('id, client_id, date, soap_note, notes, created_at')
+          .select(
+              'id, client_id, date, soap_note, notes, created_at, '
+              'target_behaviour, activity_name, next_session_focus, '
+              'client_affect, attempts, independent_responses, '
+              'prompted_responses, goal_met')
           .eq('user_id', uid)
           .inFilter('client_id', clientIds)
           .isFilter('deleted_at', null)
@@ -1042,15 +1051,18 @@ class _TodayScreenState extends State<TodayScreen> {
   // ── Phase 3.1: Today screen content blocks ──────────────────────────────
 
   Widget _buildTodayZone() {
+    // Phase 4.0.7.22a — body replaced with the Today's Brief card
+    // stack (production Variant B from 4.0.7.21 design exploration).
+    // Greeting block + eyebrow row + Add affordance retained — they
+    // anchor the screen contextually. The week pulse strip and the
+    // legacy session brief cards are removed (see MOBILE_AUDIT.md
+    // for the recoverable feature list).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildGreetingBlock(),
         const SizedBox(height: CueGap.greetingToEyebrow),
 
-        // Today's session(s) section — eyebrow row keeps the "+" affordance
-        // for adding clients to the roster (legacy behaviour preserved,
-        // visually demoted from the prior big header).
         _buildEyebrowRow(
           label: "today's session",
           trailing: _buildAddRosterButton(),
@@ -1059,22 +1071,122 @@ class _TodayScreenState extends State<TodayScreen> {
         if (_rosterRows.isEmpty)
           _buildEmptyTodayHint()
         else
-          ..._rosterRows.asMap().entries.map((e) => Padding(
-                padding: EdgeInsets.only(
-                  bottom: e.key == _rosterRows.length - 1
-                      ? 0
-                      : CueGap.sessionCardGap,
-                ),
-                child: _buildSessionBriefCard(e.value),
-              )),
-
-        const SizedBox(height: CueGap.cardToEyebrow),
-
-        _buildEyebrowRow(label: 'this week'),
-        const SizedBox(height: CueGap.eyebrowToCard),
-        _buildWeekPulse(),
+          _buildTodayBriefStack(),
       ],
     );
+  }
+
+  /// Phase 4.0.7.22a — vertical stack of TodayBriefCard, one per
+  /// roster client. Card data assembled in-memory from the existing
+  /// _rosterRows + _lastSessionByClient maps; no new Supabase calls.
+  Widget _buildTodayBriefStack() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < _rosterRows.length; i++) ...[
+          _buildTodayBriefCardForRoster(_rosterRows[i]),
+          if (i != _rosterRows.length - 1)
+            const SizedBox(height: CueGap.sessionCardGap),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildTodayBriefCardForRoster(Map<String, dynamic> row) {
+    final cl       = Map<String, dynamic>.from(row['clients'] as Map? ?? {});
+    final clientId = cl['id']?.toString() ?? '';
+    final clientName = _toTitleCase(
+        (cl['name'] as String?)?.trim() ?? 'Unknown');
+    final ageRaw    = cl['age'];
+    final age       = ageRaw is int
+        ? ageRaw
+        : (ageRaw is String ? int.tryParse(ageRaw) : null);
+    final diagnosis = (cl['diagnosis'] as String?)?.trim();
+
+    final last = _lastSessionByClient[clientId];
+    final brief = TodayBrief(
+      clientName: clientName,
+      clientAge: age != null && age > 0 ? age : null,
+      clientLensSubtitle:
+          diagnosis != null && diagnosis.isNotEmpty ? diagnosis : null,
+      baselinePhase: last == null,
+      lastSessionDateLabel: _formatLastDate(last),
+      lastTargetBehavior: last == null
+          ? null
+          : (last['target_behaviour'] as String?)?.trim(),
+      lastActivity: last == null
+          ? null
+          : (last['activity_name'] as String?)?.trim(),
+      lastNarrative: last == null ? null : _briefNarrativeFromSession(last),
+      lastAccuracy:  last == null ? null : _formatAccuracy(last),
+      nextSessionFocus: last == null
+          ? null
+          : (last['next_session_focus'] as String?)?.trim(),
+      todayTimeLabel: null,
+    );
+    return TodayBriefCard(
+      brief: brief,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ClientProfileScreen(client: cl),
+        ),
+      ).then((_) => _load()),
+    );
+  }
+
+  String? _formatLastDate(Map<String, dynamic>? row) {
+    if (row == null) return null;
+    final dateStr = (row['date'] as String?) ??
+        (row['created_at'] as String?)?.substring(0, 10);
+    final dt = _safeParseDate(dateStr);
+    if (dt == null) return null;
+    return _formatRelativeDate(dt);
+  }
+
+  String? _briefNarrativeFromSession(Map<String, dynamic> row) {
+    // Pull a one-glance narrative: prefer SOAP S, then notes, then
+    // client_affect summary. Trim to ~140 chars so the card stays
+    // single-glance-readable.
+    String? text;
+    final soap = row['soap_note'];
+    if (soap is String && soap.trim().isNotEmpty) {
+      try {
+        final m = jsonDecode(soap) as Map<String, dynamic>;
+        final s = (m['s'] as String?)?.trim();
+        if (s != null && s.isNotEmpty) text = s;
+      } catch (_) {/* not JSON — fall through */}
+      text ??= soap.trim();
+    }
+    if (text == null) {
+      final notes = (row['notes'] as String?)?.trim();
+      if (notes != null && notes.isNotEmpty) text = notes;
+    }
+    if (text == null) {
+      final affect = (row['client_affect'] as String?)?.trim();
+      if (affect != null && affect.isNotEmpty) {
+        text = 'Client affect: $affect.';
+      }
+    }
+    if (text == null) return null;
+    if (text.length > 140) text = '${text.substring(0, 137)}…';
+    return text;
+  }
+
+  String? _formatAccuracy(Map<String, dynamic> row) {
+    final attempts = _toIntOrNull(row['attempts']);
+    if (attempts == null || attempts <= 0) return null;
+    final indep = _toIntOrNull(row['independent_responses']) ?? 0;
+    final pct = ((indep / attempts) * 100).round();
+    return '$indep of $attempts ($pct%)';
+  }
+
+  int? _toIntOrNull(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    if (v is String) return int.tryParse(v);
+    return null;
   }
 
   // ── Greeting block ──────────────────────────────────────────────────────
@@ -1214,6 +1326,9 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ── Session brief card ──────────────────────────────────────────────────
 
+  // Phase 4.0.7.22a — replaced by TodayBriefCard. Kept for the
+  // recovery path documented in MOBILE_AUDIT.md.
+  // ignore: unused_element
   Widget _buildSessionBriefCard(Map<String, dynamic> row) {
     final cl       = Map<String, dynamic>.from(row['clients'] as Map? ?? {});
     final rosterId = row['id'].toString();
@@ -1384,6 +1499,10 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ── This-week pulse ─────────────────────────────────────────────────────
 
+  // Phase 4.0.7.22a — week pulse zone removed from the Today body
+  // when Variant B brief stack shipped. Kept here for the recovery
+  // path documented in MOBILE_AUDIT.md.
+  // ignore: unused_element
   Widget _buildWeekPulse() {
     final cards = [
       _PulseCardData(

@@ -12,7 +12,10 @@ import 'cue_study_fab.dart';
 const double _kSidebarFull      = 220;
 const double _kSidebarCollapsed = 56;
 const double _kDesktopBreak     = 1024;
-const double _kMobileBreak      = 600;   // below this → bottom nav layout
+// Phase 4.0.7.22a — bump from 600 → 768 so tablets and SLPs in
+// landscape on phones still get the full mobile chrome (bottom nav +
+// compact header). Above 768 we keep the desktop sidebar.
+const double _kMobileBreak      = 768;
 
 // ── Public mobile wall (reused by auth screens) ────────────────────────────────
 class MobileWall extends StatelessWidget {
