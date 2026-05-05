@@ -82,17 +82,44 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     }
   }
 
+  /// Phase 4.0.7.24a-fix8 — domain-aware gate on parent-present
+  /// expectations. Pediatric clinical areas keep parent_present = true
+  /// as the sensible default (parent typically attends a child's
+  /// assessment); adult areas write parent_present = false on insert.
+  /// The visit form has no toggle UI today — there's only a single-tap
+  /// "Add visit" card — so this gate runs at insert time. When the
+  /// per-visit detail form ships (4.0.7.24c+), expose the toggle only
+  /// when this returns true.
+  bool _isPediatricAssessment() {
+    final area = _client['clinical_area'] as String?;
+    if (area == null) return false;
+    const pediatric = {
+      'pediatric-language',
+      'autism-developmental',
+      'speech-sound-disorders',
+      'pediatric-motor-speech',
+      'literacy',
+    };
+    return pediatric.contains(area);
+  }
+
   Future<void> _addVisit() async {
     try {
       final next = (_visits.isNotEmpty
               ? (_visits.last['visit_number'] as num?)?.toInt() ?? _visits.length
               : 0) +
           1;
+      // 4.0.7.24a-fix8 — column is 'visit_date' (Postgres DATE,
+      // yyyy-MM-dd), not 'date'. parent_present routes through the
+      // pediatric gate; primary_capture_focus stays null until the
+      // per-visit form lands.
       await _supabase.from('assessment_visits').insert({
-        'client_id':    _client['id'].toString(),
-        'visit_number': next,
-        'date':         DateTime.now().toIso8601String().substring(0, 10),
-        'visit_status': 'in_progress',
+        'client_id':             _client['id'].toString(),
+        'visit_number':          next,
+        'visit_date':            DateTime.now().toIso8601String().substring(0, 10),
+        'visit_status':          'in_progress',
+        'parent_present':        _isPediatricAssessment(),
+        'primary_capture_focus': null,
       });
       await _loadVisits();
       if (mounted) {
@@ -183,8 +210,7 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Draft report created — composer in 4.0.7.24d.')),
+          const SnackBar(content: Text('Draft report created.')),
         );
       }
     } catch (e) {
@@ -318,7 +344,7 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
 
   Widget _visitCard(Map<String, dynamic> v) {
     final n        = (v['visit_number'] as num?)?.toInt() ?? 0;
-    final date     = (v['date'] as String?) ?? '';
+    final date     = (v['visit_date'] as String?) ?? '';
     final duration =
         (v['visit_duration_minutes'] as num?)?.toInt();
     final status   = (v['visit_status'] as String?) ?? 'in_progress';
@@ -434,15 +460,6 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'V1: SLP-authored. No AI suggestions. The clinician makes '
-          'the diagnostic call.',
-          style: GoogleFonts.dmSans(
-              fontSize: 12,
-              color: _inkGhost,
-              fontStyle: FontStyle.italic),
-        ),
-        const SizedBox(height: 10),
         TextField(
           controller: _diagnosisCtrl,
           maxLines: 4,
@@ -472,15 +489,6 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'V1: creates a draft assessment_reports row. Full template '
-          'surface lands in 4.0.7.24d.',
-          style: GoogleFonts.dmSans(
-              fontSize: 12,
-              color: _inkGhost,
-              fontStyle: FontStyle.italic),
-        ),
-        const SizedBox(height: 10),
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
