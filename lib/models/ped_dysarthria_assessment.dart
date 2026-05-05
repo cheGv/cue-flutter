@@ -137,9 +137,12 @@ class PedDysarthriaAssessment {
       mentalAgeMonths:              intOf('mental_age_months'),
       mentalAgeSource:              json['mental_age_source'] as String?,
       receptiveLanguageAgeMonths:   intOf('receptive_language_age_months'),
-      receptiveLanguageAgeSource:   json['receptive_language_age_source'] as String?,
+      // 27a-fix1 — schema source columns drop the "language_" prefix
+      // (receptive_age_source / expressive_age_source) even though the
+      // months columns keep it. Asymmetric but matches the migration.
+      receptiveLanguageAgeSource:   json['receptive_age_source'] as String?,
       expressiveLanguageAgeMonths:  intOf('expressive_language_age_months'),
-      expressiveLanguageAgeSource:  json['expressive_language_age_source'] as String?,
+      expressiveLanguageAgeSource:  json['expressive_age_source'] as String?,
       speechAgeMonths:              intOf('speech_age_months'),
       speechAgeSource:              json['speech_age_source'] as String?,
       socialPragmaticAgeMonths:     intOf('social_pragmatic_age_months'),
@@ -152,7 +155,7 @@ class PedDysarthriaAssessment {
       edacsLevel:          json['edacs_level']       as String?,
       vfcsLevel:           json['vfcs_level']        as String?,
       lastBotoxDate:       dateOf('last_botox_date'),
-      mayoType:            json['mayo_type']         as String?,
+      mayoType:            json['mayo_dysarthria_type'] as String?,
       flagDysphagiaReferral: json['flag_dysphagia_referral'] == true,
       flagAacAssessment:     json['flag_aac_assessment']     == true,
       caseHistoryPayload:           mapOf('case_history_payload'),

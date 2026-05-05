@@ -566,9 +566,10 @@ class _PedDysarthriaCaptureSectionState
       'mental_age_months':             _parseInt(_mentalAgeCtrl.text),
       'mental_age_source':             _mentalAgeSource,
       'receptive_language_age_months': _parseInt(_receptiveAgeCtrl.text),
-      'receptive_language_age_source': _receptiveAgeSource,
+      // 27a-fix1 — schema source columns drop "language_" prefix.
+      'receptive_age_source':          _receptiveAgeSource,
       'expressive_language_age_months': _parseInt(_expressiveAgeCtrl.text),
-      'expressive_language_age_source': _expressiveAgeSource,
+      'expressive_age_source':         _expressiveAgeSource,
       'speech_age_months':             _parseInt(_speechAgeCtrl.text),
       'speech_age_source':             _speechAgeSource,
       'social_pragmatic_age_months':   _parseInt(_socialPragAgeCtrl.text),
@@ -581,7 +582,7 @@ class _PedDysarthriaCaptureSectionState
       'edacs_level':                   _edacsLevel,
       'vfcs_level':                    _vfcsLevel,
       'last_botox_date':               _lastBotoxDate?.toIso8601String().substring(0, 10),
-      'mayo_type':                     _mayoType,
+      'mayo_dysarthria_type':          _mayoType,
     };
     final payload = <String, dynamic>{
       'chronological_age_months':      _parseInt(_chronoAgeMonthsCtrl.text),
