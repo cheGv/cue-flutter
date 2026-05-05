@@ -69,6 +69,15 @@ class AldAssessmentService {
       'cognitive_comm_screen_payload',
       'differential_diagnosis_payload',
       'clinical_impression_payload',
+      // 25c — Section 8's six etiology subforms each persist to their
+      // own jsonb so the SLP can multi-select chips and have every
+      // surface keep its data even when hidden.
+      'aphasia_apraxia_payload',
+      'tbi_payload',
+      'rhd_payload',
+      'dementia_payload',
+      'ppa_payload',
+      'multilingual_payload',
     };
     if (!allowed.contains(columnName)) {
       throw ArgumentError(
@@ -248,8 +257,11 @@ class AldAssessmentService {
           OutcomeRow(label: 'MMSE total', baseline: n(baseCog, 'mmse_total'), latest: n(latestCog, 'mmse_total'), unit: '/30', direction: 'higher'),
         ]),
         OutcomeGroup(label: 'Functional Communication & QoL', rows: [
-          // 25c populates these.
-          OutcomeRow(label: 'COAST',     baseline: n(baseQol, 'coast_total'),    latest: n(latestQol, 'coast_total'),    direction: 'higher'),
+          // 25c — typed totals from Section 12. COAST and AIQ-21 are
+          // impact / handicap scales (lower = better); SAQOL-39 and
+          // CETI score quality-of-life and effectiveness (higher =
+          // better).
+          OutcomeRow(label: 'COAST',     baseline: n(baseQol, 'coast_total'),    latest: n(latestQol, 'coast_total'),    direction: 'lower'),
           OutcomeRow(label: 'AIQ-21',    baseline: n(baseQol, 'aiq21_total'),    latest: n(latestQol, 'aiq21_total'),    direction: 'lower'),
           OutcomeRow(label: 'SAQOL-39',  baseline: n(baseQol, 'saqol39_total'),  latest: n(latestQol, 'saqol39_total'),  direction: 'higher'),
           OutcomeRow(label: 'CETI',      baseline: n(baseQol, 'ceti_total'),     latest: n(latestQol, 'ceti_total'),     direction: 'higher'),

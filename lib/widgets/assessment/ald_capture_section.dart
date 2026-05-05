@@ -246,6 +246,144 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
   String? _mostEffectiveChannel;
   final _funcCommImpressionCtrl = TextEditingController();
 
+  // ── Section 8 — Etiology-Specific Subforms ────────────────────────
+  // Multi-select chip set. Each subform persists to its own jsonb
+  // column on ald_assessments regardless of whether its chip is
+  // currently selected — toggling chips never drops sibling data.
+  // Default selection seeds from etiology_category + WAB classification
+  // on first hydrate (see _seedSubformDefaults).
+  final Set<String> _subformsSelected = {};
+
+  // 8A — Aphasia + Apraxia
+  final _aaLesionCorrelationCtrl = TextEditingController();
+  bool _aosSuspected         = false;
+  bool _aosArticulatoryGroping = false;
+  bool _aosInconsistentErrors  = false;
+  bool _aosSlowRate            = false;
+  bool _aosDistortedSubst      = false;
+  bool _aosTrialAndError       = false;
+  bool _aosAwarenessOfErrors   = false;
+  final _aosDdkObsCtrl       = TextEditingController();
+  String? _aosSeverity;
+  bool _dysarthriaScreen     = false;
+  final Set<String> _aaComorbidFeatures = {};
+  final _aaNotesCtrl         = TextEditingController();
+
+  // 8B — TBI
+  final _tbiGcsAdmitCtrl     = TextEditingController();
+  final _tbiCurrentLevelCtrl = TextEditingController();
+  final _tbiGoatCtrl         = TextEditingController();
+  String? _tbiRanchosLevel;
+  final Set<String> _tbiCogConcerns      = {};
+  final Set<String> _tbiBehavioralConcerns = {};
+  final _tbiFimCommCtrl      = TextEditingController();
+  final _tbiNotesCtrl        = TextEditingController();
+
+  // 8C — RHD
+  final _rhdMirbiCtrl        = TextEditingController();
+  final Set<String> _rhdPragmaticDeficits = {};
+  bool _rhdNeglect           = false;
+  bool _rhdAnosognosia       = false;
+  String? _rhdAffectiveComm;
+  String? _rhdDiscourseProfile;
+  final _rhdNotesCtrl        = TextEditingController();
+
+  // 8D — Dementia / MCI
+  String? _dementiaSubtype;
+  final Set<String> _dementiaMemoryProfile = {};
+  final _dementiaLanguagePatternCtrl = TextEditingController();
+  final _dementiaDifferentialCtrl    = TextEditingController();
+  final _dementiaTimelineCtrl        = TextEditingController();
+  final _dementiaNotesCtrl           = TextEditingController();
+
+  // 8E — PPA
+  String? _ppaSubtype;
+  final _ppaTimelineCtrl     = TextEditingController();
+  final Set<String> _ppaSemanticFeatures = {};
+  final Set<String> _ppaNonfluentFeatures = {};
+  final Set<String> _ppaLogopenicFeatures = {};
+  final _ppaDifferentialCtrl = TextEditingController();
+  final _ppaNotesCtrl        = TextEditingController();
+
+  // 8F — Multilingual crossover (per-language rows + crosscutting)
+  final List<_LangTestEntry> _langTests = [_LangTestEntry()];
+  final Set<String> _crossLinguisticProfile = {};
+  String? _mostPreservedLanguage;
+  String? _codeSwitchingPostInjury;
+  final _culturalAssessNotesCtrl  = TextEditingController();
+  String? _multilingualTxLanguage;
+  final _multilingualNotesCtrl    = TextEditingController();
+
+  // ── Section 9 — Cognitive-Communication Screen ──────────────────
+  String? _attnSustained;
+  String? _attnSelective;
+  String? _attnDivided;
+  final _attnNotesCtrl       = TextEditingController();
+  String? _memImmediate;
+  String? _memRecent;
+  String? _memRemote;
+  String? _memWorking;
+  final Set<String> _memToolsUsed = {};
+  String? _execPlanning;
+  String? _execProblemSolving;
+  String? _execFlexibility;
+  String? _execInhibition;
+  String? _execInitiation;
+  final _execNotesCtrl       = TextEditingController();
+  String? _reasoningAbstract;
+  String? _reasoningCategorization;
+  String? _reasoningSequencing;
+  String? _pragInsight;
+  String? _pragSocialUse;
+  String? _pragAwarenessPartner;
+  final Set<String> _cogScreenToolsUsed = {};
+
+  // ── Section 10 — Differential Diagnosis ─────────────────────────
+  final _ddPrimaryDxCtrl     = TextEditingController();
+  bool _ddOverrideEtiology   = false;
+  String? _ddEtiologyOverride;
+  final List<TextEditingController> _ddRuleOutCtrls = [
+    TextEditingController(),
+    TextEditingController(),
+    TextEditingController(),
+  ];
+  final Set<String> _ddContributingFactors = {};
+  final _ddOtherContribCtrl  = TextEditingController();
+  final _ddSynthesisCtrl     = TextEditingController();
+
+  // ── Section 12 — QoL typed totals ───────────────────────────────
+  // Item-level state in widget memory; only totals persist.
+  final Map<int, int> _coastItems = {};   // 1..20 → 1..5
+  bool _useAiq21 = false;
+  final Map<int, int> _aiq21Items = {};   // 1..21 → 1..5
+  bool _useSaqol = false;
+  final Map<int, int> _saqolItems = {};   // 1..39 → 1..5
+  bool _useCeti = false;
+  final Map<int, int> _cetiItems = {};    // 1..16 → 0..100
+  // Loaded totals for the "Last saved total" hint.
+  int? _coastTotalLoaded;
+  int? _aiq21TotalLoaded;
+  int? _saqolTotalLoaded;
+  int? _cetiTotalLoaded;
+
+  // ── Section 15 — Final Clinical Impression & Plan ───────────────
+  final _ciFinalDxCtrl       = TextEditingController();
+  final _ciIcdCodeCtrl       = TextEditingController();
+  String? _ciSeverity;
+  final _ciSeverityRationaleCtrl = TextEditingController();
+  String? _ciPrognosis;
+  final _ciPrognosticRationaleCtrl = TextEditingController();
+  final Set<String> _ciInterventions = {};
+  final _ciTherapyApproachCtrl   = TextEditingController();
+  final _ciSessionCountCtrl  = TextEditingController();
+  String? _ciFrequency;
+  final _ciSessionDurationCtrl = TextEditingController();
+  final _ciDischargeCriteriaCtrl = TextEditingController();
+  final Set<String> _ciReferrals = {};
+  final _ciReferralNotesCtrl = TextEditingController();
+  final Set<String> _ciCaregiverEdu = {};
+  final _ciFunctionalOutcomesCtrl = TextEditingController();
+
   // Accordion expansion — Section 1 default-expanded.
   String _expanded = 'sec1';
 
@@ -292,6 +430,24 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
       _pictureDescVerbatimCtrl, _totalWordsCtrl, _contentUnitsCtrl,
       _mluCtrl, _errorsPerMinCtrl,
       _convoTopicCtrl, _convoDurationCtrl, _funcCommImpressionCtrl,
+      // 25c — Sections 8, 9, 10, 15 controllers (Section 12 stores
+      // ints only, no controllers).
+      _aaLesionCorrelationCtrl, _aosDdkObsCtrl, _aaNotesCtrl,
+      _tbiGcsAdmitCtrl, _tbiCurrentLevelCtrl, _tbiGoatCtrl,
+      _tbiFimCommCtrl, _tbiNotesCtrl,
+      _rhdMirbiCtrl, _rhdNotesCtrl,
+      _dementiaLanguagePatternCtrl, _dementiaDifferentialCtrl,
+      _dementiaTimelineCtrl, _dementiaNotesCtrl,
+      _ppaTimelineCtrl, _ppaDifferentialCtrl, _ppaNotesCtrl,
+      _culturalAssessNotesCtrl, _multilingualNotesCtrl,
+      _attnNotesCtrl, _execNotesCtrl,
+      _ddPrimaryDxCtrl, _ddOtherContribCtrl, _ddSynthesisCtrl,
+      ..._ddRuleOutCtrls,
+      _ciFinalDxCtrl, _ciIcdCodeCtrl, _ciSeverityRationaleCtrl,
+      _ciPrognosticRationaleCtrl, _ciTherapyApproachCtrl,
+      _ciSessionCountCtrl, _ciSessionDurationCtrl,
+      _ciDischargeCriteriaCtrl, _ciReferralNotesCtrl,
+      _ciFunctionalOutcomesCtrl,
     ];
     for (final c in controllers) {
       c.dispose();
@@ -299,6 +455,9 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
     for (final lang in _languages) {
       lang.nameCtrl.dispose();
       lang.acquisitionAgeCtrl.dispose();
+    }
+    for (final lt in _langTests) {
+      lt.dispose();
     }
     super.dispose();
   }
@@ -318,15 +477,20 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
         // 25b — Section 4 (Naming) loads from ald_naming_measures.
         _service.loadTypedMeasures(
             assessmentId: a.id, tableName: 'ald_naming_measures'),
+        // 25c — Section 12 (QoL) loads from ald_qol_scores.
+        _service.loadTypedMeasures(
+            assessmentId: a.id, tableName: 'ald_qol_scores'),
         _service.compareBaselineToLatest(widget.clientId),
       ]);
       _hydrateWab(results[0] as Map<String, dynamic>);
       _hydrateCognitive(results[1] as Map<String, dynamic>);
       _hydrateNaming(results[2] as Map<String, dynamic>);
+      _hydrateQol(results[3] as Map<String, dynamic>);
+      _seedSubformDefaults(a);
       if (!mounted) return;
       setState(() {
         _assessment = a;
-        _outcome    = results[3] as OutcomeComparison;
+        _outcome    = results[4] as OutcomeComparison;
         _loading    = false;
       });
     } catch (e) {
@@ -539,6 +703,296 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
     _mostEffectiveChannel     = dc['most_effective_channel'] as String?;
     _funcCommImpressionCtrl.text =
         (dc['functional_comm_impression'] as String?) ?? '';
+
+    // 25c — Section 8 etiology subforms each seed from their own jsonb.
+    final subSel = a.etiologySpecificPayload['subforms_selected'];
+    if (subSel is List) {
+      _subformsSelected
+        ..clear()
+        ..addAll(subSel.map((e) => e.toString()));
+    }
+
+    final aa = a.aphasiaApraxiaPayload;
+    _aaLesionCorrelationCtrl.text =
+        (aa['lesion_symptom_correlation'] as String?) ?? '';
+    _aosSuspected           = aa['aos_suspected'] == true;
+    _aosArticulatoryGroping = aa['aos_articulatory_groping'] == true;
+    _aosInconsistentErrors  = aa['aos_inconsistent_errors']  == true;
+    _aosSlowRate            = aa['aos_slow_rate']            == true;
+    _aosDistortedSubst      = aa['aos_distorted_substitutions'] == true;
+    _aosTrialAndError       = aa['aos_trial_and_error']      == true;
+    _aosAwarenessOfErrors   = aa['aos_awareness_of_errors']  == true;
+    _aosDdkObsCtrl.text     = (aa['aos_ddk_observation'] as String?) ?? '';
+    _aosSeverity            = aa['aos_severity'] as String?;
+    _dysarthriaScreen       = aa['dysarthria_screen'] == true;
+    final aaCom = aa['comorbid_features'];
+    if (aaCom is List) {
+      _aaComorbidFeatures
+        ..clear()
+        ..addAll(aaCom.map((e) => e.toString()));
+    }
+    _aaNotesCtrl.text       = (aa['notes'] as String?) ?? '';
+
+    final tb = a.tbiPayload;
+    _tbiGcsAdmitCtrl.text     = tb['gcs_at_admission']?.toString() ?? '';
+    _tbiCurrentLevelCtrl.text = (tb['current_functional_level'] as String?) ?? '';
+    _tbiGoatCtrl.text         = tb['goat_score']?.toString() ?? '';
+    _tbiRanchosLevel          = tb['ranchos_level'] as String?;
+    final tbCog = tb['cognitive_communication_concerns'];
+    if (tbCog is List) {
+      _tbiCogConcerns
+        ..clear()
+        ..addAll(tbCog.map((e) => e.toString()));
+    }
+    final tbBeh = tb['behavioral_concerns'];
+    if (tbBeh is List) {
+      _tbiBehavioralConcerns
+        ..clear()
+        ..addAll(tbBeh.map((e) => e.toString()));
+    }
+    _tbiFimCommCtrl.text  = tb['fim_communication_subscale']?.toString() ?? '';
+    _tbiNotesCtrl.text    = (tb['notes'] as String?) ?? '';
+
+    final rh = a.rhdPayload;
+    _rhdMirbiCtrl.text   = rh['mirbi_total']?.toString() ?? '';
+    final rhPrag = rh['pragmatic_deficits'];
+    if (rhPrag is List) {
+      _rhdPragmaticDeficits
+        ..clear()
+        ..addAll(rhPrag.map((e) => e.toString()));
+    }
+    _rhdNeglect          = rh['visuospatial_neglect'] == true;
+    _rhdAnosognosia      = rh['anosognosia'] == true;
+    _rhdAffectiveComm    = rh['affective_communication'] as String?;
+    _rhdDiscourseProfile = rh['discourse_profile'] as String?;
+    _rhdNotesCtrl.text   = (rh['notes'] as String?) ?? '';
+
+    final dem = a.dementiaPayload;
+    _dementiaSubtype = dem['subtype'] as String?;
+    final demMem = dem['memory_profile'];
+    if (demMem is List) {
+      _dementiaMemoryProfile
+        ..clear()
+        ..addAll(demMem.map((e) => e.toString()));
+    }
+    _dementiaLanguagePatternCtrl.text = (dem['language_decline_pattern'] as String?) ?? '';
+    _dementiaDifferentialCtrl.text    = (dem['differential_reasoning']    as String?) ?? '';
+    _dementiaTimelineCtrl.text        = (dem['caregiver_timeline']        as String?) ?? '';
+    _dementiaNotesCtrl.text           = (dem['notes']                     as String?) ?? '';
+
+    final pp = a.ppaPayload;
+    _ppaSubtype = pp['subtype'] as String?;
+    _ppaTimelineCtrl.text = (pp['onset_progression_timeline'] as String?) ?? '';
+    final ppSem = pp['semantic_features'];
+    if (ppSem is List) {
+      _ppaSemanticFeatures
+        ..clear()
+        ..addAll(ppSem.map((e) => e.toString()));
+    }
+    final ppNon = pp['nonfluent_features'];
+    if (ppNon is List) {
+      _ppaNonfluentFeatures
+        ..clear()
+        ..addAll(ppNon.map((e) => e.toString()));
+    }
+    final ppLog = pp['logopenic_features'];
+    if (ppLog is List) {
+      _ppaLogopenicFeatures
+        ..clear()
+        ..addAll(ppLog.map((e) => e.toString()));
+    }
+    _ppaDifferentialCtrl.text = (pp['differential_from_typical'] as String?) ?? '';
+    _ppaNotesCtrl.text        = (pp['notes'] as String?) ?? '';
+
+    final ml = a.multilingualPayload;
+    final lts = ml['language_tests'];
+    if (lts is List && lts.isNotEmpty) {
+      for (final lt in _langTests) {
+        lt.dispose();
+      }
+      _langTests
+        ..clear()
+        ..addAll(lts.whereType<Map>().map((m) {
+          final mm = Map<String, dynamic>.from(m);
+          return _LangTestEntry(
+            language:        mm['language']        as String?,
+            wabAq:           mm['wab_aq']?.toString() ?? '',
+            convoFluency:    mm['conversational_fluency'] as String?,
+            naming:          mm['naming']          as String?,
+            comprehension:   mm['comprehension']   as String?,
+            reading:         mm['reading']         as String?,
+            writing:         mm['writing']         as String?,
+          );
+        }));
+      if (_langTests.isEmpty) _langTests.add(_LangTestEntry());
+    }
+    final mlCl = ml['cross_linguistic_profile'];
+    if (mlCl is List) {
+      _crossLinguisticProfile
+        ..clear()
+        ..addAll(mlCl.map((e) => e.toString()));
+    }
+    _mostPreservedLanguage     = ml['most_preserved_language'] as String?;
+    _codeSwitchingPostInjury   = ml['code_switching_post_injury'] as String?;
+    _culturalAssessNotesCtrl.text = (ml['cultural_assessment_notes'] as String?) ?? '';
+    _multilingualTxLanguage    = ml['treatment_language_recommendation'] as String?;
+    _multilingualNotesCtrl.text = (ml['notes'] as String?) ?? '';
+
+    // 25c — Section 9 (cog-comm screen) seeds from its jsonb.
+    final cc = a.cognitiveCommScreenPayload;
+    _attnSustained          = cc['attn_sustained']          as String?;
+    _attnSelective          = cc['attn_selective']          as String?;
+    _attnDivided            = cc['attn_divided']            as String?;
+    _attnNotesCtrl.text     = (cc['attn_notes']             as String?) ?? '';
+    _memImmediate           = cc['mem_immediate']           as String?;
+    _memRecent              = cc['mem_recent']              as String?;
+    _memRemote              = cc['mem_remote']              as String?;
+    _memWorking             = cc['mem_working']             as String?;
+    final mt = cc['mem_tools_used'];
+    if (mt is List) {
+      _memToolsUsed
+        ..clear()
+        ..addAll(mt.map((e) => e.toString()));
+    }
+    _execPlanning           = cc['exec_planning']           as String?;
+    _execProblemSolving     = cc['exec_problem_solving']    as String?;
+    _execFlexibility        = cc['exec_flexibility']        as String?;
+    _execInhibition         = cc['exec_inhibition']         as String?;
+    _execInitiation         = cc['exec_initiation']         as String?;
+    _execNotesCtrl.text     = (cc['exec_notes']             as String?) ?? '';
+    _reasoningAbstract      = cc['reasoning_abstract']      as String?;
+    _reasoningCategorization = cc['reasoning_categorization'] as String?;
+    _reasoningSequencing    = cc['reasoning_sequencing']    as String?;
+    _pragInsight            = cc['prag_insight']            as String?;
+    _pragSocialUse          = cc['prag_social_use']         as String?;
+    _pragAwarenessPartner   = cc['prag_awareness_partner']  as String?;
+    final ct = cc['cog_screen_tools'];
+    if (ct is List) {
+      _cogScreenToolsUsed
+        ..clear()
+        ..addAll(ct.map((e) => e.toString()));
+    }
+
+    // 25c — Section 10 (differential dx) seeds from its jsonb.
+    final dd = a.differentialDiagnosisPayload;
+    _ddPrimaryDxCtrl.text = (dd['primary_diagnosis'] as String?) ?? '';
+    _ddOverrideEtiology   = dd['override_etiology'] == true;
+    _ddEtiologyOverride   = dd['etiology_override'] as String?;
+    final ros = dd['rule_outs'];
+    if (ros is List && ros.isNotEmpty) {
+      for (final c in _ddRuleOutCtrls) {
+        c.dispose();
+      }
+      _ddRuleOutCtrls
+        ..clear()
+        ..addAll(ros.map((e) => TextEditingController(text: e?.toString() ?? '')));
+      while (_ddRuleOutCtrls.length < 3) {
+        _ddRuleOutCtrls.add(TextEditingController());
+      }
+    }
+    final ddFactors = dd['contributing_factors'];
+    if (ddFactors is List) {
+      _ddContributingFactors
+        ..clear()
+        ..addAll(ddFactors.map((e) => e.toString()));
+    }
+    _ddOtherContribCtrl.text = (dd['other_contributing'] as String?) ?? '';
+    _ddSynthesisCtrl.text    = (dd['differential_reasoning'] as String?) ?? '';
+
+    // 25c — Section 15 (clinical impression) seeds from its jsonb.
+    final ci = a.clinicalImpressionPayload;
+    _ciFinalDxCtrl.text       = (ci['final_diagnosis'] as String?) ?? '';
+    _ciIcdCodeCtrl.text       = (ci['icd_code']        as String?) ?? '';
+    _ciSeverity               = ci['severity']         as String?;
+    _ciSeverityRationaleCtrl.text = (ci['severity_rationale'] as String?) ?? '';
+    _ciPrognosis              = ci['prognosis']        as String?;
+    _ciPrognosticRationaleCtrl.text = (ci['prognostic_rationale'] as String?) ?? '';
+    final ciInt = ci['recommended_interventions'];
+    if (ciInt is List) {
+      _ciInterventions
+        ..clear()
+        ..addAll(ciInt.map((e) => e.toString()));
+    }
+    _ciTherapyApproachCtrl.text = (ci['therapy_approach_details'] as String?) ?? '';
+    _ciSessionCountCtrl.text  = ci['estimated_session_count']?.toString() ?? '';
+    _ciFrequency              = ci['frequency']         as String?;
+    _ciSessionDurationCtrl.text = ci['session_duration_min']?.toString() ?? '';
+    _ciDischargeCriteriaCtrl.text = (ci['discharge_criteria'] as String?) ?? '';
+    final ciRef = ci['referrals'];
+    if (ciRef is List) {
+      _ciReferrals
+        ..clear()
+        ..addAll(ciRef.map((e) => e.toString()));
+    }
+    _ciReferralNotesCtrl.text = (ci['referral_notes'] as String?) ?? '';
+    final ciEdu = ci['caregiver_education'];
+    if (ciEdu is List) {
+      _ciCaregiverEdu
+        ..clear()
+        ..addAll(ciEdu.map((e) => e.toString()));
+    }
+    _ciFunctionalOutcomesCtrl.text =
+        (ci['functional_outcome_targets'] as String?) ?? '';
+  }
+
+  /// Seeds the Section 8 chip selection on first hydrate from etiology
+  /// + lesion location + WAB classification, so the SLP doesn't have
+  /// to manually pick a subform that's obviously implied. SLP-driven
+  /// changes after that point persist through `subforms_selected` in
+  /// etiology_specific_payload.
+  void _seedSubformDefaults(AldAssessment a) {
+    if (_subformsSelected.isNotEmpty) return; // already saved a pick
+    final etio = a.etiologyCategory ?? _etiology;
+    final lesion = a.lesionLocation;
+    if (etio != null) {
+      if (etio.startsWith('Stroke')) {
+        _subformsSelected.add('aphasia_apraxia');
+      }
+      if (etio.startsWith('TBI')) {
+        _subformsSelected.add('tbi');
+      }
+      if (etio.startsWith('Dementia')) {
+        _subformsSelected.add('dementia');
+      }
+      if (etio.startsWith('PPA')) {
+        _subformsSelected.add('ppa');
+      }
+    }
+    if (lesion.contains('R hemisphere')) {
+      _subformsSelected.add('rhd');
+    }
+    if (_aphasiaTypeOverride != null && _aphasiaTypeOverride != 'Not aphasic') {
+      _subformsSelected.add('aphasia_apraxia');
+    }
+    // Multilingual is always available — auto-add when ≥ 2 languages
+    // were captured in Section 1 so the SLP doesn't miss the prompt.
+    if (_languages.where((e) => e.nameCtrl.text.trim().isNotEmpty).length >= 2) {
+      _subformsSelected.add('multilingual');
+    }
+  }
+
+  /// Seeds Section 12 from a previously saved ald_qol_scores row.
+  /// Per-item answers aren't persisted (only totals); per-item state
+  /// resets on hard refresh, totals reload from the typed columns.
+  void _hydrateQol(Map<String, dynamic> row) {
+    if (row.isEmpty) return;
+    final c = row['coast_total'];
+    if (c is num) _coastTotalLoaded = c.toInt();
+    final a = row['aiq21_total'];
+    if (a is num) {
+      _aiq21TotalLoaded = a.toInt();
+      _useAiq21 = true;
+    }
+    final s = row['saqol39_total'];
+    if (s is num) {
+      _saqolTotalLoaded = s.toInt();
+      _useSaqol = true;
+    }
+    final ce = row['ceti_total'];
+    if (ce is num) {
+      _cetiTotalLoaded = ce.toInt();
+      _useCeti = true;
+    }
   }
 
   void _hydrateNaming(Map<String, dynamic> row) {
@@ -922,6 +1376,241 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
       (_parseInt(_flACtrl.text) ?? 0) +
       (_parseInt(_flSCtrl.text) ?? 0);
 
+  // 25c — Section 8 saves split into the parent metadata (chip
+  // selection) and one save per subform. Each subform writes its full
+  // state on every blur within that subform, so toggling chips never
+  // drops sibling data.
+  Future<void> _saveSubformSelection() async {
+    if (_assessment == null) return;
+    try {
+      await _service.savePayloadSection(
+        assessmentId: _assessment!.id,
+        columnName:   'etiology_specific_payload',
+        payload:      {'subforms_selected': _subformsSelected.toList()},
+      );
+    } catch (e) {
+      _toast('Could not save subform selection: $e');
+    }
+  }
+
+  Future<void> _saveAphasiaApraxia() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'lesion_symptom_correlation':  _aaLesionCorrelationCtrl.text.trim(),
+      'aos_suspected':               _aosSuspected,
+      'aos_articulatory_groping':    _aosArticulatoryGroping,
+      'aos_inconsistent_errors':     _aosInconsistentErrors,
+      'aos_slow_rate':               _aosSlowRate,
+      'aos_distorted_substitutions': _aosDistortedSubst,
+      'aos_trial_and_error':         _aosTrialAndError,
+      'aos_awareness_of_errors':     _aosAwarenessOfErrors,
+      'aos_ddk_observation':         _aosDdkObsCtrl.text.trim(),
+      'aos_severity':                _aosSeverity,
+      'dysarthria_screen':           _dysarthriaScreen,
+      'comorbid_features':           _aaComorbidFeatures.toList(),
+      'notes':                       _aaNotesCtrl.text.trim(),
+    };
+    _savePayload('aphasia_apraxia_payload', payload, 'Aphasia + Apraxia');
+  }
+
+  Future<void> _saveTbi() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'gcs_at_admission':                  _parseInt(_tbiGcsAdmitCtrl.text),
+      'current_functional_level':          _tbiCurrentLevelCtrl.text.trim(),
+      'goat_score':                        _parseDecimal(_tbiGoatCtrl.text),
+      'ranchos_level':                     _tbiRanchosLevel,
+      'cognitive_communication_concerns':  _tbiCogConcerns.toList(),
+      'behavioral_concerns':               _tbiBehavioralConcerns.toList(),
+      'fim_communication_subscale':        _parseInt(_tbiFimCommCtrl.text),
+      'notes':                             _tbiNotesCtrl.text.trim(),
+    };
+    _savePayload('tbi_payload', payload, 'TBI');
+  }
+
+  Future<void> _saveRhd() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'mirbi_total':              _parseDecimal(_rhdMirbiCtrl.text),
+      'pragmatic_deficits':       _rhdPragmaticDeficits.toList(),
+      'visuospatial_neglect':     _rhdNeglect,
+      'anosognosia':              _rhdAnosognosia,
+      'affective_communication':  _rhdAffectiveComm,
+      'discourse_profile':        _rhdDiscourseProfile,
+      'notes':                    _rhdNotesCtrl.text.trim(),
+    };
+    _savePayload('rhd_payload', payload, 'RHD');
+  }
+
+  Future<void> _saveDementia() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'subtype':                   _dementiaSubtype,
+      'memory_profile':            _dementiaMemoryProfile.toList(),
+      'language_decline_pattern':  _dementiaLanguagePatternCtrl.text.trim(),
+      'differential_reasoning':    _dementiaDifferentialCtrl.text.trim(),
+      'caregiver_timeline':        _dementiaTimelineCtrl.text.trim(),
+      'notes':                     _dementiaNotesCtrl.text.trim(),
+    };
+    _savePayload('dementia_payload', payload, 'Dementia / MCI');
+  }
+
+  Future<void> _savePpa() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'subtype':                       _ppaSubtype,
+      'onset_progression_timeline':    _ppaTimelineCtrl.text.trim(),
+      'semantic_features':             _ppaSemanticFeatures.toList(),
+      'nonfluent_features':            _ppaNonfluentFeatures.toList(),
+      'logopenic_features':            _ppaLogopenicFeatures.toList(),
+      'differential_from_typical':     _ppaDifferentialCtrl.text.trim(),
+      'notes':                         _ppaNotesCtrl.text.trim(),
+    };
+    _savePayload('ppa_payload', payload, 'PPA');
+  }
+
+  Future<void> _saveMultilingual() async {
+    if (_assessment == null) return;
+    final tests = _langTests.map((t) => {
+          'language':                t.language,
+          'wab_aq':                  _parseDecimal(t.wabAqCtrl.text),
+          'conversational_fluency':  t.convoFluency,
+          'naming':                  t.naming,
+          'comprehension':           t.comprehension,
+          'reading':                 t.reading,
+          'writing':                 t.writing,
+        }).where((m) => m['language'] != null).toList();
+    final payload = <String, dynamic>{
+      'language_tests':                    tests,
+      'cross_linguistic_profile':          _crossLinguisticProfile.toList(),
+      'most_preserved_language':           _mostPreservedLanguage,
+      'code_switching_post_injury':        _codeSwitchingPostInjury,
+      'cultural_assessment_notes':         _culturalAssessNotesCtrl.text.trim(),
+      'treatment_language_recommendation': _multilingualTxLanguage,
+      'notes':                             _multilingualNotesCtrl.text.trim(),
+    };
+    _savePayload('multilingual_payload', payload, 'Multilingual');
+  }
+
+  Future<void> _saveCogComm() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'attn_sustained':           _attnSustained,
+      'attn_selective':           _attnSelective,
+      'attn_divided':             _attnDivided,
+      'attn_notes':               _attnNotesCtrl.text.trim(),
+      'mem_immediate':            _memImmediate,
+      'mem_recent':               _memRecent,
+      'mem_remote':               _memRemote,
+      'mem_working':              _memWorking,
+      'mem_tools_used':           _memToolsUsed.toList(),
+      'exec_planning':            _execPlanning,
+      'exec_problem_solving':     _execProblemSolving,
+      'exec_flexibility':         _execFlexibility,
+      'exec_inhibition':          _execInhibition,
+      'exec_initiation':          _execInitiation,
+      'exec_notes':               _execNotesCtrl.text.trim(),
+      'reasoning_abstract':       _reasoningAbstract,
+      'reasoning_categorization': _reasoningCategorization,
+      'reasoning_sequencing':     _reasoningSequencing,
+      'prag_insight':             _pragInsight,
+      'prag_social_use':          _pragSocialUse,
+      'prag_awareness_partner':   _pragAwarenessPartner,
+      'cog_screen_tools':         _cogScreenToolsUsed.toList(),
+    };
+    _savePayload('cognitive_comm_screen_payload', payload, 'Cognitive-Communication');
+  }
+
+  Future<void> _saveDifferentialDx() async {
+    if (_assessment == null) return;
+    final ruleOuts = _ddRuleOutCtrls
+        .map((c) => c.text.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final payload = <String, dynamic>{
+      'primary_diagnosis':       _ddPrimaryDxCtrl.text.trim(),
+      'override_etiology':       _ddOverrideEtiology,
+      'etiology_override':       _ddEtiologyOverride,
+      'rule_outs':               ruleOuts,
+      'contributing_factors':    _ddContributingFactors.toList(),
+      'other_contributing':      _ddOtherContribCtrl.text.trim(),
+      'differential_reasoning':  _ddSynthesisCtrl.text.trim(),
+    };
+    _savePayload('differential_diagnosis_payload', payload, 'Differential Dx');
+  }
+
+  Future<void> _saveQol() async {
+    if (_assessment == null) return;
+    final coast = _coastItems.isEmpty
+        ? null
+        : _coastItems.values.fold<int>(0, (a, b) => a + b);
+    final aiq = _useAiq21
+        ? _aiq21Items.values.fold<int>(0, (a, b) => a + b)
+        : null;
+    final saq = _useSaqol
+        ? _saqolItems.values.fold<int>(0, (a, b) => a + b)
+        : null;
+    final ceti = _useCeti
+        ? _cetiItems.values.fold<int>(0, (a, b) => a + b)
+        : null;
+    final data = <String, dynamic>{
+      'coast_total':   ?coast,
+      'aiq21_total':   ?aiq,
+      'saqol39_total': ?saq,
+      'ceti_total':    ?ceti,
+    };
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ald_qol_scores',
+        data:         data,
+      );
+      setState(() {
+        _coastTotalLoaded = coast;
+        _aiq21TotalLoaded = aiq;
+        _saqolTotalLoaded = saq;
+        _cetiTotalLoaded  = ceti;
+      });
+    } catch (e) {
+      _toast('Could not save QoL scores: $e');
+    }
+  }
+
+  Future<void> _saveClinicalImpression() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'final_diagnosis':            _ciFinalDxCtrl.text.trim(),
+      'icd_code':                   _ciIcdCodeCtrl.text.trim(),
+      'severity':                   _ciSeverity,
+      'severity_rationale':         _ciSeverityRationaleCtrl.text.trim(),
+      'prognosis':                  _ciPrognosis,
+      'prognostic_rationale':       _ciPrognosticRationaleCtrl.text.trim(),
+      'recommended_interventions':  _ciInterventions.toList(),
+      'therapy_approach_details':   _ciTherapyApproachCtrl.text.trim(),
+      'estimated_session_count':    _parseInt(_ciSessionCountCtrl.text),
+      'frequency':                  _ciFrequency,
+      'session_duration_min':       _parseInt(_ciSessionDurationCtrl.text),
+      'discharge_criteria':         _ciDischargeCriteriaCtrl.text.trim(),
+      'referrals':                  _ciReferrals.toList(),
+      'referral_notes':             _ciReferralNotesCtrl.text.trim(),
+      'caregiver_education':        _ciCaregiverEdu.toList(),
+      'functional_outcome_targets': _ciFunctionalOutcomesCtrl.text.trim(),
+    };
+    _savePayload('clinical_impression_payload', payload, 'Clinical Impression');
+  }
+
+  /// Shared helper so the seven payload-section saves stay one-liners.
+  void _savePayload(
+      String columnName, Map<String, dynamic> payload, String label) {
+    _service
+        .savePayloadSection(
+          assessmentId: _assessment!.id,
+          columnName:   columnName,
+          payload:      payload,
+        )
+        .catchError((e) => _toast('Could not save $label: $e'));
+  }
+
   Future<void> _addFollowUp() async {
     if (_assessment == null) return;
     final baselineId = _assessment!.isBaseline
@@ -1120,25 +1809,29 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
             tagline: 'Picture description, conversation, channels, repair strategies.',
             child: _section7Body()),
         const SizedBox(height: 10),
-        _stub(8,  'Etiology-Specific Subforms',
-            '6 conditional subforms based on etiology — aphasia + apraxia, TBI, RHD, dementia, PPA, multilingual.',
-            '4.0.7.25c'),
+        _section(id: 'sec8',  number: 8,  title: 'Etiology-Specific Subforms',
+            tagline: 'Aphasia + Apraxia, TBI, RHD, Dementia, PPA, Multilingual — auto-suggested from Section 1.',
+            child: _section8Body()),
         const SizedBox(height: 10),
-        _stub(9,  'Cognitive-Communication Screen',
-            'Executive function, social cognition, pragmatic deficits.', '4.0.7.25c'),
+        _section(id: 'sec9',  number: 9,  title: 'Cognitive-Communication Screen',
+            tagline: 'Attention, memory, executive function, pragmatic awareness.',
+            child: _section9Body()),
         const SizedBox(height: 10),
-        _stub(10, 'Differential Diagnosis',
-            'Aphasia type, working hypothesis, rule-outs, contributors.', '4.0.7.25c'),
+        _section(id: 'sec10', number: 10, title: 'Differential Diagnosis',
+            tagline: 'Working hypothesis, etiology, rule-outs, contributors, synthesis.',
+            child: _section10Body()),
         const SizedBox(height: 10),
         _section(id: 'sec11', number: 11, title: 'Outcome Tracking',
             tagline: 'Baseline vs most recent follow-up across all measures.',
             child: _section11Body()),
         const SizedBox(height: 10),
-        _stub(12, 'Functional Communication & QoL',
-            'COAST, AIQ-21, SAQOL-39, CETI self-report.', '4.0.7.25c'),
+        _section(id: 'sec12', number: 12, title: 'Functional Communication & QoL',
+            tagline: 'COAST, AIQ-21, SAQOL-39, CETI typed totals.',
+            child: _section12Body()),
         const SizedBox(height: 10),
-        _stub(15, 'Final Clinical Impression & Plan',
-            'Diagnosis, severity, plan, referrals, attestation.', '4.0.7.25c'),
+        _section(id: 'sec15', number: 15, title: 'Final Clinical Impression & Plan',
+            tagline: 'Diagnosis, severity, prognosis, plan, referrals, caregiver education.',
+            child: _section15Body()),
       ],
     );
   }
@@ -1205,6 +1898,7 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
     );
   }
 
+  // ignore: unused_element
   Widget _stub(int number, String title, String tagline, String comingIn) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -2499,6 +3193,1235 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
     );
   }
 
+  // ── Section 8 body — Etiology-Specific Subforms ───────────────────
+  // Multi-select chip set drives which subform bodies render. All
+  // subform state stays in widget memory and persists to its own
+  // jsonb column on save, so toggling chips on/off never drops data.
+  Widget _section8Body() {
+    String chipKey(String label) => switch (label) {
+          'Aphasia + Apraxia'        => 'aphasia_apraxia',
+          'TBI'                      => 'tbi',
+          'RHD'                      => 'rhd',
+          'Dementia / MCI'           => 'dementia',
+          'PPA'                      => 'ppa',
+          'Multilingual crossover'   => 'multilingual',
+          _                          => label.toLowerCase(),
+        };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Subform selector'),
+        Wrap(
+          spacing: 6, runSpacing: 6,
+          children: [
+            for (final label in const [
+              'Aphasia + Apraxia', 'TBI', 'RHD',
+              'Dementia / MCI', 'PPA', 'Multilingual crossover',
+            ])
+              _yesNoChip(label, _subformsSelected.contains(chipKey(label)),
+                  () {
+                final k = chipKey(label);
+                setState(() {
+                  if (_subformsSelected.contains(k)) {
+                    _subformsSelected.remove(k);
+                  } else {
+                    _subformsSelected.add(k);
+                  }
+                });
+                _saveSubformSelection();
+              }),
+          ],
+        ),
+        if (_subformsSelected.isEmpty)
+          _ghostNote(
+              'Pick one or more subforms based on the etiology you logged in Section 1.'),
+        if (_subformsSelected.contains('aphasia_apraxia')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8A · Aphasia + Apraxia of Speech'),
+          _section8aBody(),
+        ],
+        if (_subformsSelected.contains('tbi')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8B · Traumatic Brain Injury'),
+          _section8bBody(),
+        ],
+        if (_subformsSelected.contains('rhd')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8C · Right Hemisphere Damage'),
+          _section8cBody(),
+        ],
+        if (_subformsSelected.contains('dementia')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8D · Dementia / MCI'),
+          _section8dBody(),
+        ],
+        if (_subformsSelected.contains('ppa')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8E · Primary Progressive Aphasia'),
+          _section8eBody(),
+        ],
+        if (_subformsSelected.contains('multilingual')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8F · Multilingual Crossover'),
+          _section8fBody(),
+        ],
+      ],
+    );
+  }
+
+  Widget _section8aBody() {
+    final wabType = _aphasiaTypeOverride ?? _autoAphasiaType() ?? '—';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: [
+              Text('Aphasia type (auto from WAB): ',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 12, color: _inkGhost)),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _tealSoft.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _teal.withValues(alpha: 0.4)),
+                ),
+                child: Text(wabType,
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _teal,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+        ),
+        _textField('Lesion-symptom correlation notes',
+            _aaLesionCorrelationCtrl, multi: true,
+            onSave: _saveAphasiaApraxia),
+
+        const SizedBox(height: 14),
+        _groupLabel('Apraxia of Speech screen'),
+        _yesNo('AOS suspected?', _aosSuspected, (v) {
+          setState(() => _aosSuspected = v);
+          _saveAphasiaApraxia();
+        }),
+        if (_aosSuspected) ...[
+          _yesNo('Articulatory groping', _aosArticulatoryGroping, (v) {
+            setState(() => _aosArticulatoryGroping = v);
+            _saveAphasiaApraxia();
+          }),
+          _yesNo('Inconsistent errors', _aosInconsistentErrors, (v) {
+            setState(() => _aosInconsistentErrors = v);
+            _saveAphasiaApraxia();
+          }),
+          _yesNo('Slow articulation rate', _aosSlowRate, (v) {
+            setState(() => _aosSlowRate = v);
+            _saveAphasiaApraxia();
+          }),
+          _yesNo('Distorted substitutions', _aosDistortedSubst, (v) {
+            setState(() => _aosDistortedSubst = v);
+            _saveAphasiaApraxia();
+          }),
+          _yesNo('Trial-and-error articulatory attempts',
+              _aosTrialAndError, (v) {
+            setState(() => _aosTrialAndError = v);
+            _saveAphasiaApraxia();
+          }),
+          _yesNo('Awareness of errors', _aosAwarenessOfErrors, (v) {
+            setState(() => _aosAwarenessOfErrors = v);
+            _saveAphasiaApraxia();
+          }),
+          _textField('Diadochokinetic rate observation',
+              _aosDdkObsCtrl, multi: true,
+              onSave: _saveAphasiaApraxia),
+          _singleChips('AOS severity',
+              const ['Mild', 'Moderate', 'Severe'],
+              _aosSeverity, (v) {
+            setState(() => _aosSeverity = v);
+            _saveAphasiaApraxia();
+          }),
+        ],
+        const SizedBox(height: 8),
+        _yesNo('Dysarthria screen', _dysarthriaScreen, (v) {
+          setState(() => _dysarthriaScreen = v);
+          _saveAphasiaApraxia();
+        }),
+        _multiChips('Comorbid features observed', const [
+          'Right hemiplegia', 'Hemianopsia', 'Aphemia',
+          'Buccofacial apraxia', 'Limb apraxia', 'None',
+        ], _aaComorbidFeatures, (v, sel) {
+          setState(() {
+            if (sel) {
+              _aaComorbidFeatures.add(v);
+            } else {
+              _aaComorbidFeatures.remove(v);
+            }
+          });
+          _saveAphasiaApraxia();
+        }),
+        _textField('Aphasia + Apraxia notes', _aaNotesCtrl,
+            multi: true, onSave: _saveAphasiaApraxia),
+      ],
+    );
+  }
+
+  Widget _section8bBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _numField('Glasgow Coma Scale at presentation',
+            _tbiGcsAdmitCtrl, unit: '/15', onSave: _saveTbi),
+        _textField('Current functional level / GCS notes',
+            _tbiCurrentLevelCtrl, multi: true, onSave: _saveTbi),
+        _numField('Galveston Orientation & Amnesia Test (GOAT)',
+            _tbiGoatCtrl, unit: '/100', onSave: _saveTbi),
+        _singleChips('Ranchos Los Amigos Level', const [
+          'I (No response)', 'II (Generalized response)',
+          'III (Localized response)', 'IV (Confused-agitated)',
+          'V (Confused-inappropriate)', 'VI (Confused-appropriate)',
+          'VII (Automatic-appropriate)', 'VIII (Purposeful-appropriate)',
+        ], _tbiRanchosLevel, (v) {
+          setState(() => _tbiRanchosLevel = v);
+          _saveTbi();
+        }),
+        _multiChips('Cognitive-communication concerns', const [
+          'Attention', 'Memory', 'Executive function',
+          'Pragmatics', 'Awareness', 'Word retrieval',
+          'Reasoning', 'Information processing speed',
+        ], _tbiCogConcerns, (v, sel) {
+          setState(() {
+            if (sel) {
+              _tbiCogConcerns.add(v);
+            } else {
+              _tbiCogConcerns.remove(v);
+            }
+          });
+          _saveTbi();
+        }),
+        _multiChips('Behavioral concerns', const [
+          'Disinhibition', 'Apathy', 'Agitation', 'Confabulation',
+          'Perseveration', 'Impulsivity',
+        ], _tbiBehavioralConcerns, (v, sel) {
+          setState(() {
+            if (sel) {
+              _tbiBehavioralConcerns.add(v);
+            } else {
+              _tbiBehavioralConcerns.remove(v);
+            }
+          });
+          _saveTbi();
+        }),
+        _numField('FIM communication subscale', _tbiFimCommCtrl,
+            unit: '/7', onSave: _saveTbi),
+        _textField('TBI notes', _tbiNotesCtrl,
+            multi: true, onSave: _saveTbi),
+      ],
+    );
+  }
+
+  Widget _section8cBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _numField('MIRBI total', _rhdMirbiCtrl,
+            unit: 'raw', onSave: _saveRhd),
+        _multiChips('Pragmatic deficits', const [
+          'Prosody comprehension', 'Prosody production',
+          'Inferencing', 'Sarcasm/humor', 'Topic shifting',
+          'Verbose output', 'Tangential speech',
+          'Pragmatic awareness reduced',
+        ], _rhdPragmaticDeficits, (v, sel) {
+          setState(() {
+            if (sel) {
+              _rhdPragmaticDeficits.add(v);
+            } else {
+              _rhdPragmaticDeficits.remove(v);
+            }
+          });
+          _saveRhd();
+        }),
+        _yesNo('Visuospatial neglect', _rhdNeglect, (v) {
+          setState(() => _rhdNeglect = v);
+          _saveRhd();
+        }),
+        _yesNo('Anosognosia (lack of awareness of deficits)',
+            _rhdAnosognosia, (v) {
+          setState(() => _rhdAnosognosia = v);
+          _saveRhd();
+        }),
+        _singleChips('Affective communication',
+            const ['Aprosodic', 'Hyperprosodic', 'Within normal limits'],
+            _rhdAffectiveComm, (v) {
+          setState(() => _rhdAffectiveComm = v);
+          _saveRhd();
+        }),
+        _singleChips('Discourse profile', const [
+          'Excessive detail', 'Tangential', 'Reduced informativeness',
+          'Disorganized', 'Within normal limits',
+        ], _rhdDiscourseProfile, (v) {
+          setState(() => _rhdDiscourseProfile = v);
+          _saveRhd();
+        }),
+        _textField('RHD notes', _rhdNotesCtrl,
+            multi: true, onSave: _saveRhd),
+      ],
+    );
+  }
+
+  Widget _section8dBody() {
+    final mocaT = _mocaTotal();
+    final mmseT = _mmseTotal();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _singleChips('Dementia subtype', const [
+          "Alzheimer's", 'Vascular', 'Lewy body', 'FTD',
+          'Mixed', 'Unknown', 'MCI (not yet dementia)',
+        ], _dementiaSubtype, (v) {
+          setState(() => _dementiaSubtype = v);
+          _saveDementia();
+        }),
+        _ghostNote(
+            'MoCA total: $mocaT / 30  ·  MMSE total: $mmseT / 30  (from Section 3)'),
+        _multiChips('Memory profile', const [
+          'Episodic preserved', 'Episodic impaired',
+          'Semantic preserved', 'Semantic impaired',
+          'Working memory preserved', 'Working memory impaired',
+        ], _dementiaMemoryProfile, (v, sel) {
+          setState(() {
+            if (sel) {
+              _dementiaMemoryProfile.add(v);
+            } else {
+              _dementiaMemoryProfile.remove(v);
+            }
+          });
+          _saveDementia();
+        }),
+        _textField('Language profile decline pattern',
+            _dementiaLanguagePatternCtrl, multi: true,
+            onSave: _saveDementia),
+        _textField('Differential reasoning (AD vs vascular vs Lewy vs FTD)',
+            _dementiaDifferentialCtrl, multi: true,
+            onSave: _saveDementia),
+        _textField('Caregiver-reported timeline of decline',
+            _dementiaTimelineCtrl, multi: true,
+            onSave: _saveDementia),
+        _textField('Dementia notes', _dementiaNotesCtrl,
+            multi: true, onSave: _saveDementia),
+      ],
+    );
+  }
+
+  Widget _section8eBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _singleChips('PPA subtype', const [
+          'Semantic variant',
+          'Nonfluent (agrammatic) variant',
+          'Logopenic variant',
+        ], _ppaSubtype, (v) {
+          setState(() => _ppaSubtype = v);
+          _savePpa();
+        }),
+        _textField('Onset and progression timeline',
+            _ppaTimelineCtrl, multi: true, onSave: _savePpa),
+        if (_ppaSubtype == 'Semantic variant')
+          _multiChips('Semantic variant features', const [
+            'Loss of single-word meaning', 'Surface dyslexia',
+            'Reduced confrontation naming',
+            'Impaired single-word comprehension',
+            'Object recognition deficits',
+            'Spared repetition',
+          ], _ppaSemanticFeatures, (v, sel) {
+            setState(() {
+              if (sel) {
+                _ppaSemanticFeatures.add(v);
+              } else {
+                _ppaSemanticFeatures.remove(v);
+              }
+            });
+            _savePpa();
+          }),
+        if (_ppaSubtype == 'Nonfluent (agrammatic) variant')
+          _multiChips('Nonfluent variant features', const [
+            'Effortful speech', 'Apraxia of speech', 'Agrammatism',
+            'Phonemic paraphasias',
+            'Spared comprehension of single words',
+          ], _ppaNonfluentFeatures, (v, sel) {
+            setState(() {
+              if (sel) {
+                _ppaNonfluentFeatures.add(v);
+              } else {
+                _ppaNonfluentFeatures.remove(v);
+              }
+            });
+            _savePpa();
+          }),
+        if (_ppaSubtype == 'Logopenic variant')
+          _multiChips('Logopenic variant features', const [
+            'Impaired single-word retrieval in spontaneous speech',
+            'Impaired sentence repetition',
+            'Phonological errors',
+            'Spared single-word comprehension',
+            'Spared object knowledge',
+          ], _ppaLogopenicFeatures, (v, sel) {
+            setState(() {
+              if (sel) {
+                _ppaLogopenicFeatures.add(v);
+              } else {
+                _ppaLogopenicFeatures.remove(v);
+              }
+            });
+            _savePpa();
+          }),
+        _textField('Differential from typical aphasia',
+            _ppaDifferentialCtrl, multi: true, onSave: _savePpa),
+        _textField('PPA notes', _ppaNotesCtrl,
+            multi: true, onSave: _savePpa),
+      ],
+    );
+  }
+
+  Widget _section8fBody() {
+    final testedLanguageNames = _langTests
+        .map((t) => t.language ?? '')
+        .where((s) => s.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('Languages tested'),
+        for (var i = 0; i < _langTests.length; i++) _langTestRow(i),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: OutlinedButton.icon(
+            onPressed: () {
+              setState(() => _langTests.add(_LangTestEntry()));
+            },
+            icon: const Icon(Icons.add_rounded, size: 14),
+            label: Text('Add language',
+                style: GoogleFonts.dmSans(fontSize: 12, color: _teal)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: _teal.withValues(alpha: 0.45)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 6),
+            ),
+          ),
+        ),
+        _multiChips('Cross-linguistic profile', const [
+          'Parallel impairment (similar across languages)',
+          'Differential aphasia (one language more impaired)',
+          'Selective recovery (one language recovered more)',
+          'Pathological switching',
+          'Translation difficulties',
+          'Language mixing increased post-injury',
+        ], _crossLinguisticProfile, (v, sel) {
+          setState(() {
+            if (sel) {
+              _crossLinguisticProfile.add(v);
+            } else {
+              _crossLinguisticProfile.remove(v);
+            }
+          });
+          _saveMultilingual();
+        }),
+        _singleChips('Most preserved language for therapy',
+            testedLanguageNames, _mostPreservedLanguage, (v) {
+          setState(() => _mostPreservedLanguage = v);
+          _saveMultilingual();
+        }),
+        _singleChips('Code-switching post-injury', const [
+          'Reduced from premorbid', 'Similar to premorbid',
+          'Increased / pathological',
+        ], _codeSwitchingPostInjury, (v) {
+          setState(() => _codeSwitchingPostInjury = v);
+          _saveMultilingual();
+        }),
+        _textField(
+          'Culturally-relevant assessment notes',
+          _culturalAssessNotesCtrl, multi: true,
+          hint: 'kinship terms, religious vocabulary, regional idioms',
+          onSave: _saveMultilingual,
+        ),
+        _singleChips('Treatment language recommendation',
+            testedLanguageNames, _multilingualTxLanguage, (v) {
+          setState(() => _multilingualTxLanguage = v);
+          _saveMultilingual();
+        }),
+        _textField('Multilingual notes', _multilingualNotesCtrl,
+            multi: true, onSave: _saveMultilingual),
+      ],
+    );
+  }
+
+  Widget _langTestRow(int index) {
+    final lt = _langTests[index];
+    final premorbidLanguages = _languages
+        .map((e) => e.nameCtrl.text.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: _tealSoft.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('Language test #${index + 1}',
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _ink,
+                        fontWeight: FontWeight.w600)),
+              ),
+              if (_langTests.length > 1)
+                IconButton(
+                  onPressed: () {
+                    final removed = _langTests.removeAt(index);
+                    removed.dispose();
+                    setState(() {});
+                    _saveMultilingual();
+                  },
+                  icon: const Icon(Icons.close_rounded,
+                      size: 16, color: _inkGhost),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                      minWidth: 24, minHeight: 24),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _singleChips(
+            'Language',
+            premorbidLanguages.isEmpty
+                ? const ['L1', 'L2', 'L3']
+                : premorbidLanguages,
+            lt.language,
+            (v) {
+              setState(() => lt.language = v);
+              _saveMultilingual();
+            },
+          ),
+          _numField('WAB AQ in this language', lt.wabAqCtrl,
+              unit: '/100', onSave: _saveMultilingual),
+          _singleChips('Conversational fluency',
+              _kSeverityScale, lt.convoFluency, (v) {
+            setState(() => lt.convoFluency = v);
+            _saveMultilingual();
+          }),
+          _singleChips('Naming', _kSeverityScale,
+              lt.naming, (v) {
+            setState(() => lt.naming = v);
+            _saveMultilingual();
+          }),
+          _singleChips('Comprehension', _kSeverityScale,
+              lt.comprehension, (v) {
+            setState(() => lt.comprehension = v);
+            _saveMultilingual();
+          }),
+          _singleChips('Reading', _kSeverityScale,
+              lt.reading, (v) {
+            setState(() => lt.reading = v);
+            _saveMultilingual();
+          }),
+          _singleChips('Writing', _kSeverityScale,
+              lt.writing, (v) {
+            setState(() => lt.writing = v);
+            _saveMultilingual();
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ── Section 9 body — Cognitive-Communication Screen ───────────────
+  Widget _section9Body() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Attention'),
+        _singleChips('Sustained attention', _kFunctionScale,
+            _attnSustained, (v) {
+          setState(() => _attnSustained = v);
+          _saveCogComm();
+        }),
+        _singleChips('Selective attention', _kFunctionScale,
+            _attnSelective, (v) {
+          setState(() => _attnSelective = v);
+          _saveCogComm();
+        }),
+        _singleChips('Divided attention', _kFunctionScale,
+            _attnDivided, (v) {
+          setState(() => _attnDivided = v);
+          _saveCogComm();
+        }),
+        _textField('Attention notes', _attnNotesCtrl,
+            multi: true, onSave: _saveCogComm),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Memory'),
+        _singleChips('Immediate memory', _kFunctionScale,
+            _memImmediate, (v) {
+          setState(() => _memImmediate = v);
+          _saveCogComm();
+        }),
+        _singleChips('Recent memory', _kFunctionScale,
+            _memRecent, (v) {
+          setState(() => _memRecent = v);
+          _saveCogComm();
+        }),
+        _singleChips('Remote memory', _kFunctionScale,
+            _memRemote, (v) {
+          setState(() => _memRemote = v);
+          _saveCogComm();
+        }),
+        _singleChips('Working memory', _kFunctionScale,
+            _memWorking, (v) {
+          setState(() => _memWorking = v);
+          _saveCogComm();
+        }),
+        _multiChips('Memory screening tools used', const [
+          'RBANS', 'Wechsler Memory Scale', 'Informal', 'None',
+        ], _memToolsUsed, (v, sel) {
+          setState(() {
+            if (sel) {
+              _memToolsUsed.add(v);
+            } else {
+              _memToolsUsed.remove(v);
+            }
+          });
+          _saveCogComm();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Executive Function'),
+        _singleChips('Planning', _kFunctionScale,
+            _execPlanning, (v) {
+          setState(() => _execPlanning = v);
+          _saveCogComm();
+        }),
+        _singleChips('Problem-solving', _kFunctionScale,
+            _execProblemSolving, (v) {
+          setState(() => _execProblemSolving = v);
+          _saveCogComm();
+        }),
+        _singleChips('Mental flexibility / set-shifting',
+            _kFunctionScale, _execFlexibility, (v) {
+          setState(() => _execFlexibility = v);
+          _saveCogComm();
+        }),
+        _singleChips('Inhibition', _kFunctionScale,
+            _execInhibition, (v) {
+          setState(() => _execInhibition = v);
+          _saveCogComm();
+        }),
+        _singleChips('Initiation', _kFunctionScale,
+            _execInitiation, (v) {
+          setState(() => _execInitiation = v);
+          _saveCogComm();
+        }),
+        _textField('Executive function notes', _execNotesCtrl,
+            multi: true, onSave: _saveCogComm),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Reasoning & Abstract Thinking'),
+        _singleChips('Concrete vs abstract',
+            const ['Intact abstract', 'Concrete', 'Severely concrete'],
+            _reasoningAbstract, (v) {
+          setState(() => _reasoningAbstract = v);
+          _saveCogComm();
+        }),
+        _singleChips('Categorization', _kFunctionScale,
+            _reasoningCategorization, (v) {
+          setState(() => _reasoningCategorization = v);
+          _saveCogComm();
+        }),
+        _singleChips('Sequencing', _kFunctionScale,
+            _reasoningSequencing, (v) {
+          setState(() => _reasoningSequencing = v);
+          _saveCogComm();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Pragmatic Awareness'),
+        _singleChips('Insight into communication impairment', const [
+          'Full', 'Partial', 'Limited', 'Absent (anosognosia)',
+        ], _pragInsight, (v) {
+          setState(() => _pragInsight = v);
+          _saveCogComm();
+        }),
+        _singleChips('Social use of language', _kFunctionScale,
+            _pragSocialUse, (v) {
+          setState(() => _pragSocialUse = v);
+          _saveCogComm();
+        }),
+        _singleChips('Awareness of conversational partner',
+            _kFunctionScale, _pragAwarenessPartner, (v) {
+          setState(() => _pragAwarenessPartner = v);
+          _saveCogComm();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('F · Cognitive screen tools used'),
+        _multiChips('Tools', const [
+          'SCATBI', 'RBANS', 'CLQT', 'Cognistat',
+          'ACE-III', 'Informal observation only',
+        ], _cogScreenToolsUsed, (v, sel) {
+          setState(() {
+            if (sel) {
+              _cogScreenToolsUsed.add(v);
+            } else {
+              _cogScreenToolsUsed.remove(v);
+            }
+          });
+          _saveCogComm();
+        }),
+      ],
+    );
+  }
+
+  // ── Section 10 body — Differential Diagnosis ──────────────────────
+  Widget _section10Body() {
+    final autoEtio = _ddOverrideEtiology
+        ? (_ddEtiologyOverride ?? '—')
+        : (_etiology ?? 'Pick in Section 1');
+    final wabType = _aphasiaTypeOverride ?? _autoAphasiaType() ?? '—';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Primary diagnosis'),
+        _textField('Primary diagnosis (working hypothesis)',
+            _ddPrimaryDxCtrl, multi: true,
+            onSave: _saveDifferentialDx),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Text('Aphasia type (auto from WAB): ',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 12, color: _inkGhost)),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _tealSoft.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _teal.withValues(alpha: 0.4)),
+                ),
+                child: Text(wabType,
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _teal,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Etiology category'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _tealSoft.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _teal.withValues(alpha: 0.4)),
+            ),
+            child: Text(autoEtio,
+                style: GoogleFonts.dmSans(
+                    fontSize: 12, color: _teal,
+                    fontWeight: FontWeight.w500)),
+          ),
+        ),
+        _yesNo('Override etiology?', _ddOverrideEtiology, (v) {
+          setState(() => _ddOverrideEtiology = v);
+          _saveDifferentialDx();
+        }),
+        if (_ddOverrideEtiology)
+          _singleChips('Override etiology value', const [
+            'Stroke (ischemic)', 'Stroke (hemorrhagic)',
+            'TBI (closed)', 'TBI (penetrating)',
+            "Dementia (Alzheimer's)", 'Dementia (vascular)',
+            'Dementia (Lewy body)', 'Dementia (FTD)',
+            'Dementia (mixed)',
+            'PPA (semantic)', 'PPA (nonfluent)', 'PPA (logopenic)',
+            'Encephalitis', 'Tumor', 'Other', 'Unknown',
+          ], _ddEtiologyOverride, (v) {
+            setState(() => _ddEtiologyOverride = v);
+            _saveDifferentialDx();
+          }),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Rule-outs to consider'),
+        for (var i = 0; i < _ddRuleOutCtrls.length; i++)
+          _ddRuleOutRow(i),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: OutlinedButton.icon(
+            onPressed: () {
+              setState(() =>
+                  _ddRuleOutCtrls.add(TextEditingController()));
+            },
+            icon: const Icon(Icons.add_rounded, size: 14),
+            label: Text('Add rule-out',
+                style: GoogleFonts.dmSans(fontSize: 12, color: _teal)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: _teal.withValues(alpha: 0.45)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 6),
+            ),
+          ),
+        ),
+
+        _groupLabel('D · Contributing factors'),
+        _multiChips('Factors', const [
+          'Educational level', 'Premorbid cognitive function',
+          'Hearing loss', 'Vision impairment', 'Depression',
+          'Anxiety', 'Fatigue', 'Medication side effects',
+          'Reduced social engagement',
+          'Cultural-linguistic mismatch', 'Other',
+        ], _ddContributingFactors, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ddContributingFactors.add(v);
+            } else {
+              _ddContributingFactors.remove(v);
+            }
+          });
+          _saveDifferentialDx();
+        }),
+        if (_ddContributingFactors.contains('Other'))
+          _textField('Other contributing factors',
+              _ddOtherContribCtrl, multi: true,
+              onSave: _saveDifferentialDx),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Synthesis'),
+        _textField('Differential reasoning — why this diagnosis over others',
+            _ddSynthesisCtrl, multi: true,
+            onSave: _saveDifferentialDx),
+      ],
+    );
+  }
+
+  Widget _ddRuleOutRow(int index) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Focus(
+              onFocusChange: (f) {
+                if (!f) _saveDifferentialDx();
+              },
+              child: TextField(
+                controller: _ddRuleOutCtrls[index],
+                style: GoogleFonts.dmSans(fontSize: 13, color: _ink),
+                decoration: InputDecoration(
+                  hintText: 'Rule-out #${index + 1}',
+                  hintStyle: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      color: _inkGhost.withValues(alpha: 0.6)),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+          ),
+          if (_ddRuleOutCtrls.length > 3)
+            IconButton(
+              onPressed: () {
+                final removed = _ddRuleOutCtrls.removeAt(index);
+                removed.dispose();
+                setState(() {});
+                _saveDifferentialDx();
+              },
+              icon: const Icon(Icons.close_rounded,
+                  size: 16, color: _inkGhost),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                  minWidth: 28, minHeight: 28),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Section 12 body — Functional Communication & QoL ──────────────
+  Widget _section12Body() {
+    final coast = _coastItems.isEmpty
+        ? null
+        : _coastItems.values.fold<int>(0, (a, b) => a + b);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · COAST (1 None – 5 Severe)'),
+        for (var i = 1; i <= 20; i++)
+          _likertRow('$i. COAST item $i',
+              value: _coastItems[i] ?? 1,
+              min: 1, max: 5,
+              onChanged: (v) {
+                setState(() => _coastItems[i] = v);
+              },
+              onCommit: _saveQol),
+        const SizedBox(height: 6),
+        _qolBadge(
+          label: 'COAST total',
+          total: coast ?? 0,
+          maxScore: 100,
+        ),
+        _ghostNote('Lower total = better functional communication.'),
+        if (_coastTotalLoaded != null && _coastTotalLoaded != coast) ...[
+          const SizedBox(height: 4),
+          Text('Last saved total: $_coastTotalLoaded',
+              style: GoogleFonts.dmSans(
+                  fontSize: 11, color: _inkGhost,
+                  fontStyle: FontStyle.italic)),
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('B · AIQ-21 (Aphasia Impact Questionnaire)'),
+        _yesNo('Use AIQ-21?', _useAiq21, (v) {
+          setState(() => _useAiq21 = v);
+          _saveQol();
+        }),
+        if (_useAiq21) ...[
+          for (var i = 1; i <= 21; i++)
+            _likertRow(
+                '$i. AIQ-21 ${i <= 7 ? "C$i" : i <= 14 ? "P${i - 7}" : "E${i - 14}"}',
+                value: _aiq21Items[i] ?? 1,
+                min: 1, max: 5,
+                onChanged: (v) {
+                  setState(() => _aiq21Items[i] = v);
+                },
+                onCommit: _saveQol),
+          _qolBadge(
+            label: 'AIQ-21 total',
+            total: _aiq21Items.values.fold<int>(0, (a, b) => a + b),
+            maxScore: 105,
+          ),
+          _ghostNote('Higher = greater impact.'),
+          if (_aiq21TotalLoaded != null &&
+              _aiq21TotalLoaded !=
+                  _aiq21Items.values.fold<int>(0, (a, b) => a + b)) ...[
+            const SizedBox(height: 4),
+            Text('Last saved total: $_aiq21TotalLoaded',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: _inkGhost,
+                    fontStyle: FontStyle.italic)),
+          ],
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('C · SAQOL-39 (Stroke and Aphasia QoL)'),
+        _yesNo('Use SAQOL-39?', _useSaqol, (v) {
+          setState(() => _useSaqol = v);
+          _saveQol();
+        }),
+        if (_useSaqol) ...[
+          for (var i = 1; i <= 39; i++)
+            _likertRow('$i. SAQOL-39 item $i',
+                value: _saqolItems[i] ?? 1,
+                min: 1, max: 5,
+                onChanged: (v) {
+                  setState(() => _saqolItems[i] = v);
+                },
+                onCommit: _saveQol),
+          _qolBadge(
+            label: 'SAQOL-39 total',
+            total: _saqolItems.values.fold<int>(0, (a, b) => a + b),
+            maxScore: 195,
+          ),
+          if (_saqolTotalLoaded != null &&
+              _saqolTotalLoaded !=
+                  _saqolItems.values.fold<int>(0, (a, b) => a + b)) ...[
+            const SizedBox(height: 4),
+            Text('Last saved total: $_saqolTotalLoaded',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: _inkGhost,
+                    fontStyle: FontStyle.italic)),
+          ],
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('D · CETI (Communicative Effectiveness Index)'),
+        _yesNo('CETI completed by caregiver?', _useCeti, (v) {
+          setState(() => _useCeti = v);
+          _saveQol();
+        }),
+        if (_useCeti) ...[
+          for (var i = 1; i <= 16; i++)
+            _likertRow('$i. CETI item $i',
+                value: _cetiItems[i] ?? 0,
+                min: 0, max: 100,
+                onChanged: (v) {
+                  setState(() => _cetiItems[i] = v);
+                },
+                onCommit: _saveQol),
+          _qolBadge(
+            label: 'CETI total',
+            total: _cetiItems.values.fold<int>(0, (a, b) => a + b),
+            maxScore: 1600,
+          ),
+          _ghostNote(
+              "Caregiver perception of patient's communication effectiveness."),
+          if (_cetiTotalLoaded != null &&
+              _cetiTotalLoaded !=
+                  _cetiItems.values.fold<int>(0, (a, b) => a + b)) ...[
+            const SizedBox(height: 4),
+            Text('Last saved total: $_cetiTotalLoaded',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: _inkGhost,
+                    fontStyle: FontStyle.italic)),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// 0–N (or 1–N) Likert slider row with a live readout. Used by
+  /// Section 12's four QoL instruments. Same pattern voice's 24c
+  /// VHI uses; max can run up to 100 (CETI VAS).
+  Widget _likertRow(
+    String label, {
+    required int value,
+    required int min,
+    required int max,
+    required ValueChanged<int> onChanged,
+    required VoidCallback onCommit,
+  }) {
+    final divisions = max - min;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _ink)),
+              ),
+              Text('$value',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 12, color: _ink,
+                      fontWeight: FontWeight.w600)),
+              Text(' / $max',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 11, color: _inkGhost)),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              activeTrackColor: _teal,
+              inactiveTrackColor: _line,
+              thumbColor: _teal,
+              overlayColor: _teal.withValues(alpha: 0.18),
+            ),
+            child: Slider(
+              value: value.toDouble().clamp(min.toDouble(), max.toDouble()),
+              min: min.toDouble(),
+              max: max.toDouble(),
+              divisions: divisions,
+              onChanged: (d) => onChanged(d.toInt()),
+              onChangeEnd: (_) => onCommit(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Section 15 body — Final Clinical Impression & Plan ────────────
+  Widget _section15Body() {
+    final wabType = _aphasiaTypeOverride ?? _autoAphasiaType() ?? '—';
+    final autoEtio = _ddOverrideEtiology
+        ? (_ddEtiologyOverride ?? '—')
+        : (_etiology ?? '—');
+    final aq = _wabAphasiaQuotient();
+    final aqBand = aq == null ? '—' : _aqSeverityBand(aq);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Final diagnosis'),
+        _textField('Final diagnosis', _ciFinalDxCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+        _textField('ICD-style code', _ciIcdCodeCtrl,
+            hint: 'e.g. R47.01 Aphasia, F03 Unspecified Dementia, R47.81 Slurred speech',
+            onSave: _saveClinicalImpression),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Text('Aphasia type (auto from WAB): ',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 12, color: _inkGhost)),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: _tealSoft.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _teal.withValues(alpha: 0.4)),
+                ),
+                child: Text(wabType,
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _teal,
+                        fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Severity'),
+        _singleChips('Severity grading',
+            const ['Mild', 'Moderate', 'Severe', 'Profound'],
+            _ciSeverity, (v) {
+          setState(() => _ciSeverity = v);
+          _saveClinicalImpression();
+        }),
+        _ghostNote(
+            'Auto-suggested from WAB AQ ($aqBand): ≥75 Mild, 50–75 Moderate, 25–50 Mod-Severe, < 25 Severe.'),
+        _textField('Severity rationale', _ciSeverityRationaleCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Etiology'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _tealSoft.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _teal.withValues(alpha: 0.4)),
+            ),
+            child: Text(autoEtio,
+                style: GoogleFonts.dmSans(
+                    fontSize: 12, color: _teal,
+                    fontWeight: FontWeight.w500)),
+          ),
+        ),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Prognosis'),
+        _singleChips('Prognosis',
+            const ['Good', 'Fair', 'Guarded', 'Poor'],
+            _ciPrognosis, (v) {
+          setState(() => _ciPrognosis = v);
+          _saveClinicalImpression();
+        }),
+        _ghostNote(
+            'Consider: time post-onset, lesion size, premorbid abilities, family support, motivation, comorbidities.'),
+        _textField('Prognostic rationale', _ciPrognosticRationaleCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Management plan'),
+        _multiChips('Recommended interventions', const [
+          'Aphasia therapy', 'Cognitive-communication therapy',
+          'AOS treatment (if applicable)', 'AAC consideration',
+          'Caregiver training', 'Group therapy referral',
+          'Computer-based home practice', 'Multilingual therapy',
+          'Constraint-induced therapy (CIAT)',
+          'Script training',
+          'Semantic Feature Analysis (SFA)',
+          'Verb Network Strengthening (VNeST)',
+          'Melodic Intonation Therapy (MIT)',
+          'Response Elaboration Training', 'Other',
+        ], _ciInterventions, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ciInterventions.add(v);
+            } else {
+              _ciInterventions.remove(v);
+            }
+          });
+          _saveClinicalImpression();
+        }),
+        _textField('Therapy approach details',
+            _ciTherapyApproachCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+        _numField('Estimated session count', _ciSessionCountCtrl,
+            unit: 'sessions', onSave: _saveClinicalImpression),
+        _singleChips('Frequency', const [
+          'Twice weekly', 'Weekly', 'Biweekly', 'Monthly', 'As needed',
+        ], _ciFrequency, (v) {
+          setState(() => _ciFrequency = v);
+          _saveClinicalImpression();
+        }),
+        _numField('Session duration', _ciSessionDurationCtrl,
+            unit: 'min', onSave: _saveClinicalImpression),
+        _textField('Discharge criteria / outcome targets',
+            _ciDischargeCriteriaCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('F · Referrals'),
+        _multiChips('Referrals needed', const [
+          'Neurology', 'Psychiatry', 'Neuropsychology',
+          'Audiology', 'Physiotherapy', 'Occupational therapy',
+          'Social work', 'Support group', 'Caregiver counseling',
+        ], _ciReferrals, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ciReferrals.add(v);
+            } else {
+              _ciReferrals.remove(v);
+            }
+          });
+          _saveClinicalImpression();
+        }),
+        _textField('Referral notes', _ciReferralNotesCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('G · Caregiver education priorities'),
+        _multiChips('Education topics', const [
+          'Communication strategies', 'Aphasia education',
+          'Behavior management', 'AAC training',
+          'Home practice support',
+          'Cultural-linguistic considerations',
+          'Local resources', 'Aphasia association referral',
+        ], _ciCaregiverEdu, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ciCaregiverEdu.add(v);
+            } else {
+              _ciCaregiverEdu.remove(v);
+            }
+          });
+          _saveClinicalImpression();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('H · Functional outcome targets'),
+        _textField(
+          'Specific functional goals',
+          _ciFunctionalOutcomesCtrl, multi: true,
+          hint: 'e.g. phone use, return to work, conversational independence',
+          onSave: _saveClinicalImpression,
+        ),
+      ],
+    );
+  }
+
   // ── Section 11 body — outcome comparison ───────────────────────────
   Widget _section11Body() {
     final outcome = _outcome;
@@ -2961,6 +4884,51 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
         child: Text(msg,
             style: GoogleFonts.dmSans(fontSize: 12, color: _ink)),
       );
+}
+
+// 25c — shared severity / function scales used by Section 8F per-language
+// rows and Section 9 cog-comm subscales. Top-level constants so the
+// `const` literal sites in `_singleChips(...)` calls compile cheaply.
+const List<String> _kFunctionScale = [
+  'Adequate',
+  'Mildly reduced',
+  'Significantly reduced',
+  'Unable to assess',
+];
+
+const List<String> _kSeverityScale = [
+  'Preserved',
+  'Mildly impaired',
+  'Moderately impaired',
+  'Severely impaired',
+  'Unable',
+];
+
+/// One row in the Section 8F "Languages tested" list builder. Holds the
+/// per-language picks that drive the cross-linguistic profile + treatment
+/// language recommendation downstream.
+class _LangTestEntry {
+  String? language;
+  final TextEditingController wabAqCtrl;
+  String? convoFluency;
+  String? naming;
+  String? comprehension;
+  String? reading;
+  String? writing;
+
+  _LangTestEntry({
+    this.language,
+    String wabAq = '',
+    this.convoFluency,
+    this.naming,
+    this.comprehension,
+    this.reading,
+    this.writing,
+  }) : wabAqCtrl = TextEditingController(text: wabAq);
+
+  void dispose() {
+    wabAqCtrl.dispose();
+  }
 }
 
 /// One row in the Section 1 "Languages spoken" list builder.

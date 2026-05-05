@@ -43,6 +43,15 @@ class AldAssessment {
   final Map<String, dynamic> cognitiveCommScreenPayload;
   final Map<String, dynamic> differentialDiagnosisPayload;
   final Map<String, dynamic> clinicalImpressionPayload;
+  // Phase 4.0.7.25c — Section 8 ships 6 etiology-specific subforms,
+  // each persisted to its own jsonb column on the parent so the SLP
+  // can flip between subforms without losing sibling data.
+  final Map<String, dynamic> aphasiaApraxiaPayload;
+  final Map<String, dynamic> tbiPayload;
+  final Map<String, dynamic> rhdPayload;
+  final Map<String, dynamic> dementiaPayload;
+  final Map<String, dynamic> ppaPayload;
+  final Map<String, dynamic> multilingualPayload;
 
   final DateTime createdAt;
 
@@ -68,6 +77,12 @@ class AldAssessment {
     this.cognitiveCommScreenPayload   = const {},
     this.differentialDiagnosisPayload = const {},
     this.clinicalImpressionPayload    = const {},
+    this.aphasiaApraxiaPayload        = const {},
+    this.tbiPayload                   = const {},
+    this.rhdPayload                   = const {},
+    this.dementiaPayload              = const {},
+    this.ppaPayload                   = const {},
+    this.multilingualPayload          = const {},
     required this.createdAt,
   });
 
@@ -102,6 +117,12 @@ class AldAssessment {
       cognitiveCommScreenPayload:   mapOf('cognitive_comm_screen_payload'),
       differentialDiagnosisPayload: mapOf('differential_diagnosis_payload'),
       clinicalImpressionPayload:    mapOf('clinical_impression_payload'),
+      aphasiaApraxiaPayload:        mapOf('aphasia_apraxia_payload'),
+      tbiPayload:                   mapOf('tbi_payload'),
+      rhdPayload:                   mapOf('rhd_payload'),
+      dementiaPayload:              mapOf('dementia_payload'),
+      ppaPayload:                   mapOf('ppa_payload'),
+      multilingualPayload:          mapOf('multilingual_payload'),
       createdAt: _parseTs(json['created_at']) ?? DateTime.now(),
     );
   }
