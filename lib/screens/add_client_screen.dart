@@ -140,6 +140,10 @@ class _AddClientScreenState extends State<AddClientScreen> {
     'autism-developmental',
     'speech-sound-disorders',
     'pediatric-motor-speech',
+    // Phase 4.0.7.27a — resolved pediatric motor-speech diagnoses
+    // alongside the umbrella code.
+    'pediatric-cas',
+    'pediatric-dysarthria',
     'literacy',
   };
 
