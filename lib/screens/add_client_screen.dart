@@ -155,12 +155,14 @@ class _AddClientScreenState extends State<AddClientScreen> {
         : 'Client / caregiver concern';
   }
 
-  /// Phase 4.0.7.24a-fix3 — contact-section gate. Returns true (safe
-  /// pediatric default) when no clinical_area is selected yet so the
-  /// fresh form keeps its parent/guardian/school labels until the SLP
-  /// picks an area; flips to false the moment an adult area is picked.
+  /// Phase 4.0.7.24a-fix3 / -fix4 — contact-section gate. Returns
+  /// false (adult-general default) when no clinical_area is selected
+  /// yet so the fresh form reads consistently with _personLabel
+  /// ('client') and _concernSourceLabel ('Caregiver concern'). The
+  /// moment the SLP picks any pediatric area, all five domain-aware
+  /// labels swap to pediatric in the same setState pass.
   bool _isPediatric() {
-    if (_clinicalArea == null) return true;
+    if (_clinicalArea == null) return false;
     return _kPediatricAreas.contains(_clinicalArea);
   }
   final _primaryLangCtrl      = TextEditingController();
