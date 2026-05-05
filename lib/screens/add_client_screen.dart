@@ -154,6 +154,15 @@ class _AddClientScreenState extends State<AddClientScreen> {
         ? "Parent's concern"
         : 'Client / caregiver concern';
   }
+
+  /// Phase 4.0.7.24a-fix3 — contact-section gate. Returns true (safe
+  /// pediatric default) when no clinical_area is selected yet so the
+  /// fresh form keeps its parent/guardian/school labels until the SLP
+  /// picks an area; flips to false the moment an adult area is picked.
+  bool _isPediatric() {
+    if (_clinicalArea == null) return true;
+    return _kPediatricAreas.contains(_clinicalArea);
+  }
   final _primaryLangCtrl      = TextEditingController();
   final _additionalLangsCtrl  = TextEditingController(); // comma-separated
   final _concernVerbatimCtrl  = TextEditingController();
@@ -751,11 +760,20 @@ class _AddClientScreenState extends State<AddClientScreen> {
                   ..._buildIntakeForArea(_clinicalArea),
 
                   // ── Section 5: Contact and setting ─────────────────────
+                  // Phase 4.0.7.24a-fix3 — domain-aware labels driven
+                  // by _isPediatric(). Parent/guardian/school framing
+                  // stays for pediatric clinical areas; adult areas
+                  // get caregiver/contact labels and the school field
+                  // is hidden entirely (out of scope for adult voice,
+                  // aphasia, dysphagia, etc.).
                   _eyebrow('contact and setting'),
                   const SizedBox(height: 12),
                   TextField(
                     controller: _guardianNameCtrl,
-                    decoration: _dec('Parent or guardian name',
+                    decoration: _dec(
+                        _isPediatric()
+                            ? 'Parent or guardian name'
+                            : 'Caregiver name (optional)',
                         aiKey: 'guardian_name'),
                     textCapitalization: TextCapitalization.words,
                     onChanged: (_) => _clearAi('guardian_name'),
@@ -763,18 +781,23 @@ class _AddClientScreenState extends State<AddClientScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _guardianWaCtrl,
-                    decoration: _dec('Parent WhatsApp number',
+                    decoration: _dec(
+                        _isPediatric()
+                            ? 'Parent WhatsApp number'
+                            : 'Contact WhatsApp',
                         hint: '+91 98765 43210'),
                     keyboardType: TextInputType.phone,
                   ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _schoolCtrl,
-                    decoration: _dec('School or setting',
-                        aiKey: 'school_setting'),
-                    textCapitalization: TextCapitalization.words,
-                    onChanged: (_) => _clearAi('school_setting'),
-                  ),
+                  if (_isPediatric()) ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _schoolCtrl,
+                      decoration: _dec('School or setting',
+                          aiKey: 'school_setting'),
+                      textCapitalization: TextCapitalization.words,
+                      onChanged: (_) => _clearAi('school_setting'),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   TextField(
                     controller: _primaryLangCtrl,
