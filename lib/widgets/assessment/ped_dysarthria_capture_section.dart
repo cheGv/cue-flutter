@@ -228,6 +228,136 @@ class _PedDysarthriaCaptureSectionState
   String? _imitSingleWord;
   String? _imitMultiSyllabic;
 
+  // ── Section 4A — Respiration ─────────────────────────────────────
+  String? _respVitalCapacity;
+  final _respMaxAhCtrl       = TextEditingController(); // typed
+  final _respWordsPerBreathCtrl = TextEditingController(); // typed
+  final _respSyllablesPerBreathCtrl = TextEditingController(); // typed
+  String? _respBreathSupportPattern; // typed
+  String? _respPhonationSync;
+  String? _respBreathDirection;
+  String? _respAirWastage; // typed
+  final _respNotesCtrl       = TextEditingController();
+  String? _respSeverity; // typed → ped_dys_subsystem_severity
+
+  // ── Section 4B — Phonation ───────────────────────────────────────
+  final Set<String> _phonVoiceQualities = {};
+  bool _phonMptSameAsAh      = false;
+  final _phonMptCtrl         = TextEditingController();
+  final _phonSzRatioCtrl     = TextEditingController(); // typed
+  String? _phonHabitualPitch;
+  String? _phonPitchRange;
+  String? _phonLoudnessLevel;
+  String? _phonLoudnessRange;
+  String? _phonVoiceOnset;
+  bool _phonGlottalIncomp    = false;
+  bool _phonHyperaddux       = false;
+  final _phonEntFindingsCtrl = TextEditingController();
+  String? _phonSeverity;
+
+  // ── Section 4C — Articulation + DDK ──────────────────────────────
+  final _ddkPuhCtrl    = TextEditingController(); // typed
+  final _ddkTuhCtrl    = TextEditingController(); // typed
+  final _ddkKuhCtrl    = TextEditingController(); // typed
+  final _ddkPatakaCtrl = TextEditingController(); // typed
+  String? _ddkRegularity; // typed
+  String? _ddkAccuracy;   // typed
+  final _phonemeInventoryCtrl = TextEditingController();
+  final _phonemesMasteredCtrl  = TextEditingController();
+  final _phonemesEmergingCtrl  = TextEditingController();
+  final _phonemesAbsentCtrl    = TextEditingController();
+  final Set<String> _articImprecisionPattern = {};
+  final Set<String> _articPlaceErrors        = {};
+  final Set<String> _articMannerErrors       = {};
+  String? _articVoicing;
+  String? _articSeverity;
+
+  // ── Section 4D — Resonance ───────────────────────────────────────
+  String? _resonanceBalance;
+  bool _nasalEmission        = false;
+  final _nasalEmissionSoundsCtrl = TextEditingController();
+  bool _nasalTurbulence      = false;
+  bool _vpConnectedAdequate  = false;
+  bool _vpPressureAdequate   = false;
+  final _resonanceNotesCtrl  = TextEditingController();
+  String? _resonanceSeverity;
+
+  // ── Section 4E — Prosody ─────────────────────────────────────────
+  String? _rate;
+  // _wpmCtrl is shared with Section 6 — both surfaces write to
+  // ped_dys_intelligibility.words_per_minute. Last-write-wins is the
+  // contract; sharing one controller means both UI sites display the
+  // same live value.
+  final _wpmCtrl             = TextEditingController(); // typed (shared)
+  String? _rhythm;
+  final Set<String> _stressPattern = {};
+  final Set<String> _intonation    = {};
+  final _atypicalIntonationCtrl = TextEditingController();
+  String? _phrasing;
+  final _prosodyNotesCtrl    = TextEditingController();
+  String? _prosodySeverity;
+
+  /// Section 4 wrap-up — primary subsystem auto-derives from severities
+  /// (any 'Severe' picks promoted; multiple severes → comma-joined).
+  /// SLP can override via the chip below.
+  String? _primarySubsystemOverride;
+
+  // ── Section 5 — Oral Mech Examination ────────────────────────────
+  final Set<String> _omLips      = {};
+  final Set<String> _omTongue    = {};
+  final Set<String> _omJaw       = {};
+  String? _omSoftPalate;
+  String? _omHardPalate;
+  final _omHardPalateDetailCtrl = TextEditingController();
+  String? _omOcclusionClass;
+  bool _omMissingTeeth       = false;
+  final _omMissingTeethCtrl  = TextEditingController();
+  String? _omPharyngealMovement;
+  String? _omGagReflex;
+  String? _omDroolingPattern;
+  String? _omLipClosureChewing;
+  String? _omTongueLateralization;
+  String? _omTongueElevation;
+  String? _omTongueProtrusion;
+  String? _omVelumElevation;
+  String? _omCoughStrength;
+  String? _omSwallowTrigger;
+  String? _omOralTone;
+  final Set<String> _omPrimitiveReflexes = {};
+  String? _omVolitionalReflexive;
+  final _omNotesCtrl         = TextEditingController();
+
+  // ── Section 6 — Connected Speech & Intelligibility ───────────────
+  String? _passageUsed;
+  final _passageDetailCtrl   = TextEditingController();
+  final _connectedAudioRefCtrl = TextEditingController();
+  // Shares _wpmCtrl with Section 4E.
+  final _pauseDurationCtrl   = TextEditingController();
+  final _subsystemBreakdownCtrl = TextEditingController();
+  // ICS items 1..7, each 1..5 (Never..Always).
+  final Map<int, int> _icsItems = {};
+  final _csimSingleWordCtrl  = TextEditingController(); // typed
+  final _csimSentenceCtrl    = TextEditingController(); // typed
+  final _intelligibilityNotesCtrl = TextEditingController(); // typed
+
+  // ── Section 7 — Stimulability & Therapy Trial ────────────────────
+  String? _stimLoudResponse;
+  bool _stimLoudSustained    = false;
+  bool _stimLoudIntelligibilityImproves = false;
+  final _stimLoudNotesCtrl   = TextEditingController();
+  String? _stimRateResponse;
+  String? _stimPacingResponse;
+  final _stimRateNotesCtrl   = TextEditingController();
+  String? _stimTactileResponse;
+  String? _stimVisualModelResponse;
+  String? _stimPhoneticPlacementResponse;
+  final _stimArticNotesCtrl  = TextEditingController();
+  String? _stimOpenMouthResponse;
+  String? _stimOralAirflowResponse;
+  final _stimResonanceNotesCtrl = TextEditingController();
+  final Set<String> _stimRecommendedApproaches = {};
+  final _stimApproachReasoningCtrl = TextEditingController();
+
   // Accordion expansion — Section 1 default-expanded.
   String _expanded = 'sec1';
 
@@ -260,6 +390,21 @@ class _PedDysarthriaCaptureSectionState
       _fatigueOnsetCtrl,
       _audioRefCtrl, _totalUtterancesCtrl, _mluWordsCtrl,
       ..._familyPriorities,
+      // 27b — Sections 4, 5, 6, 7 controllers.
+      _respMaxAhCtrl, _respWordsPerBreathCtrl, _respSyllablesPerBreathCtrl,
+      _respNotesCtrl,
+      _phonMptCtrl, _phonSzRatioCtrl, _phonEntFindingsCtrl,
+      _ddkPuhCtrl, _ddkTuhCtrl, _ddkKuhCtrl, _ddkPatakaCtrl,
+      _phonemeInventoryCtrl, _phonemesMasteredCtrl,
+      _phonemesEmergingCtrl, _phonemesAbsentCtrl,
+      _nasalEmissionSoundsCtrl, _resonanceNotesCtrl,
+      _wpmCtrl, _atypicalIntonationCtrl, _prosodyNotesCtrl,
+      _omHardPalateDetailCtrl, _omMissingTeethCtrl, _omNotesCtrl,
+      _passageDetailCtrl, _connectedAudioRefCtrl,
+      _pauseDurationCtrl, _subsystemBreakdownCtrl,
+      _csimSingleWordCtrl, _csimSentenceCtrl, _intelligibilityNotesCtrl,
+      _stimLoudNotesCtrl, _stimRateNotesCtrl, _stimArticNotesCtrl,
+      _stimResonanceNotesCtrl, _stimApproachReasoningCtrl,
     ];
     for (final c in controllers) {
       c.dispose();
@@ -280,13 +425,23 @@ class _PedDysarthriaCaptureSectionState
       final results = await Future.wait([
         _service.loadTypedMeasures(
             assessmentId: a.id, tableName: 'ped_dys_intelligibility'),
+        // 27b — Sections 4 + 6 hydrate from these typed tables.
+        _service.loadTypedMeasures(
+            assessmentId: a.id, tableName: 'ped_dys_aerodynamic_measures'),
+        _service.loadTypedMeasures(
+            assessmentId: a.id, tableName: 'ped_dys_ddk_rates'),
+        _service.loadTypedMeasures(
+            assessmentId: a.id, tableName: 'ped_dys_subsystem_severity'),
         _service.compareBaselineToLatest(widget.clientId),
       ]);
       _hydrateIntelligibility(results[0] as Map<String, dynamic>);
+      _hydrateAerodynamic(results[1] as Map<String, dynamic>);
+      _hydrateDdk(results[2] as Map<String, dynamic>);
+      _hydrateSubsystemSeverity(results[3] as Map<String, dynamic>);
       if (!mounted) return;
       setState(() {
         _assessment = a;
-        _outcome    = results[1] as OutcomeComparison;
+        _outcome    = results[4] as OutcomeComparison;
         _loading    = false;
       });
     } catch (e) {
@@ -536,6 +691,170 @@ class _PedDysarthriaCaptureSectionState
     _imitCvVc         = bs['imitation_cv_vc']         as String?;
     _imitSingleWord   = bs['imitation_single_word']   as String?;
     _imitMultiSyllabic = bs['imitation_multi_syllabic'] as String?;
+
+    // 27b — Section 4 (five subsystems) — five granular jsonb columns
+    // on the parent (respiration_payload through prosody_payload),
+    // each carrying that subsystem's narrative fields. Typed measures
+    // (aerodynamic, DDK, severity) live in their own child tables.
+    final fs = a.respirationPayload;
+    _respVitalCapacity        = fs['vital_capacity_estimate'] as String?;
+    _respPhonationSync        = fs['phonation_sync']           as String?;
+    _respBreathDirection      = fs['breath_direction']         as String?;
+    _respNotesCtrl.text       = (fs['respiration_notes'] as String?) ?? '';
+    // Phonation narrative
+    final phon = a.phonationPayload;
+    final pq = phon['voice_qualities'];
+    if (pq is List) {
+      _phonVoiceQualities..clear()..addAll(pq.map((e) => e.toString()));
+    }
+    _phonMptSameAsAh          = phon['mpt_same_as_ah'] == true;
+    _phonMptCtrl.text         = phon['phonation_mpt_seconds']?.toString() ?? '';
+    _phonHabitualPitch        = phon['habitual_pitch']  as String?;
+    _phonPitchRange           = phon['pitch_range']     as String?;
+    _phonLoudnessLevel        = phon['loudness_level']  as String?;
+    _phonLoudnessRange        = phon['loudness_range']  as String?;
+    _phonVoiceOnset           = phon['voice_onset']     as String?;
+    _phonGlottalIncomp        = phon['glottal_incompetence'] == true;
+    _phonHyperaddux           = phon['hyperadduction'] == true;
+    _phonEntFindingsCtrl.text = (phon['ent_findings'] as String?) ?? '';
+    // Articulation narrative
+    final art = a.articulationPayload;
+    _phonemeInventoryCtrl.text = (art['phoneme_inventory']  as String?) ?? '';
+    _phonemesMasteredCtrl.text = (art['phonemes_mastered']  as String?) ?? '';
+    _phonemesEmergingCtrl.text = (art['phonemes_emerging']  as String?) ?? '';
+    _phonemesAbsentCtrl.text   = (art['phonemes_absent']    as String?) ?? '';
+    final aip = art['imprecision_pattern'];
+    if (aip is List) {
+      _articImprecisionPattern..clear()..addAll(aip.map((e) => e.toString()));
+    }
+    final ape = art['place_errors'];
+    if (ape is List) {
+      _articPlaceErrors..clear()..addAll(ape.map((e) => e.toString()));
+    }
+    final ame = art['manner_errors'];
+    if (ame is List) {
+      _articMannerErrors..clear()..addAll(ame.map((e) => e.toString()));
+    }
+    _articVoicing             = art['voicing_contrast'] as String?;
+    // Resonance narrative
+    final res = a.resonancePayload;
+    _resonanceBalance         = res['resonance_balance'] as String?;
+    _nasalEmission            = res['nasal_emission']    == true;
+    _nasalEmissionSoundsCtrl.text = (res['nasal_emission_sounds'] as String?) ?? '';
+    _nasalTurbulence          = res['nasal_turbulence']  == true;
+    _vpConnectedAdequate      = res['vp_connected_adequate'] == true;
+    _vpPressureAdequate       = res['vp_pressure_adequate'] == true;
+    _resonanceNotesCtrl.text  = (res['resonance_notes'] as String?) ?? '';
+    // Prosody narrative
+    final pr = a.prosodyPayload;
+    _rate                     = pr['rate']                 as String?;
+    _rhythm                   = pr['rhythm']               as String?;
+    final sp = pr['stress_pattern'];
+    if (sp is List) {
+      _stressPattern..clear()..addAll(sp.map((e) => e.toString()));
+    }
+    final inton = pr['intonation'];
+    if (inton is List) {
+      _intonation..clear()..addAll(inton.map((e) => e.toString()));
+    }
+    _atypicalIntonationCtrl.text = (pr['atypical_intonation_specify'] as String?) ?? '';
+    _phrasing                 = pr['phrasing'] as String?;
+    _prosodyNotesCtrl.text    = (pr['prosody_notes'] as String?) ?? '';
+    _primarySubsystemOverride = pr['primary_subsystem_override'] as String?;
+
+    // 27b — Section 5 (oral mech) jsonb.
+    final om = a.oralMechPayload;
+    void seedSet(String key, Set<String> target) {
+      final v = om[key];
+      if (v is List) {
+        target..clear()..addAll(v.map((e) => e.toString()));
+      }
+    }
+    seedSet('lips',   _omLips);
+    seedSet('tongue', _omTongue);
+    seedSet('jaw',    _omJaw);
+    _omSoftPalate           = om['soft_palate']            as String?;
+    _omHardPalate           = om['hard_palate']            as String?;
+    _omHardPalateDetailCtrl.text = (om['hard_palate_detail'] as String?) ?? '';
+    _omOcclusionClass       = om['dentition_occlusion_class'] as String?;
+    _omMissingTeeth         = om['missing_teeth'] == true;
+    _omMissingTeethCtrl.text = (om['missing_teeth_detail'] as String?) ?? '';
+    _omPharyngealMovement   = om['pharyngeal_wall_movement'] as String?;
+    _omGagReflex            = om['gag_reflex'] as String?;
+    _omDroolingPattern      = om['drooling_pattern'] as String?;
+    _omLipClosureChewing    = om['lip_closure_chewing'] as String?;
+    _omTongueLateralization = om['tongue_lateralization'] as String?;
+    _omTongueElevation      = om['tongue_elevation'] as String?;
+    _omTongueProtrusion     = om['tongue_protrusion_retraction'] as String?;
+    _omVelumElevation       = om['velum_elevation_a_phonation'] as String?;
+    _omCoughStrength        = om['cough_strength'] as String?;
+    _omSwallowTrigger       = om['swallow_trigger'] as String?;
+    _omOralTone             = om['oral_muscle_tone'] as String?;
+    seedSet('primitive_reflexes', _omPrimitiveReflexes);
+    _omVolitionalReflexive  = om['volitional_reflexive'] as String?;
+    _omNotesCtrl.text       = (om['oral_mech_notes'] as String?) ?? '';
+
+    // 27b — Section 6 (connected speech) jsonb.
+    final cs = a.connectedSpeechPayload;
+    _passageUsed                 = cs['passage_used']             as String?;
+    _passageDetailCtrl.text      = (cs['passage_detail']          as String?) ?? '';
+    _connectedAudioRefCtrl.text  = (cs['audio_reference']         as String?) ?? '';
+    _pauseDurationCtrl.text      = (cs['pause_duration_patterns'] as String?) ?? '';
+    _subsystemBreakdownCtrl.text = (cs['subsystem_breakdown']     as String?) ?? '';
+
+    // 27b — Section 7 (stimulability) jsonb.
+    final st = a.stimulabilityPayload;
+    _stimLoudResponse       = st['loud_response']        as String?;
+    _stimLoudSustained      = st['loud_sustained']       == true;
+    _stimLoudIntelligibilityImproves = st['loud_intelligibility_improves'] == true;
+    _stimLoudNotesCtrl.text = (st['loud_notes']         as String?) ?? '';
+    _stimRateResponse       = st['rate_response']        as String?;
+    _stimPacingResponse     = st['pacing_response']      as String?;
+    _stimRateNotesCtrl.text = (st['rate_notes']         as String?) ?? '';
+    _stimTactileResponse    = st['tactile_response']     as String?;
+    _stimVisualModelResponse = st['visual_model_response'] as String?;
+    _stimPhoneticPlacementResponse = st['phonetic_placement_response'] as String?;
+    _stimArticNotesCtrl.text = (st['articulatory_notes'] as String?) ?? '';
+    _stimOpenMouthResponse  = st['open_mouth_response']  as String?;
+    _stimOralAirflowResponse = st['oral_airflow_response'] as String?;
+    _stimResonanceNotesCtrl.text = (st['resonance_notes'] as String?) ?? '';
+    final ra = st['recommended_approaches'];
+    if (ra is List) {
+      _stimRecommendedApproaches..clear()..addAll(ra.map((e) => e.toString()));
+    }
+    _stimApproachReasoningCtrl.text = (st['approach_reasoning'] as String?) ?? '';
+  }
+
+  // 27b — typed Section 4 hydrators.
+
+  void _hydrateAerodynamic(Map<String, dynamic> row) {
+    if (row.isEmpty) return;
+    _respMaxAhCtrl.text       = row['max_sustained_ah_seconds']?.toString() ?? '';
+    _respWordsPerBreathCtrl.text = row['words_per_breath']?.toString() ?? '';
+    _respSyllablesPerBreathCtrl.text = row['syllables_per_breath']?.toString() ?? '';
+    _respBreathSupportPattern = row['breath_support_pattern'] as String?;
+    _respAirWastage           = row['air_wastage']            as String?;
+    _phonSzRatioCtrl.text     = row['s_z_ratio']?.toString() ?? '';
+  }
+
+  void _hydrateDdk(Map<String, dynamic> row) {
+    if (row.isEmpty) return;
+    _ddkPuhCtrl.text    = row['puh_per_sec']?.toString() ?? '';
+    _ddkTuhCtrl.text    = row['tuh_per_sec']?.toString() ?? '';
+    _ddkKuhCtrl.text    = row['kuh_per_sec']?.toString() ?? '';
+    _ddkPatakaCtrl.text = row['pataka_per_sec']?.toString() ?? '';
+    _ddkRegularity      = row['regularity'] as String?;
+    _ddkAccuracy        = row['accuracy']   as String?;
+  }
+
+  void _hydrateSubsystemSeverity(Map<String, dynamic> row) {
+    if (row.isEmpty) return;
+    _respSeverity      = row['respiration_severity']  as String?;
+    _phonSeverity      = row['phonation_severity']    as String?;
+    _articSeverity     = row['articulation_severity'] as String?;
+    _resonanceSeverity = row['resonance_severity']    as String?;
+    _prosodySeverity   = row['prosody_severity']      as String?;
+    _primarySubsystemOverride = row['primary_subsystem'] as String?;
   }
 
   void _hydrateIntelligibility(Map<String, dynamic> row) {
@@ -547,13 +866,32 @@ class _PedDysarthriaCaptureSectionState
         _settingPctTouched.add(mapKey);
       }
     }
-    seed('listener_familiar_caregivers_pct', 'familiar_caregivers');
+    // 27b — schema column is listener_familiar_primary_pct, not _caregivers_.
+    seed('listener_familiar_primary_pct', 'familiar_caregivers');
     seed('listener_family_pct',              'family_non_primary');
     seed('listener_peers_pct',               'peers');
     seed('listener_teachers_pct',            'teachers');
     seed('listener_unfamiliar_adults_pct',   'unfamiliar_adults');
     seed('context_familiar_pct',             'familiar_contexts');
     seed('context_unfamiliar_pct',           'unfamiliar_contexts');
+    // 27b — Section 6 ICS / CSIM / WPM seed from the same row.
+    for (var i = 1; i <= 7; i++) {
+      final v = row['ics_item$i'];
+      if (v is num) _icsItems[i] = v.toInt();
+    }
+    final csw = row['csim_single_word_pct'];
+    if (csw is num) _csimSingleWordCtrl.text = _trimNum(csw);
+    final css = row['csim_sentence_pct'];
+    if (css is num) _csimSentenceCtrl.text   = _trimNum(css);
+    final wpm = row['words_per_minute'];
+    if (wpm is num) _wpmCtrl.text            = _trimNum(wpm);
+    _intelligibilityNotesCtrl.text = (row['notes'] as String?) ?? '';
+  }
+
+  String _trimNum(num v) {
+    if (v is int) return v.toString();
+    final d = v.toDouble();
+    return d == d.roundToDouble() ? d.toInt().toString() : d.toString();
   }
 
   // ── Save dispatchers ────────────────────────────────────────────────
@@ -754,6 +1092,275 @@ class _PedDysarthriaCaptureSectionState
     }
   }
 
+  // 27b — Section 4 typed: aerodynamic measures.
+  Future<void> _saveAerodynamic() async {
+    if (_assessment == null) return;
+    final data = <String, dynamic>{
+      'max_sustained_ah_seconds':  _parseDecimal(_respMaxAhCtrl.text),
+      's_z_ratio':                 _parseDecimal(_phonSzRatioCtrl.text),
+      'words_per_breath':          _parseDecimal(_respWordsPerBreathCtrl.text),
+      'syllables_per_breath':      _parseDecimal(_respSyllablesPerBreathCtrl.text),
+      'breath_support_pattern':    _respBreathSupportPattern,
+      'air_wastage':               _respAirWastage,
+    };
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ped_dys_aerodynamic_measures',
+        data:         data,
+      );
+    } catch (e) {
+      _toast('Could not save aerodynamic measures: $e');
+    }
+  }
+
+  // 27b — Section 4C typed: DDK rates.
+  Future<void> _saveDdk() async {
+    if (_assessment == null) return;
+    final data = <String, dynamic>{
+      'puh_per_sec':    _parseDecimal(_ddkPuhCtrl.text),
+      'tuh_per_sec':    _parseDecimal(_ddkTuhCtrl.text),
+      'kuh_per_sec':    _parseDecimal(_ddkKuhCtrl.text),
+      'pataka_per_sec': _parseDecimal(_ddkPatakaCtrl.text),
+      'regularity':     _ddkRegularity,
+      'accuracy':       _ddkAccuracy,
+    };
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ped_dys_ddk_rates',
+        data:         data,
+      );
+    } catch (e) {
+      _toast('Could not save DDK rates: $e');
+    }
+  }
+
+  // 27b — Section 4 typed: subsystem severity row + auto-derived primary.
+  Future<void> _saveSubsystemSeverity() async {
+    if (_assessment == null) return;
+    final auto = _autoPrimarySubsystem();
+    final primary = _primarySubsystemOverride ?? auto;
+    final data = <String, dynamic>{
+      'respiration_severity':   _respSeverity,
+      'phonation_severity':     _phonSeverity,
+      'articulation_severity':  _articSeverity,
+      'resonance_severity':     _resonanceSeverity,
+      'prosody_severity':       _prosodySeverity,
+      'primary_subsystem':      primary,
+    };
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ped_dys_subsystem_severity',
+        data:         data,
+      );
+    } catch (e) {
+      _toast('Could not save subsystem severity: $e');
+    }
+  }
+
+  /// Auto-derive primary subsystem from severities — first 'Severe',
+  /// then comma-joined when multiple. Returns null when no subsystem
+  /// is rated Severe yet (SLP can override either way).
+  String? _autoPrimarySubsystem() {
+    final severeNames = <String>[];
+    if (_respSeverity     == 'Severe') severeNames.add('Respiration');
+    if (_phonSeverity     == 'Severe') severeNames.add('Phonation');
+    if (_articSeverity    == 'Severe') severeNames.add('Articulation');
+    if (_resonanceSeverity == 'Severe') severeNames.add('Resonance');
+    if (_prosodySeverity  == 'Severe') severeNames.add('Prosody');
+    if (severeNames.isEmpty) return null;
+    return severeNames.join(', ');
+  }
+
+  // 27b — Section 4 narrative: per-subsystem jsonb columns.
+  Future<void> _saveRespirationNarrative() async {
+    _savePayload('respiration_payload', {
+      'vital_capacity_estimate': _respVitalCapacity,
+      'phonation_sync':          _respPhonationSync,
+      'breath_direction':        _respBreathDirection,
+      'respiration_notes':       _respNotesCtrl.text.trim(),
+    }, 'Respiration');
+  }
+
+  Future<void> _savePhonationNarrative() async {
+    _savePayload('phonation_payload', {
+      'voice_qualities':         _phonVoiceQualities.toList(),
+      'mpt_same_as_ah':          _phonMptSameAsAh,
+      'phonation_mpt_seconds':   _parseDecimal(_phonMptCtrl.text),
+      'habitual_pitch':          _phonHabitualPitch,
+      'pitch_range':             _phonPitchRange,
+      'loudness_level':          _phonLoudnessLevel,
+      'loudness_range':          _phonLoudnessRange,
+      'voice_onset':             _phonVoiceOnset,
+      'glottal_incompetence':    _phonGlottalIncomp,
+      'hyperadduction':          _phonHyperaddux,
+      'ent_findings':            _phonEntFindingsCtrl.text.trim(),
+    }, 'Phonation');
+  }
+
+  Future<void> _saveArticulationNarrative() async {
+    _savePayload('articulation_payload', {
+      'phoneme_inventory':       _phonemeInventoryCtrl.text.trim(),
+      'phonemes_mastered':       _phonemesMasteredCtrl.text.trim(),
+      'phonemes_emerging':       _phonemesEmergingCtrl.text.trim(),
+      'phonemes_absent':         _phonemesAbsentCtrl.text.trim(),
+      'imprecision_pattern':     _articImprecisionPattern.toList(),
+      'place_errors':            _articPlaceErrors.toList(),
+      'manner_errors':           _articMannerErrors.toList(),
+      'voicing_contrast':        _articVoicing,
+    }, 'Articulation');
+  }
+
+  Future<void> _saveResonanceNarrative() async {
+    _savePayload('resonance_payload', {
+      'resonance_balance':       _resonanceBalance,
+      'nasal_emission':          _nasalEmission,
+      'nasal_emission_sounds':   _nasalEmissionSoundsCtrl.text.trim(),
+      'nasal_turbulence':        _nasalTurbulence,
+      'vp_connected_adequate':   _vpConnectedAdequate,
+      'vp_pressure_adequate':    _vpPressureAdequate,
+      'resonance_notes':         _resonanceNotesCtrl.text.trim(),
+    }, 'Resonance');
+  }
+
+  Future<void> _saveProsodyNarrative() async {
+    _savePayload('prosody_payload', {
+      'rate':                          _rate,
+      'rhythm':                        _rhythm,
+      'stress_pattern':                _stressPattern.toList(),
+      'intonation':                    _intonation.toList(),
+      'atypical_intonation_specify':   _atypicalIntonationCtrl.text.trim(),
+      'phrasing':                      _phrasing,
+      'prosody_notes':                 _prosodyNotesCtrl.text.trim(),
+      'primary_subsystem_override':    _primarySubsystemOverride,
+    }, 'Prosody');
+  }
+
+  /// Both Section 4E and Section 6 write WPM to the same typed
+  /// ped_dys_intelligibility row. Last-write-wins is the contract;
+  /// the shared _wpmCtrl means both UI sites display the same live
+  /// value, so the SLP never sees stale data on whichever surface
+  /// they happen to be viewing.
+  Future<void> _saveWpm() async {
+    if (_assessment == null) return;
+    final wpm = _parseDecimal(_wpmCtrl.text);
+    if (wpm == null) return;
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ped_dys_intelligibility',
+        data:         {'words_per_minute': wpm},
+      );
+    } catch (e) {
+      _toast('Could not save words per minute: $e');
+    }
+  }
+
+  // 27b — Section 5 narrative.
+  Future<void> _saveOralMech() async {
+    _savePayload('oral_mech_payload', {
+      'lips':                       _omLips.toList(),
+      'tongue':                     _omTongue.toList(),
+      'jaw':                        _omJaw.toList(),
+      'soft_palate':                _omSoftPalate,
+      'hard_palate':                _omHardPalate,
+      'hard_palate_detail':         _omHardPalateDetailCtrl.text.trim(),
+      'dentition_occlusion_class':  _omOcclusionClass,
+      'missing_teeth':              _omMissingTeeth,
+      'missing_teeth_detail':       _omMissingTeethCtrl.text.trim(),
+      'pharyngeal_wall_movement':   _omPharyngealMovement,
+      'gag_reflex':                 _omGagReflex,
+      'drooling_pattern':           _omDroolingPattern,
+      'lip_closure_chewing':        _omLipClosureChewing,
+      'tongue_lateralization':      _omTongueLateralization,
+      'tongue_elevation':           _omTongueElevation,
+      'tongue_protrusion_retraction': _omTongueProtrusion,
+      'velum_elevation_a_phonation': _omVelumElevation,
+      'cough_strength':             _omCoughStrength,
+      'swallow_trigger':            _omSwallowTrigger,
+      'oral_muscle_tone':           _omOralTone,
+      'primitive_reflexes':         _omPrimitiveReflexes.toList(),
+      'volitional_reflexive':       _omVolitionalReflexive,
+      'oral_mech_notes':            _omNotesCtrl.text.trim(),
+    }, 'Oral Mech');
+  }
+
+  // 27b — Section 6 narrative + typed ICS/CSIM saves. The narrative
+  // jsonb (passage, audio reference, pause patterns) goes to
+  // connected_speech_payload. ICS items + totals + CSIM + WPM go to
+  // ped_dys_intelligibility (partial upsert; Section 1 E.2 setting-%
+  // columns stay untouched).
+  Future<void> _saveConnectedSpeechNarrative() async {
+    _savePayload('connected_speech_payload', {
+      'passage_used':             _passageUsed,
+      'passage_detail':           _passageDetailCtrl.text.trim(),
+      'audio_reference':          _connectedAudioRefCtrl.text.trim(),
+      'pause_duration_patterns':  _pauseDurationCtrl.text.trim(),
+      'subsystem_breakdown':      _subsystemBreakdownCtrl.text.trim(),
+    }, 'Connected speech');
+  }
+
+  Future<void> _saveIntelligibilityTyped() async {
+    if (_assessment == null) return;
+    final total = _icsItems.values.fold<int>(0, (a, b) => a + b);
+    final hasItems = _icsItems.values.any((v) => v > 0);
+    final data = <String, dynamic>{
+      for (var i = 1; i <= 7; i++)
+        if (_icsItems[i] != null) 'ics_item$i': _icsItems[i],
+      if (hasItems) 'ics_total': total,
+      if (hasItems) 'ics_average': total / 7,
+      'csim_single_word_pct':  _parseDecimal(_csimSingleWordCtrl.text),
+      'csim_sentence_pct':     _parseDecimal(_csimSentenceCtrl.text),
+      'notes':                 _intelligibilityNotesCtrl.text.trim(),
+    };
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ped_dys_intelligibility',
+        data:         data,
+      );
+    } catch (e) {
+      _toast('Could not save intelligibility measures: $e');
+    }
+  }
+
+  // 27b — Section 7 narrative.
+  Future<void> _saveStimulability() async {
+    _savePayload('stimulability_payload', {
+      'loud_response':                  _stimLoudResponse,
+      'loud_sustained':                 _stimLoudSustained,
+      'loud_intelligibility_improves':  _stimLoudIntelligibilityImproves,
+      'loud_notes':                     _stimLoudNotesCtrl.text.trim(),
+      'rate_response':                  _stimRateResponse,
+      'pacing_response':                _stimPacingResponse,
+      'rate_notes':                     _stimRateNotesCtrl.text.trim(),
+      'tactile_response':               _stimTactileResponse,
+      'visual_model_response':          _stimVisualModelResponse,
+      'phonetic_placement_response':    _stimPhoneticPlacementResponse,
+      'articulatory_notes':             _stimArticNotesCtrl.text.trim(),
+      'open_mouth_response':            _stimOpenMouthResponse,
+      'oral_airflow_response':          _stimOralAirflowResponse,
+      'resonance_notes':                _stimResonanceNotesCtrl.text.trim(),
+      'recommended_approaches':         _stimRecommendedApproaches.toList(),
+      'approach_reasoning':             _stimApproachReasoningCtrl.text.trim(),
+    }, 'Stimulability');
+  }
+
+  /// Shared save helper so the seven payload-section saves stay one-liners.
+  void _savePayload(
+      String columnName, Map<String, dynamic> payload, String label) {
+    if (_assessment == null) return;
+    _service
+        .savePayloadSection(
+          assessmentId: _assessment!.id,
+          columnName:   columnName,
+          payload:      payload,
+        )
+        .catchError((e) => _toast('Could not save $label: $e'));
+  }
+
   Future<void> _addFollowUp() async {
     if (_assessment == null) return;
     final baselineId = _assessment!.isBaseline
@@ -827,21 +1434,21 @@ class _PedDysarthriaCaptureSectionState
             tagline: 'Behavioral state, spontaneous speech sample, imitative screen.',
             child: _section2Body()),
         const SizedBox(height: 10),
-        _stub(4,  'Five Speech Subsystems',
-            'Respiration, phonation, articulation, resonance, prosody — typed measures.',
-            '4.0.7.27b'),
+        _section(id: 'sec4', number: 4, title: 'Five Speech Subsystems',
+            tagline: 'Respiration, phonation, articulation, resonance, prosody — typed severity per subsystem.',
+            child: _section4Body()),
         const SizedBox(height: 10),
-        _stub(5,  'Oral Mech Examination',
-            'Lip / tongue / jaw / palate / dentition — structure + function.',
-            '4.0.7.27b'),
+        _section(id: 'sec5', number: 5, title: 'Oral Mech Examination',
+            tagline: 'Lips / tongue / jaw / palate / dentition + function + tone.',
+            child: _section5Body()),
         const SizedBox(height: 10),
-        _stub(6,  'Connected Speech & Intelligibility',
-            'CSIM single-word + sentence, ICS, words per minute.',
-            '4.0.7.27b'),
+        _section(id: 'sec6', number: 6, title: 'Connected Speech & Intelligibility',
+            tagline: 'Reading passage, ICS 7-item, CSIM single-word + sentence, WPM.',
+            child: _section6Body()),
         const SizedBox(height: 10),
-        _stub(7,  'Stimulability & Therapy Trial',
-            'Cuing response, prosthetic / behavioral compensations.',
-            '4.0.7.27b'),
+        _section(id: 'sec7', number: 7, title: 'Stimulability & Therapy Trial',
+            tagline: 'Loudness / rate / placement / resonance probe responses; therapy match.',
+            child: _section7Body()),
         const SizedBox(height: 10),
         _stub(8,  'Etiology-Specific Subforms',
             'CP, post-encephalitis, post-TBI, genetic syndrome, pediatric stroke.',
@@ -1834,6 +2441,838 @@ class _PedDysarthriaCaptureSectionState
           setState(() => _imitMultiSyllabic = v);
           _saveBedside();
         }),
+      ],
+    );
+  }
+
+  // ── Section 4 body — Five Speech Subsystems ───────────────────────
+  Widget _section4Body() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _subsectionHeader('4A · Respiration'),
+        _section4aBody(),
+        const SizedBox(height: 18),
+        _subsectionHeader('4B · Phonation'),
+        _section4bBody(),
+        const SizedBox(height: 18),
+        _subsectionHeader('4C · Articulation'),
+        _section4cBody(),
+        const SizedBox(height: 18),
+        _subsectionHeader('4D · Resonance'),
+        _section4dBody(),
+        const SizedBox(height: 18),
+        _subsectionHeader('4E · Prosody'),
+        _section4eBody(),
+        const SizedBox(height: 18),
+        _section4PrimarySubsystem(),
+      ],
+    );
+  }
+
+  Widget _section4aBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _singleChips('Vital capacity estimate',
+            const ['Adequate', 'Reduced', 'Severely reduced'],
+            _respVitalCapacity, (v) {
+          setState(() => _respVitalCapacity = v);
+          _saveRespirationNarrative();
+        }),
+        _numField("Maximum sustained 'ah'", _respMaxAhCtrl,
+            unit: 'sec', onSave: _saveAerodynamic),
+        _numField('Words per breath in connected speech',
+            _respWordsPerBreathCtrl, unit: 'words',
+            onSave: _saveAerodynamic),
+        _numField('Syllables per breath', _respSyllablesPerBreathCtrl,
+            unit: 'syl', onSave: _saveAerodynamic),
+        _singleChips('Breath support pattern', const [
+          'Clavicular', 'Thoracic', 'Abdominal-diaphragmatic',
+          'Reverse', 'Mixed',
+        ], _respBreathSupportPattern, (v) {
+          setState(() => _respBreathSupportPattern = v);
+          _saveAerodynamic();
+        }),
+        _singleChips('Synchronization with phonation onset',
+            const ['Adequate', 'Delayed', 'Inconsistent'],
+            _respPhonationSync, (v) {
+          setState(() => _respPhonationSync = v);
+          _saveRespirationNarrative();
+        }),
+        _singleChips('Breath direction',
+            const ['Audible inhalation', 'Silent', 'Forced'],
+            _respBreathDirection, (v) {
+          setState(() => _respBreathDirection = v);
+          _saveRespirationNarrative();
+        }),
+        _singleChips('Air wastage during speech',
+            const ['None', 'Mild', 'Moderate', 'Severe'],
+            _respAirWastage, (v) {
+          setState(() => _respAirWastage = v);
+          _saveAerodynamic();
+        }),
+        _textField('Respiration notes', _respNotesCtrl,
+            multi: true, onSave: _saveRespirationNarrative),
+        _severityRow('Respiratory subsystem severity', _respSeverity,
+            (v) {
+          setState(() => _respSeverity = v);
+          _saveSubsystemSeverity();
+        }),
+      ],
+    );
+  }
+
+  Widget _section4bBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _multiChips('Voice quality', const [
+          'Breathy', 'Strained', 'Harsh', 'Wet/gurgly',
+          'Hoarse', 'Tremulous', 'Pitch breaks',
+          'Aphonic / whispered',
+        ], _phonVoiceQualities, (v, sel) {
+          setState(() {
+            if (sel) {
+              _phonVoiceQualities.add(v);
+            } else {
+              _phonVoiceQualities.remove(v);
+            }
+          });
+          _savePhonationNarrative();
+        }),
+        _yesNo("Same as 'ah' above", _phonMptSameAsAh, (v) {
+          setState(() {
+            _phonMptSameAsAh = v;
+            if (v) _phonMptCtrl.text = _respMaxAhCtrl.text;
+          });
+          _savePhonationNarrative();
+        }),
+        if (!_phonMptSameAsAh)
+          _numField('Maximum phonation time', _phonMptCtrl,
+              unit: 'sec', onSave: _savePhonationNarrative),
+        _numField('s/z ratio', _phonSzRatioCtrl,
+            unit: 'ratio', onSave: _saveAerodynamic),
+        _singleChips('Habitual pitch',
+            const ['Adequate', 'Too high', 'Too low', 'Variable'],
+            _phonHabitualPitch, (v) {
+          setState(() => _phonHabitualPitch = v);
+          _savePhonationNarrative();
+        }),
+        _singleChips('Pitch range',
+            const ['Adequate', 'Restricted', 'Excessive'],
+            _phonPitchRange, (v) {
+          setState(() => _phonPitchRange = v);
+          _savePhonationNarrative();
+        }),
+        _singleChips('Loudness level',
+            const ['Adequate', 'Reduced', 'Excessive', 'Variable'],
+            _phonLoudnessLevel, (v) {
+          setState(() => _phonLoudnessLevel = v);
+          _savePhonationNarrative();
+        }),
+        _singleChips('Loudness range / dynamic control',
+            const ['Adequate', 'Reduced', 'Inconsistent'],
+            _phonLoudnessRange, (v) {
+          setState(() => _phonLoudnessRange = v);
+          _savePhonationNarrative();
+        }),
+        _singleChips('Voice onset',
+            const ['Smooth', 'Hard', 'Breathy', 'Effortful'],
+            _phonVoiceOnset, (v) {
+          setState(() => _phonVoiceOnset = v);
+          _savePhonationNarrative();
+        }),
+        _yesNo('Glottal incompetence signs', _phonGlottalIncomp, (v) {
+          setState(() => _phonGlottalIncomp = v);
+          _savePhonationNarrative();
+        }),
+        _yesNo('Hyperadduction signs', _phonHyperaddux, (v) {
+          setState(() => _phonHyperaddux = v);
+          _savePhonationNarrative();
+        }),
+        _textField('ENT findings transcribed (if available)',
+            _phonEntFindingsCtrl, multi: true,
+            onSave: _savePhonationNarrative),
+        _severityRow('Phonatory subsystem severity', _phonSeverity, (v) {
+          setState(() => _phonSeverity = v);
+          _saveSubsystemSeverity();
+        }),
+      ],
+    );
+  }
+
+  Widget _section4cBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('Diadochokinetic rates'),
+        _numField('puh repetitions / sec', _ddkPuhCtrl,
+            unit: '/sec', onSave: _saveDdk),
+        _numField('tuh repetitions / sec', _ddkTuhCtrl,
+            unit: '/sec', onSave: _saveDdk),
+        _numField('kuh repetitions / sec', _ddkKuhCtrl,
+            unit: '/sec', onSave: _saveDdk),
+        _numField('puh-tuh-kuh sequence rep / sec', _ddkPatakaCtrl,
+            unit: '/sec', onSave: _saveDdk),
+        _ghostNote(
+            'Pediatric DDK norms broaden with age — by ~6 yo expect ~5/sec for monosyllabic, ~3/sec for sequenced; younger children lower.'),
+        _singleChips('DDK regularity',
+            const ['Regular', 'Slightly irregular', 'Markedly irregular'],
+            _ddkRegularity, (v) {
+          setState(() => _ddkRegularity = v);
+          _saveDdk();
+        }),
+        _singleChips('DDK accuracy',
+            const ['Accurate', 'Distorted', 'Substituted'],
+            _ddkAccuracy, (v) {
+          setState(() => _ddkAccuracy = v);
+          _saveDdk();
+        }),
+        const SizedBox(height: 8),
+        _groupLabel('Phoneme inventory'),
+        _textField(
+            'Inventory (consonants initial / medial / final + vowels)',
+            _phonemeInventoryCtrl, multi: true,
+            onSave: _saveArticulationNarrative),
+        _textField('Phonemes mastered for age', _phonemesMasteredCtrl,
+            multi: true, onSave: _saveArticulationNarrative),
+        _textField('Phonemes emerging', _phonemesEmergingCtrl,
+            multi: true, onSave: _saveArticulationNarrative),
+        _textField('Phonemes absent', _phonemesAbsentCtrl,
+            multi: true, onSave: _saveArticulationNarrative),
+        _multiChips('Phoneme imprecision pattern', const [
+          'Imprecise consonants', 'Vowel distortions',
+          'Distorted substitutions (vs categorical)',
+          'Phoneme prolongation', 'Repeated phonemes',
+        ], _articImprecisionPattern, (v, sel) {
+          setState(() {
+            if (sel) {
+              _articImprecisionPattern.add(v);
+            } else {
+              _articImprecisionPattern.remove(v);
+            }
+          });
+          _saveArticulationNarrative();
+        }),
+        _multiChips('Place of articulation — affected', const [
+          'Bilabial', 'Labiodental', 'Dental', 'Alveolar',
+          'Palatal', 'Velar', 'Glottal',
+        ], _articPlaceErrors, (v, sel) {
+          setState(() {
+            if (sel) {
+              _articPlaceErrors.add(v);
+            } else {
+              _articPlaceErrors.remove(v);
+            }
+          });
+          _saveArticulationNarrative();
+        }),
+        _multiChips('Manner of articulation — affected', const [
+          'Stop', 'Fricative', 'Affricate',
+          'Nasal', 'Liquid', 'Glide',
+        ], _articMannerErrors, (v, sel) {
+          setState(() {
+            if (sel) {
+              _articMannerErrors.add(v);
+            } else {
+              _articMannerErrors.remove(v);
+            }
+          });
+          _saveArticulationNarrative();
+        }),
+        _singleChips('Voicing contrast accuracy',
+            const ['Adequate', 'Reduced', 'Severely reduced'],
+            _articVoicing, (v) {
+          setState(() => _articVoicing = v);
+          _saveArticulationNarrative();
+        }),
+        _severityRow('Articulatory subsystem severity', _articSeverity,
+            (v) {
+          setState(() => _articSeverity = v);
+          _saveSubsystemSeverity();
+        }),
+      ],
+    );
+  }
+
+  Widget _section4dBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _singleChips('Resonance balance', const [
+          'WNL', 'Hypernasal — mild', 'Hypernasal — moderate',
+          'Hypernasal — severe', 'Hyponasal', 'Mixed', 'Cul-de-sac',
+        ], _resonanceBalance, (v) {
+          setState(() => _resonanceBalance = v);
+          _saveResonanceNarrative();
+        }),
+        _yesNo('Nasal emission', _nasalEmission, (v) {
+          setState(() => _nasalEmission = v);
+          _saveResonanceNarrative();
+        }),
+        if (_nasalEmission)
+          _textField('During which sounds', _nasalEmissionSoundsCtrl,
+              multi: true, onSave: _saveResonanceNarrative),
+        _yesNo('Nasal turbulence', _nasalTurbulence, (v) {
+          setState(() => _nasalTurbulence = v);
+          _saveResonanceNarrative();
+        }),
+        _yesNo('Velopharyngeal function adequate during connected speech',
+            _vpConnectedAdequate, (v) {
+          setState(() => _vpConnectedAdequate = v);
+          _saveResonanceNarrative();
+        }),
+        _yesNo('VP adequate during pressure consonants',
+            _vpPressureAdequate, (v) {
+          setState(() => _vpPressureAdequate = v);
+          _saveResonanceNarrative();
+        }),
+        _textField('Resonance notes', _resonanceNotesCtrl,
+            multi: true, onSave: _saveResonanceNarrative),
+        _severityRow('Resonance subsystem severity', _resonanceSeverity,
+            (v) {
+          setState(() => _resonanceSeverity = v);
+          _saveSubsystemSeverity();
+        }),
+      ],
+    );
+  }
+
+  Widget _section4eBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _singleChips('Rate', const ['Slow', 'WNL', 'Fast', 'Variable'],
+            _rate, (v) {
+          setState(() => _rate = v);
+          _saveProsodyNarrative();
+        }),
+        _numField('Rate measurement (words per minute)', _wpmCtrl,
+            unit: 'wpm', onSave: _saveWpm),
+        _ghostNote(
+            'WPM is shared with Section 6 — both write to the same typed column. Last write wins.'),
+        _singleChips('Rhythm',
+            const ['Smooth', 'Halting', 'Scanning', 'Variable'],
+            _rhythm, (v) {
+          setState(() => _rhythm = v);
+          _saveProsodyNarrative();
+        }),
+        _multiChips('Stress pattern', const [
+          'WNL', 'Excess and equal stress',
+          'Reduced stress (monoloudness)',
+          'Inappropriate stress placement',
+        ], _stressPattern, (v, sel) {
+          setState(() {
+            if (sel) {
+              _stressPattern.add(v);
+            } else {
+              _stressPattern.remove(v);
+            }
+          });
+          _saveProsodyNarrative();
+        }),
+        _multiChips('Intonation', const [
+          'WNL', 'Monopitch', 'Reduced melodic contour',
+          'Atypical patterns',
+        ], _intonation, (v, sel) {
+          setState(() {
+            if (sel) {
+              _intonation.add(v);
+            } else {
+              _intonation.remove(v);
+            }
+          });
+          _saveProsodyNarrative();
+        }),
+        if (_intonation.contains('Atypical patterns'))
+          _textField('Atypical intonation specify',
+              _atypicalIntonationCtrl, multi: true,
+              onSave: _saveProsodyNarrative),
+        _singleChips('Phrasing', const [
+          'Adequate', 'Short phrases', 'Prolonged pauses',
+          'Inappropriate breaks',
+        ], _phrasing, (v) {
+          setState(() => _phrasing = v);
+          _saveProsodyNarrative();
+        }),
+        _textField('Prosody notes', _prosodyNotesCtrl,
+            multi: true, onSave: _saveProsodyNarrative),
+        _severityRow('Prosodic subsystem severity', _prosodySeverity,
+            (v) {
+          setState(() => _prosodySeverity = v);
+          _saveSubsystemSeverity();
+        }),
+      ],
+    );
+  }
+
+  Widget _section4PrimarySubsystem() {
+    final auto = _autoPrimarySubsystem();
+    final display = _primarySubsystemOverride ?? auto ?? 'Not yet determined';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('Primary subsystem affected'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: _tealSoft.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _teal.withValues(alpha: 0.4)),
+            ),
+            child: Text(display,
+                style: GoogleFonts.dmSans(
+                    fontSize: 12, color: _teal,
+                    fontWeight: FontWeight.w500)),
+          ),
+        ),
+        if (auto != null && _primarySubsystemOverride != null && _primarySubsystemOverride != auto)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text('Auto-derived: $auto (override active)',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: _inkGhost,
+                    fontStyle: FontStyle.italic)),
+          ),
+        _singleChips('Override primary subsystem', const [
+          'Respiration', 'Phonation', 'Articulation',
+          'Resonance', 'Prosody',
+        ], _primarySubsystemOverride, (v) {
+          setState(() => _primarySubsystemOverride = v);
+          _saveSubsystemSeverity();
+          _saveProsodyNarrative();
+        }),
+      ],
+    );
+  }
+
+  Widget _severityRow(String label, String? value,
+      ValueChanged<String?> onChanged) {
+    return _singleChips(label, const ['Mild', 'Moderate', 'Severe'],
+        value, onChanged);
+  }
+
+  // ── Section 5 body — Oral Mech Examination ────────────────────────
+  Widget _section5Body() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Structural'),
+        _multiChips('Lips', const [
+          'Symmetric', 'Asymmetric', 'Range WNL', 'Range reduced',
+          'Strength WNL', 'Strength reduced',
+        ], _omLips, (v, sel) {
+          setState(() {
+            if (sel) {
+              _omLips.add(v);
+            } else {
+              _omLips.remove(v);
+            }
+          });
+          _saveOralMech();
+        }),
+        _multiChips('Tongue', const [
+          'Range WNL', 'Range reduced',
+          'Strength WNL', 'Strength reduced',
+          'Dexterity WNL', 'Dexterity reduced',
+          'Fasciculations present',
+        ], _omTongue, (v, sel) {
+          setState(() {
+            if (sel) {
+              _omTongue.add(v);
+            } else {
+              _omTongue.remove(v);
+            }
+          });
+          _saveOralMech();
+        }),
+        _multiChips('Jaw', const [
+          'Range WNL', 'Range reduced', 'Stable', 'Unstable',
+          'Deviation on opening — left', 'Deviation on opening — right',
+        ], _omJaw, (v, sel) {
+          setState(() {
+            if (sel) {
+              _omJaw.add(v);
+            } else {
+              _omJaw.remove(v);
+            }
+          });
+          _saveOralMech();
+        }),
+        _singleChips('Soft palate', const [
+          'Symmetric on phonation', 'Asymmetric on phonation',
+          'Reduced elevation', 'Absent elevation',
+        ], _omSoftPalate, (v) {
+          setState(() => _omSoftPalate = v);
+          _saveOralMech();
+        }),
+        _singleChips('Hard palate', const [
+          'Intact', 'Cleft (specify)', 'Submucous cleft', 'High arched',
+        ], _omHardPalate, (v) {
+          setState(() => _omHardPalate = v);
+          _saveOralMech();
+        }),
+        if (_omHardPalate == 'Cleft (specify)' ||
+            _omHardPalate == 'Submucous cleft')
+          _textField('Hard palate detail', _omHardPalateDetailCtrl,
+              multi: true, onSave: _saveOralMech),
+        _singleChips('Dentition occlusion class', const [
+          'Class I', 'Class II', 'Class III', 'Mixed dentition',
+        ], _omOcclusionClass, (v) {
+          setState(() => _omOcclusionClass = v);
+          _saveOralMech();
+        }),
+        _yesNo('Missing teeth', _omMissingTeeth, (v) {
+          setState(() => _omMissingTeeth = v);
+          _saveOralMech();
+        }),
+        if (_omMissingTeeth)
+          _textField('Missing teeth detail', _omMissingTeethCtrl,
+              multi: true, onSave: _saveOralMech),
+        _singleChips('Pharyngeal wall movement', const [
+          'Adequate', 'Reduced', 'Asymmetric', 'Not visualizable',
+        ], _omPharyngealMovement, (v) {
+          setState(() => _omPharyngealMovement = v);
+          _saveOralMech();
+        }),
+        _singleChips('Gag reflex', const [
+          'Present and symmetric', 'Absent', 'Hyperactive', 'Asymmetric',
+        ], _omGagReflex, (v) {
+          setState(() => _omGagReflex = v);
+          _saveOralMech();
+        }),
+        _singleChips('Drooling pattern',
+            const ['Anterior', 'Posterior', 'Both', 'Minimal', 'None'],
+            _omDroolingPattern, (v) {
+          setState(() => _omDroolingPattern = v);
+          _saveOralMech();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Functional'),
+        _singleChips('Lip closure during chewing',
+            const ['Adequate', 'Inconsistent', 'Inadequate'],
+            _omLipClosureChewing, (v) {
+          setState(() => _omLipClosureChewing = v);
+          _saveOralMech();
+        }),
+        _singleChips('Tongue lateralization to teeth',
+            const ['Adequate', 'Reduced', 'Severely reduced', 'Unable'],
+            _omTongueLateralization, (v) {
+          setState(() => _omTongueLateralization = v);
+          _saveOralMech();
+        }),
+        _singleChips('Tongue elevation',
+            const ['Adequate', 'Reduced', 'Severely reduced', 'Unable'],
+            _omTongueElevation, (v) {
+          setState(() => _omTongueElevation = v);
+          _saveOralMech();
+        }),
+        _singleChips('Tongue protrusion / retraction',
+            const ['Adequate', 'Reduced', 'Severely reduced', 'Unable'],
+            _omTongueProtrusion, (v) {
+          setState(() => _omTongueProtrusion = v);
+          _saveOralMech();
+        }),
+        _singleChips('Velum elevation on /a/ phonation',
+            const ['Symmetric', 'Asymmetric', 'Reduced', 'Absent'],
+            _omVelumElevation, (v) {
+          setState(() => _omVelumElevation = v);
+          _saveOralMech();
+        }),
+        _singleChips('Cough strength',
+            const ['Strong', 'Adequate', 'Weak', 'Absent'],
+            _omCoughStrength, (v) {
+          setState(() => _omCoughStrength = v);
+          _saveOralMech();
+        }),
+        _singleChips('Swallow trigger',
+            const ['Timely', 'Delayed', 'Absent'],
+            _omSwallowTrigger, (v) {
+          setState(() => _omSwallowTrigger = v);
+          _saveOralMech();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Tone and reflexes'),
+        _singleChips('Oral muscle tone', const [
+          'Normotonic', 'Hypertonic', 'Hypotonic', 'Mixed', 'Variable',
+        ], _omOralTone, (v) {
+          setState(() => _omOralTone = v);
+          _saveOralMech();
+        }),
+        _multiChips('Primitive reflexes retained', const [
+          'ATNR (Asymmetric tonic neck reflex)', 'Bite reflex',
+          'Tongue thrust', 'Rooting', 'None observed',
+        ], _omPrimitiveReflexes, (v, sel) {
+          setState(() {
+            if (sel) {
+              _omPrimitiveReflexes.add(v);
+            } else {
+              _omPrimitiveReflexes.remove(v);
+            }
+          });
+          _saveOralMech();
+        }),
+        _singleChips('Volitional vs reflexive movement dissociation',
+            const ['Adequate', 'Reduced', 'Severely reduced'],
+            _omVolitionalReflexive, (v) {
+          setState(() => _omVolitionalReflexive = v);
+          _saveOralMech();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Notes'),
+        _textField('Oral mech examination overall notes',
+            _omNotesCtrl, multi: true, onSave: _saveOralMech),
+      ],
+    );
+  }
+
+  // ── Section 6 body — Connected Speech & Intelligibility ───────────
+  static const List<String> _icsItemWording = [
+    "Does your child's speech make sense to immediate family?",
+    "Does your child's speech make sense to extended family / relatives?",
+    "Does your child's speech make sense to your child's friends?",
+    "Does your child's speech make sense to other acquaintances?",
+    "Does your child's speech make sense to your child's teachers?",
+    "Does your child's speech make sense to strangers?",
+    "Does your child's speech make sense to you?",
+  ];
+  static const List<String> _icsLikertLabels = [
+    'Never', 'Rarely', 'Sometimes', 'Usually', 'Always',
+  ];
+
+  Widget _section6Body() {
+    final hasItems = _icsItems.values.any((v) => v > 0);
+    final icsTotal = _icsItems.values.fold<int>(0, (a, b) => a + b);
+    final icsAvg   = hasItems ? icsTotal / 7 : 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Reading passage / connected speech'),
+        _singleChips('Passage used', const [
+          'Rainbow Passage',
+          'Chosen Indian-language passage (specify)',
+          'Generated from picture',
+          'Other (specify)',
+        ], _passageUsed, (v) {
+          setState(() => _passageUsed = v);
+          _saveConnectedSpeechNarrative();
+        }),
+        if (_passageUsed == 'Chosen Indian-language passage (specify)' ||
+            _passageUsed == 'Other (specify)')
+          _textField('Passage detail', _passageDetailCtrl,
+              multi: true, onSave: _saveConnectedSpeechNarrative),
+        _textField('Audio reference / transcription',
+            _connectedAudioRefCtrl, multi: true,
+            hint: 'Audio attachment lands in a future commit',
+            onSave: _saveConnectedSpeechNarrative),
+        _numField('Words per minute', _wpmCtrl,
+            unit: 'wpm', onSave: _saveWpm),
+        _ghostNote(
+            'WPM is shared with Section 4E — both write to the same typed column. Last write wins.'),
+        _textField('Pause duration patterns', _pauseDurationCtrl,
+            multi: true, onSave: _saveConnectedSpeechNarrative),
+        _textField('Subsystem-level breakdown observations',
+            _subsystemBreakdownCtrl, multi: true,
+            onSave: _saveConnectedSpeechNarrative),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Intelligibility measures'),
+        _groupLabel('ICS — Intelligibility in Context Scale'),
+        for (var i = 1; i <= 7; i++)
+          _icsItemRow(i),
+        const SizedBox(height: 6),
+        _qolBadge(
+          label: 'ICS total',
+          total: hasItems ? icsTotal : 0,
+          maxScore: 35,
+        ),
+        if (hasItems) ...[
+          const SizedBox(height: 4),
+          Text('ICS average: ${icsAvg.toStringAsFixed(2)} / 5',
+              style: GoogleFonts.dmSans(
+                  fontSize: 12, color: _ink,
+                  fontWeight: FontWeight.w500)),
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel("CSIM — Children's Speech Intelligibility Measure"),
+        _numField('CSIM single-word', _csimSingleWordCtrl,
+            unit: '%', onSave: _saveIntelligibilityTyped),
+        _numField('CSIM sentence-level', _csimSentenceCtrl,
+            unit: '%', onSave: _saveIntelligibilityTyped),
+        _ghostNote(
+            'Score from standardized 50-word CSIM administration. If improvised, document in audio reference above.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Notes'),
+        _textField('Intelligibility notes', _intelligibilityNotesCtrl,
+            multi: true, onSave: _saveIntelligibilityTyped),
+      ],
+    );
+  }
+
+  Widget _icsItemRow(int i) {
+    final v = _icsItems[i] ?? 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$i. ${_icsItemWording[i - 1]}',
+              style: GoogleFonts.dmSans(
+                  fontSize: 12, color: _ink, height: 1.4)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6, runSpacing: 6,
+            children: [
+              for (var k = 0; k < 5; k++)
+                _yesNoChip('${k + 1} · ${_icsLikertLabels[k]}',
+                    v == k + 1, () {
+                  setState(() => _icsItems[i] = (v == k + 1) ? 0 : k + 1);
+                  _saveIntelligibilityTyped();
+                }),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _qolBadge({
+    required String label,
+    required int total,
+    required int maxScore,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: _tealSoft.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _teal.withValues(alpha: 0.45)),
+      ),
+      child: Text('$label: $total / $maxScore',
+          style: GoogleFonts.dmSans(
+              fontSize: 13, color: _teal,
+              fontWeight: FontWeight.w600)),
+    );
+  }
+
+  // ── Section 7 body — Stimulability & Therapy Trial ────────────────
+  Widget _section7Body() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel("A · Loudness manipulation (LSVT-LOUD probe)"),
+        _singleChips("Response to 'speak loud' cue",
+            const ['None', 'Partial', 'Robust'],
+            _stimLoudResponse, (v) {
+          setState(() => _stimLoudResponse = v);
+          _saveStimulability();
+        }),
+        _yesNo('Loudness sustained over 5+ seconds', _stimLoudSustained,
+            (v) {
+          setState(() => _stimLoudSustained = v);
+          _saveStimulability();
+        }),
+        _yesNo('Intelligibility improvement with louder voice',
+            _stimLoudIntelligibilityImproves, (v) {
+          setState(() => _stimLoudIntelligibilityImproves = v);
+          _saveStimulability();
+        }),
+        _textField('Loudness probe notes', _stimLoudNotesCtrl,
+            multi: true, onSave: _saveStimulability),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Rate manipulation'),
+        _singleChips('Response to slowed rate',
+            const ['None', 'Partial', 'Improved intelligibility'],
+            _stimRateResponse, (v) {
+          setState(() => _stimRateResponse = v);
+          _saveStimulability();
+        }),
+        _singleChips('Pacing board / metronome response', const [
+          'Effective', 'Partially effective', 'No effect', 'Not trialed',
+        ], _stimPacingResponse, (v) {
+          setState(() => _stimPacingResponse = v);
+          _saveStimulability();
+        }),
+        _textField('Rate manipulation notes', _stimRateNotesCtrl,
+            multi: true, onSave: _saveStimulability),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Articulatory placement cuing'),
+        _singleChips('Tactile cue response (PROMPT-style)', const [
+          'Robust response', 'Partial response',
+          'No response', 'Not trialed',
+        ], _stimTactileResponse, (v) {
+          setState(() => _stimTactileResponse = v);
+          _saveStimulability();
+        }),
+        _singleChips('Visual model response', const [
+          'Robust response', 'Partial response',
+          'No response', 'Not trialed',
+        ], _stimVisualModelResponse, (v) {
+          setState(() => _stimVisualModelResponse = v);
+          _saveStimulability();
+        }),
+        _singleChips('Phonetic placement cue response', const [
+          'Robust response', 'Partial response',
+          'No response', 'Not trialed',
+        ], _stimPhoneticPlacementResponse, (v) {
+          setState(() => _stimPhoneticPlacementResponse = v);
+          _saveStimulability();
+        }),
+        _textField('Articulatory cuing notes', _stimArticNotesCtrl,
+            multi: true, onSave: _saveStimulability),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Resonance manipulation'),
+        _singleChips('Open-mouth posture response', const [
+          'Effective', 'Partially effective',
+          'No effect', 'Not trialed',
+        ], _stimOpenMouthResponse, (v) {
+          setState(() => _stimOpenMouthResponse = v);
+          _saveStimulability();
+        }),
+        _singleChips('Increased oral airflow cuing response', const [
+          'Effective', 'Partially effective',
+          'No effect', 'Not trialed',
+        ], _stimOralAirflowResponse, (v) {
+          setState(() => _stimOralAirflowResponse = v);
+          _saveStimulability();
+        }),
+        _textField('Resonance manipulation notes',
+            _stimResonanceNotesCtrl, multi: true,
+            onSave: _saveStimulability),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Therapy approach predicted'),
+        _multiChips('Recommended therapy approaches', const [
+          'LSVT-LOUD candidate', 'SPEAK OUT! candidate',
+          'PROMPT candidate', 'Resonance therapy',
+          'Rate control therapy',
+          'Compensatory / strategic approach',
+          'AAC consideration', 'Articulation drill',
+          'Beckman oral motor (note: weak evidence — consider carefully)',
+        ], _stimRecommendedApproaches, (v, sel) {
+          setState(() {
+            if (sel) {
+              _stimRecommendedApproaches.add(v);
+            } else {
+              _stimRecommendedApproaches.remove(v);
+            }
+          });
+          _saveStimulability();
+        }),
+        _textField('Therapy approach reasoning',
+            _stimApproachReasoningCtrl, multi: true,
+            onSave: _saveStimulability),
       ],
     );
   }

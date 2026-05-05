@@ -65,6 +65,9 @@ class PedDysarthriaAssessment {
   final Map<String, dynamic> resonancePayload;
   final Map<String, dynamic> prosodyPayload;
   final Map<String, dynamic> oralMechPayload;
+  // Phase 4.0.7.27b — Section 6 narrative jsonb (passage notes,
+  // pause patterns, subsystem-level breakdown observations).
+  final Map<String, dynamic> connectedSpeechPayload;
   final Map<String, dynamic> stimulabilityPayload;
   final Map<String, dynamic> etiologySpecificPayload;
   final Map<String, dynamic> cognitiveCommScreenPayload;
@@ -108,6 +111,7 @@ class PedDysarthriaAssessment {
     this.resonancePayload             = const {},
     this.prosodyPayload               = const {},
     this.oralMechPayload              = const {},
+    this.connectedSpeechPayload       = const {},
     this.stimulabilityPayload         = const {},
     this.etiologySpecificPayload      = const {},
     this.cognitiveCommScreenPayload   = const {},
@@ -166,6 +170,7 @@ class PedDysarthriaAssessment {
       resonancePayload:             mapOf('resonance_payload'),
       prosodyPayload:               mapOf('prosody_payload'),
       oralMechPayload:              mapOf('oral_mech_payload'),
+      connectedSpeechPayload:       mapOf('connected_speech_payload'),
       stimulabilityPayload:         mapOf('stimulability_payload'),
       etiologySpecificPayload:      mapOf('etiology_specific_payload'),
       cognitiveCommScreenPayload:   mapOf('cognitive_comm_screen_payload'),

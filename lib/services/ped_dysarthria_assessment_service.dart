@@ -69,6 +69,8 @@ class PedDysarthriaAssessmentService {
       'resonance_payload',
       'prosody_payload',
       'oral_mech_payload',
+      // 27b — Section 6 (connected speech narrative).
+      'connected_speech_payload',
       'stimulability_payload',
       'etiology_specific_payload',
       'cognitive_comm_screen_payload',
@@ -232,7 +234,10 @@ class PedDysarthriaAssessmentService {
           // deviance from 1.0, not directional. Same correction voice
           // 24a-fix1 applied.
           OutcomeRow(label: 's/z ratio',         baseline: n(baseAero, 's_z_ratio'),           latest: n(latestAero, 's_z_ratio'),           direction: 'neutral'),
-          OutcomeRow(label: 'Words per breath',  baseline: n(baseAero, 'words_per_breath'),    latest: n(latestAero, 'words_per_breath'),    direction: 'higher'),
+          OutcomeRow(label: 'Words per breath',     baseline: n(baseAero, 'words_per_breath'),     latest: n(latestAero, 'words_per_breath'),     direction: 'higher'),
+          // 27b — adds syllables/breath alongside words/breath since
+          // Section 4A captures both.
+          OutcomeRow(label: 'Syllables per breath', baseline: n(baseAero, 'syllables_per_breath'), latest: n(latestAero, 'syllables_per_breath'), direction: 'higher'),
         ]),
         OutcomeGroup(label: 'DDK', rows: [
           OutcomeRow(label: 'puh / sec',     baseline: n(baseDdk, 'puh_per_sec'),     latest: n(latestDdk, 'puh_per_sec'),     direction: 'higher'),
@@ -252,7 +257,7 @@ class PedDysarthriaAssessmentService {
           OutcomeRow(label: 'ICS average',                    baseline: n(baseInt, 'ics_average'),                        latest: n(latestInt, 'ics_average'),                        direction: 'higher'),
           OutcomeRow(label: 'CSIM single-word',               baseline: n(baseInt, 'csim_single_word_pct'),               latest: n(latestInt, 'csim_single_word_pct'),               unit: '%', direction: 'higher'),
           OutcomeRow(label: 'CSIM sentence',                  baseline: n(baseInt, 'csim_sentence_pct'),                  latest: n(latestInt, 'csim_sentence_pct'),                  unit: '%', direction: 'higher'),
-          OutcomeRow(label: 'Familiar caregivers',            baseline: n(baseInt, 'listener_familiar_caregivers_pct'),   latest: n(latestInt, 'listener_familiar_caregivers_pct'),   unit: '%', direction: 'higher'),
+          OutcomeRow(label: 'Familiar primary listeners',     baseline: n(baseInt, 'listener_familiar_primary_pct'),      latest: n(latestInt, 'listener_familiar_primary_pct'),      unit: '%', direction: 'higher'),
           OutcomeRow(label: 'Family (non-primary)',           baseline: n(baseInt, 'listener_family_pct'),                latest: n(latestInt, 'listener_family_pct'),                unit: '%', direction: 'higher'),
           OutcomeRow(label: 'Peers',                          baseline: n(baseInt, 'listener_peers_pct'),                 latest: n(latestInt, 'listener_peers_pct'),                 unit: '%', direction: 'higher'),
           OutcomeRow(label: 'Teachers',                       baseline: n(baseInt, 'listener_teachers_pct'),              latest: n(latestInt, 'listener_teachers_pct'),              unit: '%', direction: 'higher'),
