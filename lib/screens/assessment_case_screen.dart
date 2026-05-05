@@ -18,6 +18,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/assessment/ald_capture_section.dart';
 import '../widgets/assessment/ssd_capture_section.dart';
 import '../widgets/assessment/voice_capture_section.dart';
 
@@ -439,6 +440,10 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     if (area == 'voice') return VoiceCaptureSection(clientId: clientId);
     if (area == 'speech-sound-disorders') {
       return SsdCaptureSection(clientId: clientId);
+    }
+    // 4.0.7.25a — Adult Language & Cognitive surface lands here.
+    if (area == 'adult-language-cognitive') {
+      return AldCaptureSection(clientId: clientId);
     }
     return Container(
       padding: const EdgeInsets.all(14),
