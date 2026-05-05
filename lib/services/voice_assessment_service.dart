@@ -79,7 +79,14 @@ class VoiceAssessmentService {
     required String columnName,
     required Map<String, dynamic> payload,
   }) async {
-    const allowed = {'functional_voice_payload', 'task_based_payload'};
+    // 24c — three new narrative jsonb columns for Sections 8 / 10 / 15.
+    const allowed = {
+      'functional_voice_payload',
+      'task_based_payload',
+      'special_populations_payload',
+      'differential_diagnosis_payload',
+      'clinical_impression_payload',
+    };
     if (!allowed.contains(columnName)) {
       throw ArgumentError(
           'savePayloadSection: $columnName is not a known jsonb column');
@@ -106,6 +113,8 @@ class VoiceAssessmentService {
     const allowed = {
       'voice_aerodynamic_measures',
       'voice_perceptual_ratings',
+      // 24c — Section 12 typed QoL scores
+      'voice_qol_scores',
     };
     if (!allowed.contains(tableName)) {
       throw ArgumentError(
@@ -236,9 +245,13 @@ class VoiceAssessmentService {
           OutcomeRow(label: 'GRBAS grade',        baseline: n(basePerc, 'grbas_grade'),            latest: n(latestPerc, 'grbas_grade'),            direction: 'lower'),
         ]),
         OutcomeGroup(label: 'QoL', rows: [
+          // 24c — Section 12 lands typed QoL scores. VHI-* / SVHI are
+          // handicap scales (lower = better); V-RQOL is a quality of
+          // life scale (higher = better).
           OutcomeRow(label: 'VHI-10',     baseline: n(baseQol, 'vhi10_total'),  latest: n(latestQol, 'vhi10_total'),  direction: 'lower'),
           OutcomeRow(label: 'VHI-30',     baseline: n(baseQol, 'vhi30_total'),  latest: n(latestQol, 'vhi30_total'),  direction: 'lower'),
           OutcomeRow(label: 'V-RQOL',     baseline: n(baseQol, 'vrqol_total'),  latest: n(latestQol, 'vrqol_total'),  direction: 'higher'),
+          OutcomeRow(label: 'SVHI',       baseline: n(baseQol, 'svhi_total'),   latest: n(latestQol, 'svhi_total'),   direction: 'lower'),
         ]),
       ],
     );

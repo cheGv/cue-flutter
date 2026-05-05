@@ -173,6 +173,96 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
   String? _resonanceBalance;
   final _resonanceObsCtrl      = TextEditingController();
 
+  // ── Section 8 (Special Populations) — narrative jsonb ─────────────
+  // Subform routes off _populationType. Each subform's controllers
+  // persist independently in widget memory so toggling between
+  // population types doesn't lose entered data within the session;
+  // on save the full payload (including sibling subform data) is
+  // written, so a refresh restores the active subform's fields too.
+  String? _populationType;
+  // Transgender
+  String? _trGender;
+  final _trCurrentF0Ctrl     = TextEditingController();
+  final _trTargetF0LowCtrl   = TextEditingController();
+  final _trTargetF0HighCtrl  = TextEditingController();
+  final _trResonanceCtrl     = TextEditingController();
+  final _trIntonationCtrl    = TextEditingController();
+  final _trTrainingHistCtrl  = TextEditingController();
+  bool _trHormoneOn          = false;
+  final _trHormoneDurCtrl    = TextEditingController();
+  // Puberty
+  final _pubAgeOnsetCtrl     = TextEditingController();
+  String? _pubMutationStability;
+  String? _pubPitchBreakFreq;
+  final _pubHabitualPitchCtrl = TextEditingController();
+  final _pubNotesCtrl        = TextEditingController();
+  // Pediatric
+  final _pedHygieneCtrl      = TextEditingController();
+  final _pedAbusePatternsCtrl = TextEditingController();
+  final _pedBehavioralCtrl   = TextEditingController();
+  final _pedSchoolLoadCtrl   = TextEditingController();
+  // Geriatric
+  bool _geriPresbylaryngis   = false;
+  final _geriPresbylDetailsCtrl = TextEditingController();
+  final _geriFunctionalLoadCtrl = TextEditingController();
+  final _geriComorbiditiesCtrl  = TextEditingController();
+  final _geriMedsCtrl        = TextEditingController();
+  // Singer / occupational
+  final _singerVoiceClassCtrl   = TextEditingController();
+  final _singerRepertoireCtrl   = TextEditingController();
+  final _singerTrainingCtrl     = TextEditingController();
+  final _singerScheduleHrsCtrl  = TextEditingController();
+
+  // ── Section 10 (Differential Diagnosis) — narrative jsonb ────────
+  final _ddPrimaryDxCtrl     = TextEditingController();
+  String? _ddEtiologyCategory;
+  final _ddEtiologyNotesCtrl = TextEditingController();
+  // Rule-outs grown via "+ Add rule-out". Default 3 empty rows shown.
+  final List<TextEditingController> _ddRuleOutCtrls = [
+    TextEditingController(),
+    TextEditingController(),
+    TextEditingController(),
+  ];
+  final Set<String> _ddContributingFactors = {};
+  final _ddOtherContribCtrl  = TextEditingController();
+  final _ddSynthesisCtrl     = TextEditingController();
+
+  // ── Section 12 (QoL) — typed voice_qol_scores totals ─────────────
+  // Item-level state lives in widget memory only — the schema's
+  // typed columns are totals (vhi10_total, vhi30_total, vrqol_total,
+  // svhi_total + vhi30 subscales). On hard refresh the totals
+  // reload but the per-item answers do not (flagged in 24c report).
+  final Map<int, int> _vhi10Items = {}; // q1..q10 → 0..4
+  bool _useVhi30 = false;
+  final Map<int, int> _vhi30Items = {}; // q1..q30 → 0..4
+  final Map<int, int> _vrqolItems = {}; // q1..q10 → 1..5
+  bool _useSvhi  = false;
+  final Map<int, int> _svhiItems  = {}; // q1..q36 → 0..4
+  // Totals as last loaded from voice_qol_scores; updated on save.
+  int? _vhi10TotalLoaded;
+  int? _vhi30TotalLoaded;
+  int? _vrqolTotalLoaded;
+  int? _svhiTotalLoaded;
+
+  // ── Section 15 (Final Clinical Impression & Plan) — narrative ───
+  final _ciFinalDxCtrl       = TextEditingController();
+  final _ciIcdCodeCtrl       = TextEditingController();
+  String? _ciDxConfidence;
+  String? _ciSeverity;
+  final _ciSeverityRationaleCtrl = TextEditingController();
+  bool _ciOverrideEtiology   = false;
+  String? _ciEtiologyOverride;
+  final Set<String> _ciInterventions = {};
+  final _ciTherapyProtocolCtrl   = TextEditingController();
+  final _ciSessionCountCtrl  = TextEditingController();
+  String? _ciFrequency;
+  final _ciDischargeCriteriaCtrl = TextEditingController();
+  bool _ciEntReferralNeeded  = false;
+  final _ciEntReferralReasonCtrl = TextEditingController();
+  final _ciOtherReferralsCtrl    = TextEditingController();
+  final Set<String> _ciHygieneItems = {};
+  final _ciHygieneNotesCtrl  = TextEditingController();
+
   // Accordion expansion state — Section 1 default-expanded
   String _expanded = 'sec1';
 
@@ -199,6 +289,25 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
       _highestPitchCtrl, _lowestPitchCtrl, _pitchBreakNotesCtrl,
       _resonanceObsCtrl,
       ..._aeroCtrls.values,
+      // 24c — Section 8 / 10 / 15 controllers (Section 12 only holds
+      // ints, no controllers to dispose).
+      _trCurrentF0Ctrl, _trTargetF0LowCtrl, _trTargetF0HighCtrl,
+      _trResonanceCtrl, _trIntonationCtrl, _trTrainingHistCtrl,
+      _trHormoneDurCtrl,
+      _pubAgeOnsetCtrl, _pubHabitualPitchCtrl, _pubNotesCtrl,
+      _pedHygieneCtrl, _pedAbusePatternsCtrl, _pedBehavioralCtrl,
+      _pedSchoolLoadCtrl,
+      _geriPresbylDetailsCtrl, _geriFunctionalLoadCtrl,
+      _geriComorbiditiesCtrl, _geriMedsCtrl,
+      _singerVoiceClassCtrl, _singerRepertoireCtrl, _singerTrainingCtrl,
+      _singerScheduleHrsCtrl,
+      _ddPrimaryDxCtrl, _ddEtiologyNotesCtrl, _ddOtherContribCtrl,
+      _ddSynthesisCtrl,
+      ..._ddRuleOutCtrls,
+      _ciFinalDxCtrl, _ciIcdCodeCtrl, _ciSeverityRationaleCtrl,
+      _ciTherapyProtocolCtrl, _ciSessionCountCtrl,
+      _ciDischargeCriteriaCtrl, _ciEntReferralReasonCtrl,
+      _ciOtherReferralsCtrl, _ciHygieneNotesCtrl,
     ]) {
       c.dispose();
     }
@@ -212,8 +321,8 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
         visitId:  widget.visitId,
       );
       _hydrateFromAssessment(a);
-      // 24b — typed-table reads run in parallel; both soft-fail to {}
-      // so a fresh baseline lands without surfacing a load error.
+      // 24b/24c — typed-table reads run in parallel; all soft-fail to
+      // {} so a fresh baseline lands without surfacing a load error.
       final results = await Future.wait([
         _service.loadTypedMeasures(
             voiceAssessmentId: a.id,
@@ -221,14 +330,18 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
         _service.loadTypedMeasures(
             voiceAssessmentId: a.id,
             tableName: 'voice_perceptual_ratings'),
+        _service.loadTypedMeasures(
+            voiceAssessmentId: a.id,
+            tableName: 'voice_qol_scores'),
         _service.compareBaselineToLatest(widget.clientId),
       ]);
       _hydrateAerodynamic(results[0] as Map<String, dynamic>);
       _hydratePerceptual(results[1] as Map<String, dynamic>);
+      _hydrateQol(results[2] as Map<String, dynamic>);
       if (!mounted) return;
       setState(() {
         _assessment = a;
-        _outcome    = results[2] as OutcomeComparison;
+        _outcome    = results[3] as OutcomeComparison;
         _loading    = false;
       });
     } catch (e) {
@@ -346,6 +459,132 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
         : const <String, dynamic>{};
     _resonanceBalance       = res['balance'] as String?;
     _resonanceObsCtrl.text  = (res['observations'] as String?) ?? '';
+
+    // 24c — Section 8 (special populations) seeds from its jsonb.
+    final sp = a.specialPopulationsPayload;
+    _populationType = sp['population_type'] as String?;
+    final tr = (sp['transgender'] is Map)
+        ? Map<String, dynamic>.from(sp['transgender'] as Map)
+        : const <String, dynamic>{};
+    _trGender                = tr['target_gender'] as String?;
+    _trCurrentF0Ctrl.text    = tr['current_f0_hz']?.toString() ?? '';
+    _trTargetF0LowCtrl.text  = tr['target_f0_low_hz']?.toString() ?? '';
+    _trTargetF0HighCtrl.text = tr['target_f0_high_hz']?.toString() ?? '';
+    _trResonanceCtrl.text    = (tr['resonance_formant_notes'] as String?) ?? '';
+    _trIntonationCtrl.text   = (tr['intonation_patterns'] as String?) ?? '';
+    _trTrainingHistCtrl.text = (tr['voice_training_history'] as String?) ?? '';
+    _trHormoneOn             = tr['hormone_therapy_on'] == true;
+    _trHormoneDurCtrl.text   = tr['hormone_therapy_duration_months']?.toString() ?? '';
+    final pub = (sp['puberty'] is Map)
+        ? Map<String, dynamic>.from(sp['puberty'] as Map)
+        : const <String, dynamic>{};
+    _pubAgeOnsetCtrl.text     = pub['age_at_voice_change_onset']?.toString() ?? '';
+    _pubMutationStability     = pub['mutation_stability'] as String?;
+    _pubPitchBreakFreq        = pub['pitch_break_frequency'] as String?;
+    _pubHabitualPitchCtrl.text = (pub['habitual_pitch_vs_expected'] as String?) ?? '';
+    _pubNotesCtrl.text        = (pub['notes'] as String?) ?? '';
+    final ped = (sp['pediatric'] is Map)
+        ? Map<String, dynamic>.from(sp['pediatric'] as Map)
+        : const <String, dynamic>{};
+    _pedHygieneCtrl.text       = (ped['vocal_hygiene_awareness'] as String?) ?? '';
+    _pedAbusePatternsCtrl.text = (ped['voice_abuse_patterns']    as String?) ?? '';
+    _pedBehavioralCtrl.text    = (ped['behavioral_concerns']     as String?) ?? '';
+    _pedSchoolLoadCtrl.text    = (ped['school_voice_load']       as String?) ?? '';
+    final geri = (sp['geriatric'] is Map)
+        ? Map<String, dynamic>.from(sp['geriatric'] as Map)
+        : const <String, dynamic>{};
+    _geriPresbylaryngis           = geri['presbylaryngis_signs'] == true;
+    _geriPresbylDetailsCtrl.text  = (geri['presbylaryngis_details']  as String?) ?? '';
+    _geriFunctionalLoadCtrl.text  = (geri['functional_voice_load']    as String?) ?? '';
+    _geriComorbiditiesCtrl.text   = (geri['comorbidities_affecting']  as String?) ?? '';
+    _geriMedsCtrl.text            = (geri['medication_review']        as String?) ?? '';
+    final singer = (sp['singer_occupational'] is Map)
+        ? Map<String, dynamic>.from(sp['singer_occupational'] as Map)
+        : const <String, dynamic>{};
+    _singerVoiceClassCtrl.text  = (singer['voice_classification']  as String?) ?? '';
+    _singerRepertoireCtrl.text  = (singer['repertoire']             as String?) ?? '';
+    _singerTrainingCtrl.text    = (singer['training_background']    as String?) ?? '';
+    _singerScheduleHrsCtrl.text = singer['performance_hours_per_week']?.toString() ?? '';
+
+    // 24c — Section 10 (differential diagnosis) seeds from its jsonb.
+    final dd = a.differentialDiagnosisPayload;
+    _ddPrimaryDxCtrl.text     = (dd['primary_diagnosis']  as String?) ?? '';
+    _ddEtiologyCategory       = dd['etiology_category']   as String?;
+    _ddEtiologyNotesCtrl.text = (dd['etiology_notes']     as String?) ?? '';
+    final ruleOuts = dd['rule_outs'];
+    if (ruleOuts is List && ruleOuts.isNotEmpty) {
+      // Replace the default 3 with however many landed; pad to at
+      // least 3 so the form still shows empty rows on the bottom.
+      for (final c in _ddRuleOutCtrls) {
+        c.dispose();
+      }
+      _ddRuleOutCtrls
+        ..clear()
+        ..addAll(ruleOuts.map((e) =>
+            TextEditingController(text: e?.toString() ?? '')));
+      while (_ddRuleOutCtrls.length < 3) {
+        _ddRuleOutCtrls.add(TextEditingController());
+      }
+    }
+    final factors = dd['contributing_factors'];
+    if (factors is List) {
+      _ddContributingFactors
+        ..clear()
+        ..addAll(factors.map((e) => e.toString()));
+    }
+    _ddOtherContribCtrl.text = (dd['other_contributing']    as String?) ?? '';
+    _ddSynthesisCtrl.text    = (dd['differential_reasoning'] as String?) ?? '';
+
+    // 24c — Section 15 (clinical impression & plan) seeds from its jsonb.
+    final ci = a.clinicalImpressionPayload;
+    _ciFinalDxCtrl.text       = (ci['final_diagnosis']      as String?) ?? '';
+    _ciIcdCodeCtrl.text       = (ci['icd_code']             as String?) ?? '';
+    _ciDxConfidence           = ci['diagnosis_confidence']  as String?;
+    _ciSeverity               = ci['severity']              as String?;
+    _ciSeverityRationaleCtrl.text = (ci['severity_rationale'] as String?) ?? '';
+    _ciOverrideEtiology       = ci['override_etiology'] == true;
+    _ciEtiologyOverride       = ci['etiology_override']     as String?;
+    final interv = ci['recommended_interventions'];
+    if (interv is List) {
+      _ciInterventions
+        ..clear()
+        ..addAll(interv.map((e) => e.toString()));
+    }
+    _ciTherapyProtocolCtrl.text   = (ci['therapy_protocol_details']  as String?) ?? '';
+    _ciSessionCountCtrl.text      = ci['estimated_session_count']?.toString() ?? '';
+    _ciFrequency                  = ci['frequency']               as String?;
+    _ciDischargeCriteriaCtrl.text = (ci['discharge_criteria']     as String?) ?? '';
+    _ciEntReferralNeeded          = ci['ent_referral_needed'] == true;
+    _ciEntReferralReasonCtrl.text = (ci['ent_referral_reason']    as String?) ?? '';
+    _ciOtherReferralsCtrl.text    = (ci['other_referrals']        as String?) ?? '';
+    final hyg = ci['vocal_hygiene_items'];
+    if (hyg is List) {
+      _ciHygieneItems
+        ..clear()
+        ..addAll(hyg.map((e) => e.toString()));
+    }
+    _ciHygieneNotesCtrl.text = (ci['vocal_hygiene_notes'] as String?) ?? '';
+  }
+
+  /// Seeds Section 12 from a previously saved voice_qol_scores row.
+  /// Per-item answers are NOT persisted (only totals), so on hard
+  /// refresh the totals reload but the slider rows show 0/1 defaults.
+  void _hydrateQol(Map<String, dynamic> row) {
+    if (row.isEmpty) return;
+    final v10 = row['vhi10_total'];
+    if (v10 is num) _vhi10TotalLoaded = v10.toInt();
+    final v30 = row['vhi30_total'];
+    if (v30 is num) {
+      _vhi30TotalLoaded = v30.toInt();
+      _useVhi30 = true;
+    }
+    final vrq = row['vrqol_total'];
+    if (vrq is num) _vrqolTotalLoaded = vrq.toInt();
+    final svhi = row['svhi_total'];
+    if (svhi is num) {
+      _svhiTotalLoaded = svhi.toInt();
+      _useSvhi = true;
+    }
   }
 
   void _hydrateAerodynamic(Map<String, dynamic> row) {
@@ -565,6 +804,182 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
     }
   }
 
+  // 24c — Section 8 narrative jsonb. Writes the active subform plus
+  // any sibling subform data already in widget memory so toggling
+  // population types in-session doesn't drop sibling answers.
+  Future<void> _saveSpecialPopulations() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'population_type': _populationType,
+      'transgender': {
+        'target_gender':                   _trGender,
+        'current_f0_hz':                   _parseDecimal(_trCurrentF0Ctrl.text),
+        'target_f0_low_hz':                _parseDecimal(_trTargetF0LowCtrl.text),
+        'target_f0_high_hz':               _parseDecimal(_trTargetF0HighCtrl.text),
+        'resonance_formant_notes':         _trResonanceCtrl.text.trim(),
+        'intonation_patterns':             _trIntonationCtrl.text.trim(),
+        'voice_training_history':          _trTrainingHistCtrl.text.trim(),
+        'hormone_therapy_on':              _trHormoneOn,
+        'hormone_therapy_duration_months': _parseDecimal(_trHormoneDurCtrl.text),
+      },
+      'puberty': {
+        'age_at_voice_change_onset':  _parseDecimal(_pubAgeOnsetCtrl.text),
+        'mutation_stability':         _pubMutationStability,
+        'pitch_break_frequency':      _pubPitchBreakFreq,
+        'habitual_pitch_vs_expected': _pubHabitualPitchCtrl.text.trim(),
+        'notes':                      _pubNotesCtrl.text.trim(),
+      },
+      'pediatric': {
+        'vocal_hygiene_awareness': _pedHygieneCtrl.text.trim(),
+        'voice_abuse_patterns':    _pedAbusePatternsCtrl.text.trim(),
+        'behavioral_concerns':     _pedBehavioralCtrl.text.trim(),
+        'school_voice_load':       _pedSchoolLoadCtrl.text.trim(),
+      },
+      'geriatric': {
+        'presbylaryngis_signs':     _geriPresbylaryngis,
+        'presbylaryngis_details':   _geriPresbylDetailsCtrl.text.trim(),
+        'functional_voice_load':    _geriFunctionalLoadCtrl.text.trim(),
+        'comorbidities_affecting':  _geriComorbiditiesCtrl.text.trim(),
+        'medication_review':        _geriMedsCtrl.text.trim(),
+      },
+      'singer_occupational': {
+        'voice_classification':       _singerVoiceClassCtrl.text.trim(),
+        'repertoire':                 _singerRepertoireCtrl.text.trim(),
+        'training_background':        _singerTrainingCtrl.text.trim(),
+        'performance_hours_per_week': _parseDecimal(_singerScheduleHrsCtrl.text),
+      },
+    };
+    try {
+      await _service.savePayloadSection(
+        voiceAssessmentId: _assessment!.id,
+        columnName:        'special_populations_payload',
+        payload:           payload,
+      );
+    } catch (e) {
+      _toast('Could not save special populations: $e');
+    }
+  }
+
+  // 24c — Section 10 narrative jsonb.
+  Future<void> _saveDifferentialDiagnosis() async {
+    if (_assessment == null) return;
+    final ruleOuts = _ddRuleOutCtrls
+        .map((c) => c.text.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final payload = <String, dynamic>{
+      'primary_diagnosis':       _ddPrimaryDxCtrl.text.trim(),
+      'etiology_category':       _ddEtiologyCategory,
+      'etiology_notes':          _ddEtiologyNotesCtrl.text.trim(),
+      'rule_outs':               ruleOuts,
+      'contributing_factors':    _ddContributingFactors.toList(),
+      'other_contributing':      _ddOtherContribCtrl.text.trim(),
+      'differential_reasoning':  _ddSynthesisCtrl.text.trim(),
+    };
+    try {
+      await _service.savePayloadSection(
+        voiceAssessmentId: _assessment!.id,
+        columnName:        'differential_diagnosis_payload',
+        payload:           payload,
+      );
+    } catch (e) {
+      _toast('Could not save differential diagnosis: $e');
+    }
+  }
+
+  // 24c — Section 12 typed QoL totals to voice_qol_scores. Per-item
+  // answers stay in widget memory only (the schema's typed columns
+  // are totals + VHI-30 subscale totals).
+  Future<void> _saveQol() async {
+    if (_assessment == null) return;
+    final vhi10 = _vhi10Total;
+    final data = <String, dynamic>{
+      'vhi10_total': ?vhi10,
+      if (_useVhi30) ...{
+        'vhi30_total':       _vhi30Total,
+        'vhi30_functional':  _vhi30FunctionalTotal,
+        'vhi30_physical':    _vhi30PhysicalTotal,
+        'vhi30_emotional':   _vhi30EmotionalTotal,
+      },
+      'vrqol_total': _vrqolTotal,
+      if (_useSvhi) 'svhi_total': _svhiTotal,
+    };
+    try {
+      await _service.saveTypedMeasures(
+        voiceAssessmentId: _assessment!.id,
+        tableName:         'voice_qol_scores',
+        data:              data,
+      );
+      // Reflect the saved totals in the loaded badges immediately.
+      setState(() {
+        _vhi10TotalLoaded  = vhi10;
+        _vhi30TotalLoaded  = _useVhi30 ? _vhi30Total  : null;
+        _vrqolTotalLoaded  = _vrqolTotal;
+        _svhiTotalLoaded   = _useSvhi  ? _svhiTotal   : null;
+      });
+    } catch (e) {
+      _toast('Could not save QoL scores: $e');
+    }
+  }
+
+  // QoL totals — sums over the in-memory item maps. Returns null when
+  // no item has been touched, so we don't write a 0 into the typed
+  // column and confuse the outcome comparison.
+  int? get _vhi10Total =>
+      _vhi10Items.isEmpty ? null : _vhi10Items.values.fold<int>(0, (a, b) => a + b);
+  int get _vhi30Total =>
+      _vhi30Items.values.fold<int>(0, (a, b) => a + b);
+  int get _vhi30FunctionalTotal =>
+      _vhi30SumRange(1, 10);
+  int get _vhi30PhysicalTotal =>
+      _vhi30SumRange(11, 20);
+  int get _vhi30EmotionalTotal =>
+      _vhi30SumRange(21, 30);
+  int _vhi30SumRange(int from, int to) {
+    var sum = 0;
+    for (var i = from; i <= to; i++) {
+      sum += _vhi30Items[i] ?? 0;
+    }
+    return sum;
+  }
+  int get _vrqolTotal =>
+      _vrqolItems.values.fold<int>(0, (a, b) => a + b);
+  int get _svhiTotal =>
+      _svhiItems.values.fold<int>(0, (a, b) => a + b);
+
+  // 24c — Section 15 narrative jsonb.
+  Future<void> _saveClinicalImpression() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'final_diagnosis':            _ciFinalDxCtrl.text.trim(),
+      'icd_code':                   _ciIcdCodeCtrl.text.trim(),
+      'diagnosis_confidence':       _ciDxConfidence,
+      'severity':                   _ciSeverity,
+      'severity_rationale':         _ciSeverityRationaleCtrl.text.trim(),
+      'override_etiology':          _ciOverrideEtiology,
+      'etiology_override':          _ciEtiologyOverride,
+      'recommended_interventions':  _ciInterventions.toList(),
+      'therapy_protocol_details':   _ciTherapyProtocolCtrl.text.trim(),
+      'estimated_session_count':    _parseDecimal(_ciSessionCountCtrl.text),
+      'frequency':                  _ciFrequency,
+      'discharge_criteria':         _ciDischargeCriteriaCtrl.text.trim(),
+      'ent_referral_needed':        _ciEntReferralNeeded,
+      'ent_referral_reason':        _ciEntReferralReasonCtrl.text.trim(),
+      'other_referrals':            _ciOtherReferralsCtrl.text.trim(),
+      'vocal_hygiene_items':        _ciHygieneItems.toList(),
+      'vocal_hygiene_notes':        _ciHygieneNotesCtrl.text.trim(),
+    };
+    try {
+      await _service.savePayloadSection(
+        voiceAssessmentId: _assessment!.id,
+        columnName:        'clinical_impression_payload',
+        payload:           payload,
+      );
+    } catch (e) {
+      _toast('Could not save clinical impression: $e');
+    }
+  }
+
   /// Empty / unparseable text → null, so the typed jsonb / numeric
   /// columns receive a real null rather than 0.
   num? _parseDecimal(String s) {
@@ -643,25 +1058,25 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
             tagline: 'Loud / soft, pitch glide, resonance balance.',
             child: _section7Body()),
         const SizedBox(height: 10),
-        _stubSection(number: 8, title: 'Special Populations',
-            tagline: 'Transgender voice, puberty, pediatric, geriatric.',
-            comingIn: '4.0.7.24c'),
+        _section(id: 'sec8', number: 8, title: 'Special Populations',
+            tagline: 'Transgender, puberty, pediatric, geriatric, singer.',
+            child: _section8Body()),
         const SizedBox(height: 10),
-        _stubSection(number: 10, title: 'Differential Diagnosis',
-            tagline: 'Functional vs organic vs neurogenic vs psychogenic.',
-            comingIn: '4.0.7.24c'),
+        _section(id: 'sec10', number: 10, title: 'Differential Diagnosis',
+            tagline: 'Working hypothesis, etiology, rule-outs, contributors.',
+            child: _section10Body()),
         const SizedBox(height: 10),
         _section(id: 'sec11', number: 11, title: 'Outcome Tracking',
             tagline: 'Baseline vs most recent follow-up across all measures.',
             child: _section11Body()),
         const SizedBox(height: 10),
-        _stubSection(number: 12, title: 'Voice Handicap & Quality of Life',
-            tagline: 'VHI-10, VHI-30, V-RQOL self-report.',
-            comingIn: '4.0.7.24c'),
+        _section(id: 'sec12', number: 12, title: 'Voice Handicap & Quality of Life',
+            tagline: 'VHI-10, V-RQOL — VHI-30 / SVHI behind toggles.',
+            child: _section12Body()),
         const SizedBox(height: 10),
-        _stubSection(number: 15, title: 'Final Clinical Impression & Plan',
-            tagline: 'Diagnosis, prognosis, treatment plan, attestation.',
-            comingIn: '4.0.7.24c'),
+        _section(id: 'sec15', number: 15, title: 'Final Clinical Impression & Plan',
+            tagline: 'Diagnosis, severity, plan, referrals, hygiene.',
+            child: _section15Body()),
       ],
     );
   }
@@ -727,6 +1142,7 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
     );
   }
 
+  // ignore: unused_element
   Widget _stubSection({
     required int number,
     required String title,
@@ -1214,6 +1630,804 @@ class _VoiceCaptureSectionState extends State<VoiceCaptureSection> {
         _textFieldGeneric('Resonance observations',
             _resonanceObsCtrl, multi: true, onSave: _saveTaskBased),
       ],
+    );
+  }
+
+  // ── Section 8 body — Special Populations ──────────────────────────
+  // The chip in GROUP A routes which subform renders below. All
+  // subform controllers persist in widget memory whether or not the
+  // chip is currently selected, so toggling between population types
+  // doesn't lose entered data within the session. On save, the
+  // serialized payload includes every subform's data (not just the
+  // active one), so a refresh restores the full state.
+  Widget _section8Body() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Population type'),
+        _singleChips(
+          'Population type',
+          const [
+            'Adult voice',
+            'Transgender voice',
+            'Puberty / pubertal voice mutation',
+            'Pediatric voice',
+            'Geriatric / aging voice',
+            'Singer / occupational voice user',
+          ],
+          _populationType,
+          (v) {
+            setState(() => _populationType = v);
+            _saveSpecialPopulations();
+          },
+        ),
+        const SizedBox(height: 8),
+        if (_populationType == null ||
+            _populationType == 'Adult voice')
+          _ghostNote(
+              'Standard adult voice protocol applies. No special-population fields needed.'),
+        if (_populationType == 'Transgender voice') ...[
+          const SizedBox(height: 6),
+          _groupLabel('B · Transgender voice'),
+          _singleChips('Target gender',
+              const ['Feminine', 'Masculine', 'Non-binary'],
+              _trGender, (v) {
+            setState(() => _trGender = v);
+            _saveSpecialPopulations();
+          }),
+          // Auto-prefill hint pulled from Section 4's f0_mean_hz when
+          // the SLP hasn't typed a value yet — keeps the flow moving
+          // without overwriting clinician-entered values.
+          _numericFieldWithPrefill(
+            'Current F0',
+            _trCurrentF0Ctrl,
+            unit: 'Hz',
+            prefillFrom: _aeroCtrls['f0_mean_hz']!.text,
+            onSave: _saveSpecialPopulations,
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: _numericField('Target F0 — low',
+                    _trTargetF0LowCtrl,
+                    unit: 'Hz', onSave: _saveSpecialPopulations),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _numericField('Target F0 — high',
+                    _trTargetF0HighCtrl,
+                    unit: 'Hz', onSave: _saveSpecialPopulations),
+              ),
+            ],
+          ),
+          _textFieldGeneric('Resonance — formant frequencies',
+              _trResonanceCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Intonation patterns',
+              _trIntonationCtrl, multi: true,
+              hint: 'Rising / falling / flat observations',
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Voice training history',
+              _trTrainingHistCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _yesNo('Hormone therapy on?', _trHormoneOn, (v) {
+            setState(() => _trHormoneOn = v);
+            _saveSpecialPopulations();
+          }),
+          if (_trHormoneOn)
+            _numericField('Hormone therapy duration', _trHormoneDurCtrl,
+                unit: 'months', onSave: _saveSpecialPopulations),
+        ],
+        if (_populationType == 'Puberty / pubertal voice mutation') ...[
+          const SizedBox(height: 6),
+          _groupLabel('B · Puberty'),
+          _numericField('Age at voice change onset', _pubAgeOnsetCtrl,
+              unit: 'years', onSave: _saveSpecialPopulations),
+          _singleChips('Mutation stability',
+              const ['Stable', 'Unstable', 'Reverting (mutational falsetto)'],
+              _pubMutationStability, (v) {
+            setState(() => _pubMutationStability = v);
+            _saveSpecialPopulations();
+          }),
+          _singleChips('Pitch breaks frequency',
+              const ['Rare', 'Occasional', 'Frequent', 'Constant'],
+              _pubPitchBreakFreq, (v) {
+            setState(() => _pubPitchBreakFreq = v);
+            _saveSpecialPopulations();
+          }),
+          _textFieldGeneric('Habitual pitch vs. expected',
+              _pubHabitualPitchCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Notes', _pubNotesCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+        ],
+        if (_populationType == 'Pediatric voice') ...[
+          const SizedBox(height: 6),
+          _groupLabel('B · Pediatric voice'),
+          _textFieldGeneric('Vocal hygiene awareness (parent + child)',
+              _pedHygieneCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Voice abuse / overuse patterns',
+              _pedAbusePatternsCtrl, multi: true,
+              hint: 'Yelling, vocal play, sports',
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Behavioral concerns',
+              _pedBehavioralCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('School / daycare voice load',
+              _pedSchoolLoadCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+        ],
+        if (_populationType == 'Geriatric / aging voice') ...[
+          const SizedBox(height: 6),
+          _groupLabel('B · Geriatric voice'),
+          _yesNo('Presbylaryngis signs', _geriPresbylaryngis, (v) {
+            setState(() => _geriPresbylaryngis = v);
+            _saveSpecialPopulations();
+          }),
+          if (_geriPresbylaryngis)
+            _textFieldGeneric('Presbylaryngis details',
+                _geriPresbylDetailsCtrl, multi: true,
+                onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Functional voice load',
+              _geriFunctionalLoadCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Comorbidities affecting voice',
+              _geriComorbiditiesCtrl, multi: true,
+              hint: "Parkinson's, COPD, hearing loss, dental",
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Medication review',
+              _geriMedsCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+        ],
+        if (_populationType == 'Singer / occupational voice user') ...[
+          const SizedBox(height: 6),
+          _groupLabel('B · Singer / occupational'),
+          _textFieldGeneric('Voice classification',
+              _singerVoiceClassCtrl,
+              hint: 'soprano / alto / tenor / bass / occupational speaker',
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Repertoire / vocal demands',
+              _singerRepertoireCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _textFieldGeneric('Training background',
+              _singerTrainingCtrl, multi: true,
+              onSave: _saveSpecialPopulations),
+          _numericField('Performance schedule load',
+              _singerScheduleHrsCtrl, unit: 'hrs/week',
+              onSave: _saveSpecialPopulations),
+          const SizedBox(height: 4),
+          _ghostNote('Singing Voice Handicap Index — see Section 12.'),
+        ],
+      ],
+    );
+  }
+
+  // ── Section 10 body — Differential Diagnosis ──────────────────────
+  Widget _section10Body() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Likely diagnosis'),
+        _textFieldGeneric(
+          'Primary diagnosis (working hypothesis)',
+          _ddPrimaryDxCtrl,
+          multi: true,
+          hint: "What you're leaning toward, in your own words.",
+          onSave: _saveDifferentialDiagnosis,
+        ),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Etiology category'),
+        _singleChips(
+          'Etiology',
+          const [
+            'Behavioral', 'Organic', 'Neurogenic',
+            'Psychogenic', 'Iatrogenic', 'Functional', 'Mixed',
+          ],
+          _ddEtiologyCategory,
+          (v) {
+            setState(() => _ddEtiologyCategory = v);
+            _saveDifferentialDiagnosis();
+          },
+        ),
+        _textFieldGeneric('Etiology notes', _ddEtiologyNotesCtrl,
+            multi: true, onSave: _saveDifferentialDiagnosis),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Rule-outs to consider'),
+        for (var i = 0; i < _ddRuleOutCtrls.length; i++)
+          _ruleOutRow(i),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: OutlinedButton.icon(
+            onPressed: () {
+              setState(() =>
+                  _ddRuleOutCtrls.add(TextEditingController()));
+            },
+            icon: const Icon(Icons.add_rounded, size: 14),
+            label: Text('Add rule-out',
+                style: GoogleFonts.dmSans(fontSize: 12, color: _teal)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: _teal.withValues(alpha: 0.45)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 6),
+            ),
+          ),
+        ),
+
+        _groupLabel('D · Contributing factors'),
+        _multiChips(
+          'Contributing factors',
+          const [
+            'Vocal abuse / misuse', 'LPR / GERD', 'Allergies',
+            'Smoking', 'Alcohol', 'Hydration', 'Stress / anxiety',
+            'Sleep deprivation', 'Hormonal',
+            'Occupational vocal load', 'Other',
+          ],
+          _ddContributingFactors,
+          (v, sel) {
+            setState(() {
+              if (sel) {
+                _ddContributingFactors.add(v);
+              } else {
+                _ddContributingFactors.remove(v);
+              }
+            });
+            _saveDifferentialDiagnosis();
+          },
+        ),
+        if (_ddContributingFactors.contains('Other'))
+          _textFieldGeneric('Other contributing factors',
+              _ddOtherContribCtrl, multi: true,
+              onSave: _saveDifferentialDiagnosis),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Synthesis'),
+        _textFieldGeneric(
+          'Differential reasoning — why this diagnosis over others',
+          _ddSynthesisCtrl,
+          multi: true,
+          onSave: _saveDifferentialDiagnosis,
+        ),
+      ],
+    );
+  }
+
+  Widget _ruleOutRow(int index) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Focus(
+              onFocusChange: (f) {
+                if (!f) _saveDifferentialDiagnosis();
+              },
+              child: TextField(
+                controller: _ddRuleOutCtrls[index],
+                style: GoogleFonts.dmSans(fontSize: 13, color: _ink),
+                decoration: InputDecoration(
+                  hintText: 'Rule-out #${index + 1}',
+                  hintStyle: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      color: _inkGhost.withValues(alpha: 0.6)),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+          ),
+          if (_ddRuleOutCtrls.length > 3)
+            IconButton(
+              onPressed: () {
+                final removed = _ddRuleOutCtrls.removeAt(index);
+                removed.dispose();
+                setState(() {});
+                _saveDifferentialDiagnosis();
+              },
+              icon: const Icon(Icons.close_rounded,
+                  size: 16, color: _inkGhost),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                  minWidth: 28, minHeight: 28),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ── Section 12 body — Voice Handicap & Quality of Life ────────────
+  Widget _section12Body() {
+    final v10 = _vhi10Total;
+    final v10Flagged = (v10 ?? 0) > 11;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · VHI-10 (0 Never – 4 Always)'),
+        for (var i = 1; i <= _vhi10Items.length || i <= 10; i++)
+          if (i <= 10) _likertRow(
+            '$i. ${_vhi10Wording[i - 1]}',
+            value: _vhi10Items[i] ?? 0,
+            min: 0, max: 4,
+            onChanged: (v) {
+              setState(() => _vhi10Items[i] = v);
+            },
+            onCommit: _saveQol,
+          ),
+        const SizedBox(height: 6),
+        _qolTotalRow(
+          label: 'VHI-10 total',
+          total: v10,
+          maxScore: 40,
+          flagged: v10Flagged,
+          flagText: 'Total > 11 suggests significant voice handicap',
+        ),
+        if (_vhi10TotalLoaded != null && _vhi10TotalLoaded != v10) ...[
+          const SizedBox(height: 4),
+          Text('Last saved total: $_vhi10TotalLoaded',
+              style: GoogleFonts.dmSans(
+                  fontSize: 11, color: _inkGhost,
+                  fontStyle: FontStyle.italic)),
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('B · VHI-30 (longer alternative)'),
+        _yesNo('Use VHI-30 instead of VHI-10?', _useVhi30, (v) {
+          setState(() => _useVhi30 = v);
+          _saveQol();
+        }),
+        if (_useVhi30) ...[
+          for (var i = 1; i <= 30; i++)
+            _likertRow(
+              'F${i <= 10 ? i : (i <= 20 ? "P${i - 10}" : "E${i - 20}")}. VHI-30 item $i',
+              value: _vhi30Items[i] ?? 0,
+              min: 0, max: 4,
+              onChanged: (v) {
+                setState(() => _vhi30Items[i] = v);
+              },
+              onCommit: _saveQol,
+            ),
+          const SizedBox(height: 6),
+          _qolSubscaleRow('Functional (F1–F10)', _vhi30FunctionalTotal, 40),
+          _qolSubscaleRow('Physical (P1–P10)',   _vhi30PhysicalTotal,   40),
+          _qolSubscaleRow('Emotional (E1–E10)',  _vhi30EmotionalTotal,  40),
+          _qolTotalRow(
+            label: 'VHI-30 total',
+            total: _vhi30Total,
+            maxScore: 120,
+            flagged: _vhi30Total > 33,
+            flagText: 'Total > 33 suggests significant voice handicap',
+          ),
+          if (_vhi30TotalLoaded != null && _vhi30TotalLoaded != _vhi30Total) ...[
+            const SizedBox(height: 4),
+            Text('Last saved total: $_vhi30TotalLoaded',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: _inkGhost,
+                    fontStyle: FontStyle.italic)),
+          ],
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('C · V-RQOL (1 None – 5 Problem is "as bad as it can be")'),
+        for (var i = 1; i <= 10; i++)
+          _likertRow(
+            '$i. V-RQOL item $i',
+            value: _vrqolItems[i] ?? 1,
+            min: 1, max: 5,
+            onChanged: (v) {
+              setState(() => _vrqolItems[i] = v);
+            },
+            onCommit: _saveQol,
+          ),
+        const SizedBox(height: 6),
+        _qolTotalRow(
+          label: 'V-RQOL raw total',
+          total: _vrqolItems.isEmpty ? null : _vrqolTotal,
+          maxScore: 50,
+        ),
+        if (_vrqolItems.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(
+            'Standardized 0–100: ${_vrqolStandardized().toStringAsFixed(1)} (higher = better)',
+            style: GoogleFonts.dmSans(
+                fontSize: 11, color: _inkGhost),
+          ),
+        ],
+        if (_vrqolTotalLoaded != null &&
+            _vrqolTotalLoaded != (_vrqolItems.isEmpty ? null : _vrqolTotal)) ...[
+          const SizedBox(height: 4),
+          Text('Last saved raw total: $_vrqolTotalLoaded',
+              style: GoogleFonts.dmSans(
+                  fontSize: 11, color: _inkGhost,
+                  fontStyle: FontStyle.italic)),
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Singing Voice Handicap Index'),
+        _yesNo('Use SVHI (singer / occupational only)?',
+            _useSvhi, (v) {
+          setState(() => _useSvhi = v);
+          _saveQol();
+        }),
+        if (_useSvhi) ...[
+          for (var i = 1; i <= 36; i++)
+            _likertRow('$i. SVHI item $i',
+                value: _svhiItems[i] ?? 0,
+                min: 0, max: 4,
+                onChanged: (v) {
+                  setState(() => _svhiItems[i] = v);
+                },
+                onCommit: _saveQol),
+          const SizedBox(height: 6),
+          _qolTotalRow(
+            label: 'SVHI total',
+            total: _svhiTotal,
+            maxScore: 144,
+            flagged: _svhiTotal > 30,
+            flagText: 'SVHI > 30 suggests singing-voice handicap',
+          ),
+          if (_svhiTotalLoaded != null && _svhiTotalLoaded != _svhiTotal) ...[
+            const SizedBox(height: 4),
+            Text('Last saved total: $_svhiTotalLoaded',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: _inkGhost,
+                    fontStyle: FontStyle.italic)),
+          ],
+        ],
+      ],
+    );
+  }
+
+  /// V-RQOL standardized 0–100 score per Hogikyan & Sethuraman 1999:
+  /// (raw - 10) / 40 * 100, then inverted so higher = better. Range
+  /// 0..100. Empty input returns 100 (ideal — no symptom load yet).
+  double _vrqolStandardized() {
+    if (_vrqolItems.isEmpty) return 100.0;
+    final raw = _vrqolTotal;
+    final clamped = raw.clamp(10, 50);
+    return ((50 - clamped) / 40) * 100.0;
+  }
+
+  static const List<String> _vhi10Wording = [
+    'My voice makes it difficult for people to hear me',
+    'People have difficulty understanding me in a noisy room',
+    "My family has difficulty hearing me when I call them throughout the house",
+    'I use the phone less often than I would like',
+    'I tend to avoid groups of people because of my voice',
+    'I speak with friends, neighbors, or relatives less often because of my voice',
+    "People ask \"What's wrong with your voice?\"",
+    'My voice difficulties restrict personal and social life',
+    'I feel left out of conversations because of my voice',
+    'My voice problem causes me to lose income',
+  ];
+
+  // ── Section 15 body — Final Clinical Impression & Plan ────────────
+  Widget _section15Body() {
+    // GROUP C reads etiology from Section 10 unless the override is on.
+    final etiologyDisplay = _ciOverrideEtiology
+        ? (_ciEtiologyOverride ?? '—')
+        : (_ddEtiologyCategory ?? 'Pick in Section 10');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Final diagnosis'),
+        _textFieldGeneric('Final diagnosis', _ciFinalDxCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+        _textFieldGeneric('ICD-style code', _ciIcdCodeCtrl,
+            hint: 'e.g. R49.0 Dysphonia',
+            onSave: _saveClinicalImpression),
+        _singleChips(
+          'Diagnosis confidence',
+          const ['Provisional', 'Working', 'Confirmed'],
+          _ciDxConfidence,
+          (v) {
+            setState(() => _ciDxConfidence = v);
+            _saveClinicalImpression();
+          },
+        ),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Severity'),
+        _singleChips('Severity grading',
+            const ['Mild', 'Moderate', 'Severe', 'Profound'],
+            _ciSeverity, (v) {
+          setState(() => _ciSeverity = v);
+          _saveClinicalImpression();
+        }),
+        _textFieldGeneric('Severity rationale',
+            _ciSeverityRationaleCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Etiology'),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _tealSoft.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _teal.withValues(alpha: 0.4)),
+                ),
+                child: Text(etiologyDisplay,
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _teal,
+                        fontWeight: FontWeight.w500)),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _ciOverrideEtiology
+                    ? 'Override ON'
+                    : 'Auto-pulled from Section 10',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: _inkGhost,
+                    fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+        ),
+        _yesNo('Override etiology?', _ciOverrideEtiology, (v) {
+          setState(() => _ciOverrideEtiology = v);
+          _saveClinicalImpression();
+        }),
+        if (_ciOverrideEtiology)
+          _singleChips(
+            'Override etiology value',
+            const [
+              'Behavioral', 'Organic', 'Neurogenic',
+              'Psychogenic', 'Iatrogenic', 'Functional', 'Mixed',
+            ],
+            _ciEtiologyOverride,
+            (v) {
+              setState(() => _ciEtiologyOverride = v);
+              _saveClinicalImpression();
+            },
+          ),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Management plan'),
+        _multiChips(
+          'Recommended interventions',
+          const [
+            'Voice therapy', 'Vocal hygiene counseling',
+            'Medical referral (ENT)', 'Surgical consult',
+            'Behavioral therapy', 'Stress management',
+            'Reflux management', 'Hydration protocol',
+            'Vocal rest', 'Singing-voice specialist',
+          ],
+          _ciInterventions,
+          (v, sel) {
+            setState(() {
+              if (sel) {
+                _ciInterventions.add(v);
+              } else {
+                _ciInterventions.remove(v);
+              }
+            });
+            _saveClinicalImpression();
+          },
+        ),
+        _textFieldGeneric('Therapy protocol details',
+            _ciTherapyProtocolCtrl, multi: true,
+            hint: 'RVT, SOVT, LSVT, Lee Silverman, etc.',
+            onSave: _saveClinicalImpression),
+        _numericField('Estimated session count',
+            _ciSessionCountCtrl, unit: 'sessions',
+            onSave: _saveClinicalImpression),
+        _singleChips('Frequency',
+            const ['Weekly', 'Biweekly', 'Monthly', 'As needed'],
+            _ciFrequency, (v) {
+          setState(() => _ciFrequency = v);
+          _saveClinicalImpression();
+        }),
+        _textFieldGeneric('Discharge criteria / outcome targets',
+            _ciDischargeCriteriaCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Referrals'),
+        _yesNo('ENT referral needed?', _ciEntReferralNeeded, (v) {
+          setState(() => _ciEntReferralNeeded = v);
+          _saveClinicalImpression();
+        }),
+        if (_ciEntReferralNeeded)
+          _textFieldGeneric('ENT referral reason',
+              _ciEntReferralReasonCtrl, multi: true,
+              onSave: _saveClinicalImpression),
+        _textFieldGeneric('Other referrals',
+            _ciOtherReferralsCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('F · Vocal hygiene plan'),
+        _multiChips(
+          'Hygiene items',
+          const [
+            'Hydration ≥ 2L/day', 'Reduced caffeine',
+            'Reduced alcohol', 'Smoking cessation',
+            'Voice rest periods', 'Reduced throat clearing',
+            'Reflux precautions', 'Humidification',
+            'Reduced talking on phone', 'Reduced singing',
+          ],
+          _ciHygieneItems,
+          (v, sel) {
+            setState(() {
+              if (sel) {
+                _ciHygieneItems.add(v);
+              } else {
+                _ciHygieneItems.remove(v);
+              }
+            });
+            _saveClinicalImpression();
+          },
+        ),
+        _textFieldGeneric('Personalized hygiene notes',
+            _ciHygieneNotesCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+      ],
+    );
+  }
+
+  // ── Shared 24c primitives ─────────────────────────────────────────
+
+  Widget _ghostNote(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: _tealSoft.withValues(alpha: 0.30),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _tealSoft),
+        ),
+        child: Text(text,
+            style: GoogleFonts.dmSans(
+                fontSize: 12, color: _ink,
+                fontStyle: FontStyle.italic, height: 1.5)),
+      ),
+    );
+  }
+
+  /// Numeric field with an optional prefill hint — when [prefillFrom]
+  /// is non-empty AND [ctrl] is empty, the prefill value populates
+  /// the input on next focus loss as a soft suggestion.
+  Widget _numericFieldWithPrefill(
+    String label,
+    TextEditingController ctrl, {
+    required String unit,
+    required String prefillFrom,
+    required VoidCallback onSave,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _numericField(label, ctrl, unit: unit, onSave: onSave),
+        if (prefillFrom.trim().isNotEmpty && ctrl.text.trim().isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: GestureDetector(
+              onTap: () {
+                ctrl.text = prefillFrom.trim();
+                onSave();
+                setState(() {});
+              },
+              child: Text(
+                'Prefill from Section 4 F0 = $prefillFrom Hz',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: _amber,
+                    fontStyle: FontStyle.italic,
+                    decoration: TextDecoration.underline),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// 0-N (or 1-N) Likert row with a slider snapped to integer values
+  /// and a live readout. Used by VHI-10, VHI-30, V-RQOL, SVHI.
+  Widget _likertRow(
+    String label, {
+    required int value,
+    required int min,
+    required int max,
+    required ValueChanged<int> onChanged,
+    required VoidCallback onCommit,
+  }) {
+    final divisions = max - min;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _ink)),
+              ),
+              Text('$value',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      color: _ink,
+                      fontWeight: FontWeight.w600)),
+              Text(' / $max',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 11, color: _inkGhost)),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              activeTrackColor: _teal,
+              inactiveTrackColor: _line,
+              thumbColor: _teal,
+              overlayColor: _teal.withValues(alpha: 0.18),
+            ),
+            child: Slider(
+              value: value.toDouble().clamp(min.toDouble(), max.toDouble()),
+              min: min.toDouble(),
+              max: max.toDouble(),
+              divisions: divisions,
+              onChanged: (d) => onChanged(d.toInt()),
+              onChangeEnd: (_) => onCommit(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _qolTotalRow({
+    required String label,
+    required int? total,
+    required int maxScore,
+    bool flagged = false,
+    String? flagText,
+  }) {
+    final color = flagged ? _amber : _teal;
+    final bg = flagged ? _amberSoft : _tealSoft;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      decoration: BoxDecoration(
+        color: bg.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.45)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label: ${total ?? '—'} / $maxScore',
+              style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  color: color,
+                  fontWeight: FontWeight.w600)),
+          if (flagged && flagText != null) ...[
+            const SizedBox(height: 2),
+            Text(flagText,
+                style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: color,
+                    fontStyle: FontStyle.italic)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _qolSubscaleRow(String label, int total, int maxScore) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text('$label: $total / $maxScore',
+          style: GoogleFonts.dmSans(
+              fontSize: 12, color: _inkGhost)),
     );
   }
 

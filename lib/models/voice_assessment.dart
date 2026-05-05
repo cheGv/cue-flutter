@@ -22,6 +22,11 @@ class VoiceAssessment {
   // Phase 4.0.7.24b — narrative jsonb columns for Sections 6 / 7.
   final Map<String, dynamic> functionalVoicePayload;
   final Map<String, dynamic> taskBasedPayload;
+  // Phase 4.0.7.24c — narrative jsonb columns for Sections 8 / 10 / 15.
+  // Section 12 (QoL) writes to the typed voice_qol_scores child table.
+  final Map<String, dynamic> specialPopulationsPayload;
+  final Map<String, dynamic> differentialDiagnosisPayload;
+  final Map<String, dynamic> clinicalImpressionPayload;
   final DateTime createdAt;
 
   const VoiceAssessment({
@@ -32,8 +37,11 @@ class VoiceAssessment {
     this.baselineAssessmentId,
     required this.caseHistoryPayload,
     required this.laryngealExamPayload,
-    this.functionalVoicePayload = const {},
-    this.taskBasedPayload       = const {},
+    this.functionalVoicePayload      = const {},
+    this.taskBasedPayload            = const {},
+    this.specialPopulationsPayload   = const {},
+    this.differentialDiagnosisPayload = const {},
+    this.clinicalImpressionPayload   = const {},
     required this.createdAt,
   });
 
@@ -49,8 +57,11 @@ class VoiceAssessment {
       baselineAssessmentId:   json['baseline_assessment_id'] as String?,
       caseHistoryPayload:     mapOf('case_history_payload'),
       laryngealExamPayload:   mapOf('laryngeal_exam_payload'),
-      functionalVoicePayload: mapOf('functional_voice_payload'),
-      taskBasedPayload:       mapOf('task_based_payload'),
+      functionalVoicePayload:       mapOf('functional_voice_payload'),
+      taskBasedPayload:             mapOf('task_based_payload'),
+      specialPopulationsPayload:    mapOf('special_populations_payload'),
+      differentialDiagnosisPayload: mapOf('differential_diagnosis_payload'),
+      clinicalImpressionPayload:    mapOf('clinical_impression_payload'),
       createdAt: _parseTs(json['created_at']) ?? DateTime.now(),
     );
   }

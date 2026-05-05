@@ -15,7 +15,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../widgets/app_layout.dart';
 import 'add_client_screen.dart';
-import 'assessment_case_screen.dart';
+// 4.0.7.24c — AssessmentCaseScreen no longer imported here; the
+// _openCase flow pushes via the named route '/assessing/:clientId'
+// resolved by main.dart's onGenerateRoute handler.
 
 const Color _ink       = Color(0xFF0E1C36);
 const Color _inkGhost  = Color(0xFF6B7690);
@@ -83,12 +85,12 @@ class _AssessingScreenState extends State<AssessingScreen> {
   }
 
   Future<void> _openCase(Map<String, dynamic> client) async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AssessmentCaseScreen(client: client),
-      ),
-    );
+    // Phase 4.0.7.24c — push via named route so the URL becomes
+    // /assessing/:clientId. A hard refresh on that URL is then
+    // resolved by main.dart's _AssessmentCaseDeepLinkLoader and
+    // stays on the case screen instead of bouncing to this list.
+    final clientId = client['id']?.toString() ?? '';
+    await Navigator.pushNamed(context, '/assessing/$clientId');
     if (mounted) await _load();
   }
 
