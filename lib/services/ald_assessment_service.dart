@@ -209,6 +209,18 @@ class AldAssessmentService {
     num? n(Map<String, dynamic>? m, String key) =>
         m == null ? null : (m[key] is num ? m[key] as num : null);
 
+    /// Sum the three FAS phonemic subscores from a naming row.
+    /// Returns null when none of the three are populated, so the
+    /// outcome row stays empty rather than reading "0" misleadingly.
+    num? fasTotalOf(Map<String, dynamic>? m) {
+      if (m == null) return null;
+      final f = n(m, 'fluency_phonemic_f');
+      final a = n(m, 'fluency_phonemic_a');
+      final s = n(m, 'fluency_phonemic_s');
+      if (f == null && a == null && s == null) return null;
+      return (f ?? 0) + (a ?? 0) + (s ?? 0);
+    }
+
     return OutcomeComparison(
       baselineId: baseline.id,
       latestId:   latest.id,
@@ -218,11 +230,18 @@ class AldAssessmentService {
           OutcomeRow(label: 'Cortical Quotient', baseline: n(baseWab, 'cortical_quotient'), latest: n(latestWab, 'cortical_quotient'), unit: '/100', direction: 'higher'),
         ]),
         OutcomeGroup(label: 'Naming & Word Retrieval', rows: [
-          // 25b populates these.
-          OutcomeRow(label: 'BNT raw',                     baseline: n(baseNam, 'bnt_raw'),                  latest: n(latestNam, 'bnt_raw'),                  direction: 'higher'),
-          OutcomeRow(label: 'Action naming raw',           baseline: n(baseNam, 'action_naming_raw'),        latest: n(latestNam, 'action_naming_raw'),        direction: 'higher'),
-          OutcomeRow(label: 'Verbal fluency — semantic',   baseline: n(baseNam, 'verbal_fluency_semantic'),  latest: n(latestNam, 'verbal_fluency_semantic'),  direction: 'higher'),
-          OutcomeRow(label: 'Verbal fluency — phonemic',   baseline: n(baseNam, 'verbal_fluency_phonemic'),  latest: n(latestNam, 'verbal_fluency_phonemic'),  direction: 'higher'),
+          // 25b — column names match the migration spec
+          // (bnt_raw_score / fluency_semantic_animals /
+          // fluency_phonemic_*). FAS total is computed client-side
+          // by summing the three phonemic subscores.
+          OutcomeRow(label: 'BNT raw',                  baseline: n(baseNam, 'bnt_raw_score'),            latest: n(latestNam, 'bnt_raw_score'),            unit: '/60', direction: 'higher'),
+          OutcomeRow(label: 'BNT z-score',              baseline: n(baseNam, 'bnt_z_score'),              latest: n(latestNam, 'bnt_z_score'),              direction: 'higher'),
+          OutcomeRow(label: 'Action naming raw',        baseline: n(baseNam, 'ant_raw_score'),            latest: n(latestNam, 'ant_raw_score'),            direction: 'higher'),
+          OutcomeRow(label: 'Verbal fluency — animals', baseline: n(baseNam, 'fluency_semantic_animals'), latest: n(latestNam, 'fluency_semantic_animals'), direction: 'higher'),
+          OutcomeRow(label: 'Verbal fluency — FAS total',
+              baseline: fasTotalOf(baseNam),
+              latest:   fasTotalOf(latestNam),
+              direction: 'higher'),
         ]),
         OutcomeGroup(label: 'Cognitive Screens', rows: [
           OutcomeRow(label: 'MoCA total', baseline: n(baseCog, 'moca_total'), latest: n(latestCog, 'moca_total'), unit: '/30', direction: 'higher'),

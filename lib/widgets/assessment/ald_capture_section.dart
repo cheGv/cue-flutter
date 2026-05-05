@@ -173,6 +173,79 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
   final _mmseRecallCtrl     = TextEditingController(); // 0-3
   final _mmseLanguageCtrl   = TextEditingController(); // 0-9
 
+  // ── Section 4 — Naming & Word Retrieval (typed) ──────────────────
+  // Saves to ald_naming_measures keyed by ald_assessment_id (UNIQUE).
+  // Schema column names match the 25a migration spec
+  // (bnt_raw_score / fluency_semantic_animals / fluency_phonemic_f|a|s,
+  // not the abbreviated forms used in pre-25b drafts).
+  final _bntRawCtrl       = TextEditingController(); // 0-60
+  final _bntZCtrl         = TextEditingController(); // ± float
+  bool  _bntAgeAdjusted   = false;
+  final _antRawCtrl       = TextEditingController();
+  final _flAnimalsCtrl    = TextEditingController();
+  final _flFCtrl          = TextEditingController();
+  final _flACtrl          = TextEditingController();
+  final _flSCtrl          = TextEditingController();
+  final Set<String> _namingErrors = {};
+  bool  _semCueHelps      = false;
+  bool  _phonCueHelps     = false;
+  bool  _choiceCueHelps   = false;
+  final _namingNotesCtrl  = TextEditingController();
+
+  // ── Section 5 — Auditory Comprehension (jsonb) ───────────────────
+  String? _tokenVersion;
+  final _tokenRawCtrl     = TextEditingController();
+  final _tokenStdCtrl     = TextEditingController();
+  final _yesNoCorrectCtrl = TextEditingController(); // 0-20
+  final _cmd1PctCtrl      = TextEditingController(); // 0-100
+  final _cmd2PctCtrl      = TextEditingController();
+  final _cmd3PctCtrl      = TextEditingController();
+  final _cmd4PctCtrl      = TextEditingController();
+  final _sentSimpleCtrl   = TextEditingController(); // 0-100
+  final _sentSubjRelCtrl  = TextEditingController();
+  final _sentObjRelCtrl   = TextEditingController();
+  final _sentPassiveCtrl  = TextEditingController();
+  final _storyUsedCtrl    = TextEditingController();
+  final _storyPropsCtrl   = TextEditingController(); // "X / Y"
+  bool  _storyMainIdea    = false;
+  String? _inferentialComp;
+  final _compNotesCtrl    = TextEditingController();
+
+  // ── Section 6 — Reading & Writing (jsonb) ────────────────────────
+  final _readRegCtrl      = TextEditingController(); // "X/Y"
+  final _readIrregCtrl    = TextEditingController();
+  final _readNonwordsCtrl = TextEditingController();
+  String? _sentReadingFluency;
+  String? _paragraphReading;
+  final _readWordPicCtrl  = TextEditingController();
+  final _readSentPicCtrl  = TextEditingController();
+  String? _paragraphComp;
+  String? _readingRate;
+  String? _writeOwnNameQuality;
+  String? _copyWordsQuality;
+  final _writeDictWordsCtrl    = TextEditingController();
+  String? _writeDictSentence;
+  final _spontaneousWritingCtrl = TextEditingController();
+  final Set<String> _writingErrors = {};
+  final _rwImpressionCtrl  = TextEditingController();
+
+  // ── Section 7 — Discourse & Functional Communication (jsonb) ─────
+  String? _pictureUsed;
+  final _pictureDescVerbatimCtrl = TextEditingController();
+  final _totalWordsCtrl    = TextEditingController();
+  final _contentUnitsCtrl  = TextEditingController();
+  final _mluCtrl           = TextEditingController();
+  final _errorsPerMinCtrl  = TextEditingController();
+  final _convoTopicCtrl    = TextEditingController();
+  final _convoDurationCtrl = TextEditingController();
+  String? _topicMaintenance;
+  String? _turnTaking;
+  String? _initiation;
+  final Set<String> _repairStrategies = {};
+  final Set<String> _channelsUsed     = {};
+  String? _mostEffectiveChannel;
+  final _funcCommImpressionCtrl = TextEditingController();
+
   // Accordion expansion — Section 1 default-expanded.
   String _expanded = 'sec1';
 
@@ -205,6 +278,20 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
       _mocaOrientCtrl,
       _mmseLangCtrl, _mmseOrientCtrl, _mmseRegistrationCtrl,
       _mmseAttentionCtrl, _mmseRecallCtrl, _mmseLanguageCtrl,
+      // 25b — Sections 4, 5, 6, 7 controllers
+      _bntRawCtrl, _bntZCtrl, _antRawCtrl,
+      _flAnimalsCtrl, _flFCtrl, _flACtrl, _flSCtrl,
+      _namingNotesCtrl,
+      _tokenRawCtrl, _tokenStdCtrl, _yesNoCorrectCtrl,
+      _cmd1PctCtrl, _cmd2PctCtrl, _cmd3PctCtrl, _cmd4PctCtrl,
+      _sentSimpleCtrl, _sentSubjRelCtrl, _sentObjRelCtrl, _sentPassiveCtrl,
+      _storyUsedCtrl, _storyPropsCtrl, _compNotesCtrl,
+      _readRegCtrl, _readIrregCtrl, _readNonwordsCtrl,
+      _readWordPicCtrl, _readSentPicCtrl,
+      _writeDictWordsCtrl, _spontaneousWritingCtrl, _rwImpressionCtrl,
+      _pictureDescVerbatimCtrl, _totalWordsCtrl, _contentUnitsCtrl,
+      _mluCtrl, _errorsPerMinCtrl,
+      _convoTopicCtrl, _convoDurationCtrl, _funcCommImpressionCtrl,
     ];
     for (final c in controllers) {
       c.dispose();
@@ -228,14 +315,18 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
             assessmentId: a.id, tableName: 'ald_wab_scores'),
         _service.loadTypedMeasures(
             assessmentId: a.id, tableName: 'ald_cognitive_screens'),
+        // 25b — Section 4 (Naming) loads from ald_naming_measures.
+        _service.loadTypedMeasures(
+            assessmentId: a.id, tableName: 'ald_naming_measures'),
         _service.compareBaselineToLatest(widget.clientId),
       ]);
       _hydrateWab(results[0] as Map<String, dynamic>);
       _hydrateCognitive(results[1] as Map<String, dynamic>);
+      _hydrateNaming(results[2] as Map<String, dynamic>);
       if (!mounted) return;
       setState(() {
         _assessment = a;
-        _outcome    = results[2] as OutcomeComparison;
+        _outcome    = results[3] as OutcomeComparison;
         _loading    = false;
       });
     } catch (e) {
@@ -373,6 +464,103 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
     _writeDictation  = bs['write_dictation']  == true;
     _bedsideImpressionCtrl.text =
         (bs['bedside_impression'] as String?) ?? '';
+
+    // 25b — Section 5 (auditory comprehension) seeds from its jsonb.
+    final cmp = a.auditoryComprehensionPayload;
+    _tokenVersion           = cmp['token_test_version']        as String?;
+    _tokenRawCtrl.text      = cmp['token_test_raw']?.toString() ?? '';
+    _tokenStdCtrl.text      = cmp['token_test_standardized']?.toString() ?? '';
+    _yesNoCorrectCtrl.text  = cmp['yes_no_correct']?.toString() ?? '';
+    _cmd1PctCtrl.text       = cmp['cmd_1step_pct']?.toString() ?? '';
+    _cmd2PctCtrl.text       = cmp['cmd_2step_pct']?.toString() ?? '';
+    _cmd3PctCtrl.text       = cmp['cmd_3step_pct']?.toString() ?? '';
+    _cmd4PctCtrl.text       = cmp['cmd_4step_pct']?.toString() ?? '';
+    _sentSimpleCtrl.text    = cmp['sent_simple_pct']?.toString() ?? '';
+    _sentSubjRelCtrl.text   = cmp['sent_subject_relative_pct']?.toString() ?? '';
+    _sentObjRelCtrl.text    = cmp['sent_object_relative_pct']?.toString() ?? '';
+    _sentPassiveCtrl.text   = cmp['sent_passive_pct']?.toString() ?? '';
+    _storyUsedCtrl.text     = (cmp['story_used']            as String?) ?? '';
+    _storyPropsCtrl.text    = (cmp['story_propositions']    as String?) ?? '';
+    _storyMainIdea          = cmp['story_main_idea_grasped'] == true;
+    _inferentialComp        = cmp['inferential_comprehension'] as String?;
+    _compNotesCtrl.text     = (cmp['comprehension_breakdown_notes'] as String?) ?? '';
+
+    // 25b — Section 6 (reading & writing) seeds from its jsonb.
+    final rw = a.readingWritingPayload;
+    _readRegCtrl.text         = (rw['read_regular_words']    as String?) ?? '';
+    _readIrregCtrl.text       = (rw['read_irregular_words']  as String?) ?? '';
+    _readNonwordsCtrl.text    = (rw['read_nonwords']         as String?) ?? '';
+    _sentReadingFluency       = rw['sentence_reading_fluency'] as String?;
+    _paragraphReading         = rw['paragraph_reading']        as String?;
+    _readWordPicCtrl.text     = (rw['read_word_picture_match']     as String?) ?? '';
+    _readSentPicCtrl.text     = (rw['read_sentence_picture_match'] as String?) ?? '';
+    _paragraphComp            = rw['paragraph_comprehension'] as String?;
+    _readingRate              = rw['reading_rate']            as String?;
+    _writeOwnNameQuality      = rw['write_own_name_quality'] as String?;
+    _copyWordsQuality         = rw['copy_words_quality']     as String?;
+    _writeDictWordsCtrl.text  = (rw['write_dictation_words']    as String?) ?? '';
+    _writeDictSentence        = rw['write_dictation_sentence'] as String?;
+    _spontaneousWritingCtrl.text =
+        (rw['spontaneous_writing_sample'] as String?) ?? '';
+    final werr = rw['writing_errors'];
+    if (werr is List) {
+      _writingErrors
+        ..clear()
+        ..addAll(werr.map((e) => e.toString()));
+    }
+    _rwImpressionCtrl.text    = (rw['rw_impression'] as String?) ?? '';
+
+    // 25b — Section 7 (discourse & functional comm) seeds from its jsonb.
+    final dc = a.discoursePayload;
+    _pictureUsed              = dc['picture_used'] as String?;
+    _pictureDescVerbatimCtrl.text =
+        (dc['picture_description_verbatim'] as String?) ?? '';
+    _totalWordsCtrl.text      = dc['total_words']?.toString() ?? '';
+    _contentUnitsCtrl.text    = dc['content_units']?.toString() ?? '';
+    _mluCtrl.text             = dc['mlu']?.toString() ?? '';
+    _errorsPerMinCtrl.text    = dc['errors_per_minute']?.toString() ?? '';
+    _convoTopicCtrl.text      = (dc['conversation_topic'] as String?) ?? '';
+    _convoDurationCtrl.text   = dc['conversation_duration_min']?.toString() ?? '';
+    _topicMaintenance         = dc['topic_maintenance'] as String?;
+    _turnTaking               = dc['turn_taking']       as String?;
+    _initiation               = dc['initiation']        as String?;
+    final repair = dc['repair_strategies'];
+    if (repair is List) {
+      _repairStrategies
+        ..clear()
+        ..addAll(repair.map((e) => e.toString()));
+    }
+    final channels = dc['channels_used'];
+    if (channels is List) {
+      _channelsUsed
+        ..clear()
+        ..addAll(channels.map((e) => e.toString()));
+    }
+    _mostEffectiveChannel     = dc['most_effective_channel'] as String?;
+    _funcCommImpressionCtrl.text =
+        (dc['functional_comm_impression'] as String?) ?? '';
+  }
+
+  void _hydrateNaming(Map<String, dynamic> row) {
+    if (row.isEmpty) return;
+    _bntRawCtrl.text     = row['bnt_raw_score']?.toString() ?? '';
+    _bntZCtrl.text       = row['bnt_z_score']?.toString() ?? '';
+    _bntAgeAdjusted      = row['bnt_age_adjusted'] == true;
+    _antRawCtrl.text     = row['ant_raw_score']?.toString() ?? '';
+    _flAnimalsCtrl.text  = row['fluency_semantic_animals']?.toString() ?? '';
+    _flFCtrl.text        = row['fluency_phonemic_f']?.toString() ?? '';
+    _flACtrl.text        = row['fluency_phonemic_a']?.toString() ?? '';
+    _flSCtrl.text        = row['fluency_phonemic_s']?.toString() ?? '';
+    final errs = row['error_profile'];
+    if (errs is List) {
+      _namingErrors
+        ..clear()
+        ..addAll(errs.map((e) => e.toString()));
+    }
+    _semCueHelps         = row['semantic_cue_helps'] == true;
+    _phonCueHelps        = row['phonemic_cue_helps'] == true;
+    _choiceCueHelps      = row['choice_cue_helps']   == true;
+    _namingNotesCtrl.text = (row['notes'] as String?) ?? '';
   }
 
   void _hydrateWab(Map<String, dynamic> row) {
@@ -602,6 +790,138 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
     }
   }
 
+  // 25b — Section 4 typed naming measures.
+  Future<void> _saveNaming() async {
+    if (_assessment == null) return;
+    final data = <String, dynamic>{
+      'bnt_raw_score':            _parseInt(_bntRawCtrl.text),
+      'bnt_z_score':              _parseDecimal(_bntZCtrl.text),
+      'bnt_age_adjusted':         _bntAgeAdjusted,
+      'ant_raw_score':            _parseInt(_antRawCtrl.text),
+      'fluency_semantic_animals': _parseInt(_flAnimalsCtrl.text),
+      'fluency_phonemic_f':       _parseInt(_flFCtrl.text),
+      'fluency_phonemic_a':       _parseInt(_flACtrl.text),
+      'fluency_phonemic_s':       _parseInt(_flSCtrl.text),
+      'error_profile':            _namingErrors.toList(),
+      'semantic_cue_helps':       _semCueHelps,
+      'phonemic_cue_helps':       _phonCueHelps,
+      'choice_cue_helps':         _choiceCueHelps,
+      'notes':                    _namingNotesCtrl.text.trim(),
+    };
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ald_naming_measures',
+        data:         data,
+      );
+    } catch (e) {
+      _toast('Could not save naming measures: $e');
+    }
+  }
+
+  // 25b — Section 5 narrative jsonb.
+  Future<void> _saveComprehension() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'token_test_version':         _tokenVersion,
+      'token_test_raw':             _parseDecimal(_tokenRawCtrl.text),
+      'token_test_standardized':    _parseDecimal(_tokenStdCtrl.text),
+      'yes_no_correct':             _parseInt(_yesNoCorrectCtrl.text),
+      'cmd_1step_pct':              _parseInt(_cmd1PctCtrl.text),
+      'cmd_2step_pct':              _parseInt(_cmd2PctCtrl.text),
+      'cmd_3step_pct':              _parseInt(_cmd3PctCtrl.text),
+      'cmd_4step_pct':              _parseInt(_cmd4PctCtrl.text),
+      'sent_simple_pct':            _parseInt(_sentSimpleCtrl.text),
+      'sent_subject_relative_pct':  _parseInt(_sentSubjRelCtrl.text),
+      'sent_object_relative_pct':   _parseInt(_sentObjRelCtrl.text),
+      'sent_passive_pct':           _parseInt(_sentPassiveCtrl.text),
+      'story_used':                 _storyUsedCtrl.text.trim(),
+      'story_propositions':         _storyPropsCtrl.text.trim(),
+      'story_main_idea_grasped':    _storyMainIdea,
+      'inferential_comprehension':  _inferentialComp,
+      'comprehension_breakdown_notes': _compNotesCtrl.text.trim(),
+    };
+    try {
+      await _service.savePayloadSection(
+        assessmentId: _assessment!.id,
+        columnName:   'auditory_comprehension_payload',
+        payload:      payload,
+      );
+    } catch (e) {
+      _toast('Could not save auditory comprehension: $e');
+    }
+  }
+
+  // 25b — Section 6 narrative jsonb.
+  Future<void> _saveReadingWriting() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'read_regular_words':           _readRegCtrl.text.trim(),
+      'read_irregular_words':         _readIrregCtrl.text.trim(),
+      'read_nonwords':                _readNonwordsCtrl.text.trim(),
+      'sentence_reading_fluency':     _sentReadingFluency,
+      'paragraph_reading':            _paragraphReading,
+      'read_word_picture_match':      _readWordPicCtrl.text.trim(),
+      'read_sentence_picture_match':  _readSentPicCtrl.text.trim(),
+      'paragraph_comprehension':      _paragraphComp,
+      'reading_rate':                 _readingRate,
+      'write_own_name_quality':       _writeOwnNameQuality,
+      'copy_words_quality':           _copyWordsQuality,
+      'write_dictation_words':        _writeDictWordsCtrl.text.trim(),
+      'write_dictation_sentence':     _writeDictSentence,
+      'spontaneous_writing_sample':   _spontaneousWritingCtrl.text.trim(),
+      'writing_errors':               _writingErrors.toList(),
+      'rw_impression':                _rwImpressionCtrl.text.trim(),
+    };
+    try {
+      await _service.savePayloadSection(
+        assessmentId: _assessment!.id,
+        columnName:   'reading_writing_payload',
+        payload:      payload,
+      );
+    } catch (e) {
+      _toast('Could not save reading & writing: $e');
+    }
+  }
+
+  // 25b — Section 7 narrative jsonb.
+  Future<void> _saveDiscourse() async {
+    if (_assessment == null) return;
+    final payload = <String, dynamic>{
+      'picture_used':                 _pictureUsed,
+      'picture_description_verbatim': _pictureDescVerbatimCtrl.text.trim(),
+      'total_words':                  _parseInt(_totalWordsCtrl.text),
+      'content_units':                _parseInt(_contentUnitsCtrl.text),
+      'mlu':                          _parseDecimal(_mluCtrl.text),
+      'errors_per_minute':            _parseDecimal(_errorsPerMinCtrl.text),
+      'conversation_topic':           _convoTopicCtrl.text.trim(),
+      'conversation_duration_min':    _parseDecimal(_convoDurationCtrl.text),
+      'topic_maintenance':            _topicMaintenance,
+      'turn_taking':                  _turnTaking,
+      'initiation':                   _initiation,
+      'repair_strategies':            _repairStrategies.toList(),
+      'channels_used':                _channelsUsed.toList(),
+      'most_effective_channel':       _mostEffectiveChannel,
+      'functional_comm_impression':   _funcCommImpressionCtrl.text.trim(),
+    };
+    try {
+      await _service.savePayloadSection(
+        assessmentId: _assessment!.id,
+        columnName:   'discourse_payload',
+        payload:      payload,
+      );
+    } catch (e) {
+      _toast('Could not save discourse & functional comm: $e');
+    }
+  }
+
+  /// Sum of the three FAS phonemic fluency totals (live, for the
+  /// inline display next to the three input fields).
+  int _fasTotal() =>
+      (_parseInt(_flFCtrl.text) ?? 0) +
+      (_parseInt(_flACtrl.text) ?? 0) +
+      (_parseInt(_flSCtrl.text) ?? 0);
+
   Future<void> _addFollowUp() async {
     if (_assessment == null) return;
     final baselineId = _assessment!.isBaseline
@@ -784,17 +1104,21 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
             tagline: 'Auto AQ/CQ + aphasia type classification + cognitive screens.',
             child: _section3Body()),
         const SizedBox(height: 10),
-        _stub(4,  'Naming & Word Retrieval',
-            'BNT, action naming, verbal fluency, error profile, cuing.', '4.0.7.25b'),
+        _section(id: 'sec4', number: 4, title: 'Naming & Word Retrieval',
+            tagline: 'BNT + action naming + FAS fluency + error profile + cuing response.',
+            child: _section4Body()),
         const SizedBox(height: 10),
-        _stub(5,  'Auditory Comprehension',
-            'Token Test, complex sentence comprehension, working memory.', '4.0.7.25b'),
+        _section(id: 'sec5', number: 5, title: 'Auditory Comprehension',
+            tagline: 'Token Test, command length, sentence complexity, story retell.',
+            child: _section5Body()),
         const SizedBox(height: 10),
-        _stub(6,  'Reading & Writing',
-            'Word + sentence + paragraph reading, copy / dictation / generative writing.', '4.0.7.25b'),
+        _section(id: 'sec6', number: 6, title: 'Reading & Writing',
+            tagline: 'Word + sentence + paragraph; copy / dictation / generative writing.',
+            child: _section6Body()),
         const SizedBox(height: 10),
-        _stub(7,  'Discourse & Functional Communication',
-            'Picture description, narrative, conversational sample, content units.', '4.0.7.25b'),
+        _section(id: 'sec7', number: 7, title: 'Discourse & Functional Communication',
+            tagline: 'Picture description, conversation, channels, repair strategies.',
+            child: _section7Body()),
         const SizedBox(height: 10),
         _stub(8,  'Etiology-Specific Subforms',
             '6 conditional subforms based on etiology — aphasia + apraxia, TBI, RHD, dementia, PPA, multilingual.',
@@ -1779,6 +2103,398 @@ class _AldCaptureSectionState extends State<AldCaptureSection> {
                     fontStyle: FontStyle.italic)),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Section 4 body — Naming & Word Retrieval ──────────────────────
+  Widget _section4Body() {
+    final fas = _fasTotal();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Boston Naming Test (BNT)'),
+        _numField('BNT raw score', _bntRawCtrl,
+            unit: '/60', onSave: _saveNaming),
+        _numField('Age-adjusted z-score', _bntZCtrl,
+            unit: 'z (±)', onSave: _saveNaming),
+        _yesNo('Age adjustment applied?', _bntAgeAdjusted, (v) {
+          setState(() => _bntAgeAdjusted = v);
+          _saveNaming();
+        }),
+        _ghostNote('z ≤ −1.5 = significant deficit; z = −1 to −1.5 = mild.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Action Naming Test (optional)'),
+        _numField('Action Naming raw score', _antRawCtrl,
+            unit: 'raw', onSave: _saveNaming),
+        _ghostNote('If administered. Skip if not part of battery.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Verbal Fluency (60s tasks)'),
+        _numField('Semantic — animals (60s)', _flAnimalsCtrl,
+            unit: 'count', onSave: _saveNaming),
+        _numField('Phonemic — F (60s)', _flFCtrl,
+            unit: 'count', onSave: _saveNaming),
+        _numField('Phonemic — A (60s)', _flACtrl,
+            unit: 'count', onSave: _saveNaming),
+        _numField('Phonemic — S (60s)', _flSCtrl,
+            unit: 'count', onSave: _saveNaming),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text('FAS total: $fas',
+              style: GoogleFonts.dmSans(
+                  fontSize: 12, color: _ink,
+                  fontWeight: FontWeight.w500)),
+        ),
+        _ghostNote(
+            'Adult Indian-context norms: Animals ≥ 15, FAS total ≥ 30 considered WNL.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Naming Error Profile'),
+        _multiChips('Error types observed', const [
+          'Semantic paraphasia', 'Phonemic paraphasia', 'Neologism',
+          'Circumlocution', "Don't know responses", 'No response',
+          'Perseveration', 'Mixed errors',
+        ], _namingErrors, (v, sel) {
+          setState(() {
+            if (sel) {
+              _namingErrors.add(v);
+            } else {
+              _namingErrors.remove(v);
+            }
+          });
+          _saveNaming();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Cuing Effectiveness'),
+        _yesNo('Semantic cue helps', _semCueHelps, (v) {
+          setState(() => _semCueHelps = v);
+          _saveNaming();
+        }),
+        _yesNo('Phonemic cue helps', _phonCueHelps, (v) {
+          setState(() => _phonCueHelps = v);
+          _saveNaming();
+        }),
+        _yesNo('Choice cue helps', _choiceCueHelps, (v) {
+          setState(() => _choiceCueHelps = v);
+          _saveNaming();
+        }),
+        _ghostNote(
+            'Cuing response predicts therapy approach. Phonemic cue effective → SFA candidate. Semantic cue effective → semantic feature work.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('F · Notes'),
+        _textField('Naming notes', _namingNotesCtrl,
+            multi: true, onSave: _saveNaming),
+      ],
+    );
+  }
+
+  // ── Section 5 body — Auditory Comprehension ───────────────────────
+  Widget _section5Body() {
+    final ynRaw = _parseInt(_yesNoCorrectCtrl.text);
+    final ynFlagged = ynRaw != null && ynRaw < 14;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Token Test'),
+        _singleChips('Token Test version', const [
+          'Full (62-item)', 'Short form (36-item)', 'Other',
+        ], _tokenVersion, (v) {
+          setState(() => _tokenVersion = v);
+          _saveComprehension();
+        }),
+        _numField('Token Test raw score', _tokenRawCtrl,
+            unit: 'raw', onSave: _saveComprehension),
+        _numField('Token Test percentile / standardized', _tokenStdCtrl,
+            unit: 'std', onSave: _saveComprehension),
+        _ghostNote('Standardized cutoff varies by version.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Yes/No accuracy (extended)'),
+        _numField('Yes/No questions correct', _yesNoCorrectCtrl,
+            unit: '/20', onSave: _saveComprehension),
+        if (ynFlagged)
+          _flaggedNote('< 14/20 — significant comprehension impairment.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Following commands by length (% accuracy)'),
+        _numField('1-step commands', _cmd1PctCtrl,
+            unit: '%', onSave: _saveComprehension),
+        _numField('2-step commands', _cmd2PctCtrl,
+            unit: '%', onSave: _saveComprehension),
+        _numField('3-step commands', _cmd3PctCtrl,
+            unit: '%', onSave: _saveComprehension),
+        _numField('4-step commands', _cmd4PctCtrl,
+            unit: '%', onSave: _saveComprehension),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Sentence comprehension complexity (% accuracy)'),
+        _numField('Simple active sentences', _sentSimpleCtrl,
+            unit: '%', onSave: _saveComprehension),
+        _numField('Subject-relative clauses', _sentSubjRelCtrl,
+            unit: '%', onSave: _saveComprehension),
+        _numField('Object-relative clauses', _sentObjRelCtrl,
+            unit: '%', onSave: _saveComprehension),
+        _numField('Passive sentences', _sentPassiveCtrl,
+            unit: '%', onSave: _saveComprehension),
+        _ghostNote(
+            'Object-relative drop indicates syntactic comprehension impairment (Broca / conduction).'),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Discourse comprehension'),
+        _textField('Story retell — story used', _storyUsedCtrl,
+            onSave: _saveComprehension),
+        _textField('Propositions retained (X / Y)', _storyPropsCtrl,
+            hint: 'e.g. 6 / 10', onSave: _saveComprehension),
+        _yesNo('Main idea grasped?', _storyMainIdea, (v) {
+          setState(() => _storyMainIdea = v);
+          _saveComprehension();
+        }),
+        _singleChips('Inferential comprehension',
+            const ['Intact', 'Reduced', 'Severely impaired'],
+            _inferentialComp, (v) {
+          setState(() => _inferentialComp = v);
+          _saveComprehension();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('F · Comprehension breakdown notes'),
+        _textField('Narrative', _compNotesCtrl,
+            multi: true, onSave: _saveComprehension),
+      ],
+    );
+  }
+
+  // ── Section 6 body — Reading & Writing ────────────────────────────
+  Widget _section6Body() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Reading aloud'),
+        _textField('Single regular words (X / Y)', _readRegCtrl,
+            hint: 'e.g. 8 / 10', onSave: _saveReadingWriting),
+        _textField('Single irregular words (X / Y)', _readIrregCtrl,
+            hint: 'e.g. 4 / 10', onSave: _saveReadingWriting),
+        _textField('Non-words / pseudowords (X / Y)', _readNonwordsCtrl,
+            onSave: _saveReadingWriting),
+        _ghostNote(
+            'Surface dyslexia: irregular impaired, regular preserved. Phonological dyslexia: non-words impaired.'),
+        _singleChips('Sentence reading aloud',
+            const ['Fluent', 'Effortful', 'Letter-by-letter', 'Unable'],
+            _sentReadingFluency, (v) {
+          setState(() => _sentReadingFluency = v);
+          _saveReadingWriting();
+        }),
+        _singleChips('Paragraph reading aloud',
+            const ['Adequate', 'Slow but intelligible', 'Halting', 'Unable'],
+            _paragraphReading, (v) {
+          setState(() => _paragraphReading = v);
+          _saveReadingWriting();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Reading comprehension'),
+        _textField('Single word — picture matching (X / Y)',
+            _readWordPicCtrl, onSave: _saveReadingWriting),
+        _textField('Sentence — picture matching (X / Y)',
+            _readSentPicCtrl, onSave: _saveReadingWriting),
+        _singleChips('Paragraph comprehension',
+            const ['Adequate', 'Reduced', 'Severely impaired'],
+            _paragraphComp, (v) {
+          setState(() => _paragraphComp = v);
+          _saveReadingWriting();
+        }),
+        _singleChips('Reading rate',
+            const ['WNL', 'Slow', 'Very slow'],
+            _readingRate, (v) {
+          setState(() => _readingRate = v);
+          _saveReadingWriting();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Writing'),
+        _singleChips('Write own name',
+            const ['Legible', 'Distorted', 'Unable'],
+            _writeOwnNameQuality, (v) {
+          setState(() => _writeOwnNameQuality = v);
+          _saveReadingWriting();
+        }),
+        _singleChips('Copy single words',
+            const ['Accurate', 'Errors', 'Unable'],
+            _copyWordsQuality, (v) {
+          setState(() => _copyWordsQuality = v);
+          _saveReadingWriting();
+        }),
+        _textField('Write to dictation — words (X / Y)',
+            _writeDictWordsCtrl, onSave: _saveReadingWriting),
+        _singleChips('Write to dictation — sentence',
+            const ['Accurate', 'Some errors', 'Unable'],
+            _writeDictSentence, (v) {
+          setState(() => _writeDictSentence = v);
+          _saveReadingWriting();
+        }),
+        _textField('Spontaneous writing sample',
+            _spontaneousWritingCtrl, multi: true,
+            hint: 'Capture sample or describe',
+            onSave: _saveReadingWriting),
+        _multiChips('Writing errors observed', const [
+          'Phonological', 'Surface', 'Semantic substitution',
+          'Letter omission', 'Letter substitution',
+          'Agrammatic', 'Apraxic / motor',
+        ], _writingErrors, (v, sel) {
+          setState(() {
+            if (sel) {
+              _writingErrors.add(v);
+            } else {
+              _writingErrors.remove(v);
+            }
+          });
+          _saveReadingWriting();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Reading + writing impression'),
+        _textField('Impression', _rwImpressionCtrl,
+            multi: true, onSave: _saveReadingWriting),
+      ],
+    );
+  }
+
+  // ── Section 7 body — Discourse & Functional Communication ─────────
+  Widget _section7Body() {
+    final mostEffectiveOptions =
+        _channelsUsed.toList()..sort();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Picture description'),
+        _singleChips('Picture used', const [
+          'Cookie Theft (BDAE)', 'WAB-R picnic scene',
+          'Indian-adapted (specify)', 'Other',
+        ], _pictureUsed, (v) {
+          setState(() => _pictureUsed = v);
+          _saveDiscourse();
+        }),
+        _textField('Picture description verbatim',
+            _pictureDescVerbatimCtrl, multi: true,
+            hint: 'Transcribed sample',
+            onSave: _saveDiscourse),
+        _numField('Total words produced', _totalWordsCtrl,
+            unit: 'words', onSave: _saveDiscourse),
+        _numField('Content units / propositions correct',
+            _contentUnitsCtrl, unit: 'units', onSave: _saveDiscourse),
+        _numField('Mean length of utterance (MLU)', _mluCtrl,
+            unit: 'words', onSave: _saveDiscourse),
+        _numField('Errors per minute', _errorsPerMinCtrl,
+            unit: '/min', onSave: _saveDiscourse),
+        _ghostNote(
+            'MLU < 5 words suggests agrammatism. Content units / minute < 4 = reduced informativeness.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Conversational sample'),
+        _textField('Conversation topic', _convoTopicCtrl,
+            onSave: _saveDiscourse),
+        _numField('Duration', _convoDurationCtrl,
+            unit: 'minutes', onSave: _saveDiscourse),
+        _singleChips('Topic maintenance',
+            const ['Adequate', 'Reduced', 'Tangential'],
+            _topicMaintenance, (v) {
+          setState(() => _topicMaintenance = v);
+          _saveDiscourse();
+        }),
+        _singleChips('Turn-taking',
+            const ['Adequate', 'Reduced', 'Inappropriate'],
+            _turnTaking, (v) {
+          setState(() => _turnTaking = v);
+          _saveDiscourse();
+        }),
+        _singleChips('Initiation',
+            const ['Spontaneous', 'Cued', 'Absent'],
+            _initiation, (v) {
+          setState(() => _initiation = v);
+          _saveDiscourse();
+        }),
+        _multiChips('Repair strategies used', const [
+          'Self-correction', 'Restarts', 'Gestural',
+          'Drawing', 'Caregiver scaffolding', 'None observed',
+        ], _repairStrategies, (v, sel) {
+          setState(() {
+            if (sel) {
+              _repairStrategies.add(v);
+            } else {
+              _repairStrategies.remove(v);
+            }
+          });
+          _saveDiscourse();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Communicative effectiveness'),
+        _multiChips('Channels used effectively', const [
+          'Vocal speech', 'Gesture', 'Facial expression',
+          'Drawing', 'Pointing', 'Writing', 'AAC', 'Eye gaze',
+        ], _channelsUsed, (v, sel) {
+          setState(() {
+            if (sel) {
+              _channelsUsed.add(v);
+            } else {
+              _channelsUsed.remove(v);
+              if (_mostEffectiveChannel == v) _mostEffectiveChannel = null;
+            }
+          });
+          _saveDiscourse();
+        }),
+        _singleChips('Most effective channel currently',
+            mostEffectiveOptions, _mostEffectiveChannel, (v) {
+          setState(() => _mostEffectiveChannel = v);
+          _saveDiscourse();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Functional communication impression'),
+        _textField('Impression', _funcCommImpressionCtrl,
+            multi: true, onSave: _saveDiscourse),
+      ],
+    );
+  }
+
+  // ── Shared 25b primitives ─────────────────────────────────────────
+
+  Widget _ghostNote(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: _tealSoft.withValues(alpha: 0.30),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _tealSoft),
+        ),
+        child: Text(text,
+            style: GoogleFonts.dmSans(
+                fontSize: 12, color: _ink,
+                fontStyle: FontStyle.italic, height: 1.5)),
+      ),
+    );
+  }
+
+  Widget _flaggedNote(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        decoration: BoxDecoration(
+          color: _amberSoft.withValues(alpha: 0.4),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _amber.withValues(alpha: 0.45)),
+        ),
+        child: Text(text,
+            style: GoogleFonts.dmSans(
+                fontSize: 12, color: _amber,
+                fontWeight: FontWeight.w500)),
       ),
     );
   }
