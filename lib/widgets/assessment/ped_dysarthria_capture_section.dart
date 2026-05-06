@@ -358,6 +358,133 @@ class _PedDysarthriaCaptureSectionState
   final Set<String> _stimRecommendedApproaches = {};
   final _stimApproachReasoningCtrl = TextEditingController();
 
+  // ── Section 8 — Etiology-specific subforms (chip-driven) ─────────
+  // Multi-select chip set, persisted in etiology_specific selection
+  // (kept on cerebral_palsy_payload as a sibling key to keep schema
+  // surface area minimal). Each subform writes its own jsonb column.
+  final Set<String> _subformsSelected = {};
+
+  // 8A — Cerebral Palsy
+  final _cpSpasticityDistCtrl   = TextEditingController();
+  final _cpMovementPatternCtrl  = TextEditingController();
+  final _cpPosturalSupportCtrl  = TextEditingController();
+  final _cpBotoxHistoryCtrl     = TextEditingController();
+  String? _cpBotoxImpactSpeech;
+  final _cpOrthopedicSurgeryCtrl = TextEditingController();
+  final _cpNotesCtrl            = TextEditingController();
+
+  // 8B — Post-encephalitis / meningitis
+  String? _peAcuteIllnessType;
+  DateTime? _peOnsetDate;
+  String? _peAcuteSeverity;
+  String? _peRecoveryTrajectory;
+  final _peRecoveryDetailsCtrl  = TextEditingController();
+  final Set<String> _peComorbidImpairments = {};
+  final _peSequelaeNotesCtrl    = TextEditingController();
+
+  // 8C — Post-TBI
+  String? _tbiMechanism;
+  final _tbiOtherMechanismCtrl  = TextEditingController();
+  final _tbiGcsCtrl             = TextEditingController();
+  final _tbiTimePostInjuryCtrl  = TextEditingController();
+  final _tbiComaDurationCtrl    = TextEditingController();
+  final _tbiPtaDurationCtrl     = TextEditingController();
+  String? _tbiRecoveryTrajectory;
+  final Set<String> _tbiCogConcerns       = {};
+  final Set<String> _tbiBehavioralConcerns = {};
+  String? _tbiRanchosLevel;
+  final _tbiNotesCtrl           = TextEditingController();
+
+  // 8D — Genetic syndrome
+  final _genConfirmedEtiologyCtrl = TextEditingController();
+  final _genTestingDetailsCtrl  = TextEditingController();
+  final _genMotorSpeechFeaturesCtrl = TextEditingController();
+  final _genFamilyHistoryCtrl   = TextEditingController();
+  bool _genCounselingReceived   = false;
+  final _genNotesCtrl           = TextEditingController();
+
+  // 8E — Mixed / Idiopathic
+  final _miDifferentialReasoningCtrl = TextEditingController();
+  final _miWorkingHypothesisCtrl     = TextEditingController();
+  final Set<String> _miPendingInvestigations = {};
+  final _miInvestigationTimelineCtrl = TextEditingController();
+  final _miNotesCtrl                 = TextEditingController();
+
+  // ── Section 9 — Functional Communication Screen ─────────────────
+  String? _recLangApproach;
+  final _recLangBatteryCtrl       = TextEditingController();
+  String? _recLangProfile;
+  final _recLangNotesCtrl         = TextEditingController();
+  String? _expLangApproach;
+  final _expLangBatteryCtrl       = TextEditingController();
+  String? _expLangEstimate;
+  final _expLangNotesCtrl         = TextEditingController();
+  String? _symbolicPlay;
+  String? _cognitiveLevel;
+  final Set<String> _cogBatteries = {};
+  final _cogSymbolicNotesCtrl     = TextEditingController();
+  String? _aacCandidacy;
+  final _aacReasoningCtrl         = TextEditingController();
+  bool _augInputEffective         = false;
+  final _augInputDetailsCtrl      = TextEditingController();
+  String? _primaryCommConcern;
+  final _commSynthesisCtrl        = TextEditingController();
+
+  // ── Section 10 — Differential Diagnosis ─────────────────────────
+  bool _ddOverrideMayo            = false;
+  String? _ddMayoOverride;
+  String? _ddOverallSeverity;
+  final _ddSeverityRationaleCtrl  = TextEditingController();
+  bool _ddOverrideSubsystems      = false;
+  final Set<String> _ddSubsystemsAffectedOverride = {};
+  final _ddDiffFromCasCtrl        = TextEditingController();
+  final _ddDiffFromPhonologicalCtrl = TextEditingController();
+  final _ddDiffFromDelayCtrl      = TextEditingController();
+  final _ddDiffFromArticulationCtrl = TextEditingController();
+  String? _ddHypothesisConfidence;
+  final _ddHypothesisStatementCtrl = TextEditingController();
+  final Set<String> _ddContributingFactors = {};
+  final _ddContributingNotesCtrl   = TextEditingController();
+
+  // ── Section 12 — QoL typed totals ───────────────────────────────
+  // Per-item FOCUS-34 answers in widget memory; only total persists.
+  String? _focus34AdminMode;
+  final Map<int, int> _focus34Items = {};
+  int _parentConfidence  = 5;
+  int _teacherImpact     = 5;
+  int _peerInteraction   = 5;
+  final _qolNotesCtrl    = TextEditingController();
+  int? _focus34TotalLoaded;
+  int? _parentConfidenceLoaded;
+  int? _teacherImpactLoaded;
+  int? _peerInteractionLoaded;
+
+  // ── Section 15 — Final Clinical Impression & Plan ───────────────
+  final _ciFinalDxCtrl       = TextEditingController();
+  final _ciIcdCodeCtrl       = TextEditingController();
+  String? _ciCogLinguistic;
+  String? _ciFamilySupport;
+  final Set<String> _ciComorbiditiesAffectingOutcome = {};
+  String? _ciEtiologyTrajectory;
+  String? _ciOverallPrognosis;
+  final _ciPrognosticRationaleCtrl = TextEditingController();
+  final Set<String> _ciInterventions = {};
+  final _ciTherapyReasoningCtrl  = TextEditingController();
+  final _ciIntensityCtrl     = TextEditingController();
+  final _ciSessionCountCtrl  = TextEditingController();
+  final _ciSessionDurationCtrl = TextEditingController();
+  String? _ciFrequency;
+  final _ciDischargeCriteriaCtrl = TextEditingController();
+  final _ciFunctionalOutcomesCtrl = TextEditingController();
+  final Set<String> _ciReferrals = {};
+  final _ciReferralReasoningCtrl = TextEditingController();
+  // Cross-domain alert flags — typed parent BOOLEAN columns,
+  // SLP-toggled (V1 product law: never auto-computed).
+  bool _flagDysphagiaReferral    = false;
+  bool _flagAacAssessment        = false;
+  final Set<String> _ciCaregiverEdu = {};
+  final _ciFinalNarrativeCtrl   = TextEditingController();
+
   // Accordion expansion — Section 1 default-expanded.
   String _expanded = 'sec1';
 
@@ -405,6 +532,30 @@ class _PedDysarthriaCaptureSectionState
       _csimSingleWordCtrl, _csimSentenceCtrl, _intelligibilityNotesCtrl,
       _stimLoudNotesCtrl, _stimRateNotesCtrl, _stimArticNotesCtrl,
       _stimResonanceNotesCtrl, _stimApproachReasoningCtrl,
+      // 27c — Sections 8, 9, 10, 12, 15 controllers.
+      _cpSpasticityDistCtrl, _cpMovementPatternCtrl, _cpPosturalSupportCtrl,
+      _cpBotoxHistoryCtrl, _cpOrthopedicSurgeryCtrl, _cpNotesCtrl,
+      _peRecoveryDetailsCtrl, _peSequelaeNotesCtrl,
+      _tbiOtherMechanismCtrl, _tbiGcsCtrl, _tbiTimePostInjuryCtrl,
+      _tbiComaDurationCtrl, _tbiPtaDurationCtrl, _tbiNotesCtrl,
+      _genConfirmedEtiologyCtrl, _genTestingDetailsCtrl,
+      _genMotorSpeechFeaturesCtrl, _genFamilyHistoryCtrl, _genNotesCtrl,
+      _miDifferentialReasoningCtrl, _miWorkingHypothesisCtrl,
+      _miInvestigationTimelineCtrl, _miNotesCtrl,
+      _recLangBatteryCtrl, _recLangNotesCtrl,
+      _expLangBatteryCtrl, _expLangNotesCtrl,
+      _cogSymbolicNotesCtrl, _aacReasoningCtrl, _augInputDetailsCtrl,
+      _commSynthesisCtrl,
+      _ddSeverityRationaleCtrl, _ddDiffFromCasCtrl,
+      _ddDiffFromPhonologicalCtrl, _ddDiffFromDelayCtrl,
+      _ddDiffFromArticulationCtrl, _ddHypothesisStatementCtrl,
+      _ddContributingNotesCtrl,
+      _qolNotesCtrl,
+      _ciFinalDxCtrl, _ciIcdCodeCtrl, _ciPrognosticRationaleCtrl,
+      _ciTherapyReasoningCtrl, _ciIntensityCtrl, _ciSessionCountCtrl,
+      _ciSessionDurationCtrl, _ciDischargeCriteriaCtrl,
+      _ciFunctionalOutcomesCtrl, _ciReferralReasoningCtrl,
+      _ciFinalNarrativeCtrl,
     ];
     for (final c in controllers) {
       c.dispose();
@@ -432,16 +583,21 @@ class _PedDysarthriaCaptureSectionState
             assessmentId: a.id, tableName: 'ped_dys_ddk_rates'),
         _service.loadTypedMeasures(
             assessmentId: a.id, tableName: 'ped_dys_subsystem_severity'),
+        // 27c — Section 12 (QoL) loads from ped_dys_qol_scores.
+        _service.loadTypedMeasures(
+            assessmentId: a.id, tableName: 'ped_dys_qol_scores'),
         _service.compareBaselineToLatest(widget.clientId),
       ]);
       _hydrateIntelligibility(results[0] as Map<String, dynamic>);
       _hydrateAerodynamic(results[1] as Map<String, dynamic>);
       _hydrateDdk(results[2] as Map<String, dynamic>);
       _hydrateSubsystemSeverity(results[3] as Map<String, dynamic>);
+      _hydrateQol(results[4] as Map<String, dynamic>);
+      _seedSubformDefaults(a);
       if (!mounted) return;
       setState(() {
         _assessment = a;
-        _outcome    = results[4] as OutcomeComparison;
+        _outcome    = results[5] as OutcomeComparison;
         _loading    = false;
       });
     } catch (e) {
@@ -823,6 +979,215 @@ class _PedDysarthriaCaptureSectionState
       _stimRecommendedApproaches..clear()..addAll(ra.map((e) => e.toString()));
     }
     _stimApproachReasoningCtrl.text = (st['approach_reasoning'] as String?) ?? '';
+
+    // 27c — Section 8 etiology subforms each from their own jsonb.
+    final cp = a.cerebralPalsyPayload;
+    final subSel = cp['subforms_selected'];
+    if (subSel is List) {
+      _subformsSelected
+        ..clear()
+        ..addAll(subSel.map((e) => e.toString()));
+    }
+    _cpSpasticityDistCtrl.text   = (cp['spasticity_distribution'] as String?) ?? '';
+    _cpMovementPatternCtrl.text  = (cp['movement_pattern']        as String?) ?? '';
+    _cpPosturalSupportCtrl.text  = (cp['postural_support']        as String?) ?? '';
+    _cpBotoxHistoryCtrl.text     = (cp['botox_history_speech']    as String?) ?? '';
+    _cpBotoxImpactSpeech         = cp['botox_impact_speech']      as String?;
+    _cpOrthopedicSurgeryCtrl.text = (cp['orthopedic_surgery_history'] as String?) ?? '';
+    _cpNotesCtrl.text            = (cp['notes'] as String?) ?? '';
+
+    final pe = a.postEncephalitisPayload;
+    _peAcuteIllnessType   = pe['acute_illness_type'] as String?;
+    final peOnset = pe['acute_illness_onset_date'] as String?;
+    if (peOnset != null && peOnset.isNotEmpty) {
+      _peOnsetDate = DateTime.tryParse(peOnset);
+    }
+    _peAcuteSeverity      = pe['acute_illness_severity']  as String?;
+    _peRecoveryTrajectory = pe['recovery_trajectory']      as String?;
+    _peRecoveryDetailsCtrl.text = (pe['recovery_details']  as String?) ?? '';
+    final peCom = pe['comorbid_impairments'];
+    if (peCom is List) {
+      _peComorbidImpairments..clear()..addAll(peCom.map((e) => e.toString()));
+    }
+    _peSequelaeNotesCtrl.text = (pe['sequelae_notes'] as String?) ?? '';
+
+    final tb = a.postTbiPayload;
+    _tbiMechanism             = tb['mechanism_of_injury'] as String?;
+    _tbiOtherMechanismCtrl.text = (tb['other_mechanism_specify'] as String?) ?? '';
+    _tbiGcsCtrl.text          = tb['gcs_at_presentation']?.toString() ?? '';
+    _tbiTimePostInjuryCtrl.text = tb['time_post_injury_months']?.toString() ?? '';
+    _tbiComaDurationCtrl.text = tb['coma_duration_days']?.toString() ?? '';
+    _tbiPtaDurationCtrl.text  = tb['pta_duration_days']?.toString() ?? '';
+    _tbiRecoveryTrajectory    = tb['recovery_trajectory'] as String?;
+    final tbCog = tb['cognitive_communication_concerns'];
+    if (tbCog is List) {
+      _tbiCogConcerns..clear()..addAll(tbCog.map((e) => e.toString()));
+    }
+    final tbBeh = tb['behavioral_concerns'];
+    if (tbBeh is List) {
+      _tbiBehavioralConcerns..clear()..addAll(tbBeh.map((e) => e.toString()));
+    }
+    _tbiRanchosLevel          = tb['ranchos_level'] as String?;
+    _tbiNotesCtrl.text        = (tb['notes'] as String?) ?? '';
+
+    final gen = a.geneticSyndromePayload;
+    _genConfirmedEtiologyCtrl.text   = (gen['confirmed_etiology']         as String?) ?? '';
+    _genTestingDetailsCtrl.text      = (gen['genetic_testing_details']    as String?) ?? '';
+    _genMotorSpeechFeaturesCtrl.text = (gen['motor_speech_features']      as String?) ?? '';
+    _genFamilyHistoryCtrl.text       = (gen['family_history']             as String?) ?? '';
+    _genCounselingReceived           = gen['counseling_received'] == true;
+    _genNotesCtrl.text               = (gen['notes'] as String?) ?? '';
+
+    final mi = a.mixedIdiopathicPayload;
+    _miDifferentialReasoningCtrl.text = (mi['differential_reasoning']  as String?) ?? '';
+    _miWorkingHypothesisCtrl.text     = (mi['working_hypothesis']      as String?) ?? '';
+    final miInv = mi['pending_investigations'];
+    if (miInv is List) {
+      _miPendingInvestigations..clear()..addAll(miInv.map((e) => e.toString()));
+    }
+    _miInvestigationTimelineCtrl.text = (mi['investigation_timeline']  as String?) ?? '';
+    _miNotesCtrl.text                 = (mi['notes']                   as String?) ?? '';
+
+    // 27c — Section 9 (functional communication screen).
+    final fc = a.functionalCommunicationPayload;
+    _recLangApproach        = fc['receptive_approach']    as String?;
+    _recLangBatteryCtrl.text = (fc['receptive_battery']   as String?) ?? '';
+    _recLangProfile         = fc['receptive_profile']     as String?;
+    _recLangNotesCtrl.text  = (fc['receptive_notes']      as String?) ?? '';
+    _expLangApproach        = fc['expressive_approach']   as String?;
+    _expLangBatteryCtrl.text = (fc['expressive_battery']  as String?) ?? '';
+    _expLangEstimate        = fc['expressive_estimate']   as String?;
+    _expLangNotesCtrl.text  = (fc['expressive_notes']     as String?) ?? '';
+    _symbolicPlay           = fc['symbolic_play']         as String?;
+    _cognitiveLevel         = fc['cognitive_level']       as String?;
+    final cogBat = fc['cognitive_batteries'];
+    if (cogBat is List) {
+      _cogBatteries..clear()..addAll(cogBat.map((e) => e.toString()));
+    }
+    _cogSymbolicNotesCtrl.text = (fc['cognitive_symbolic_notes'] as String?) ?? '';
+    _aacCandidacy           = fc['aac_candidacy']         as String?;
+    _aacReasoningCtrl.text  = (fc['aac_reasoning']        as String?) ?? '';
+    _augInputEffective      = fc['aug_input_effective']   == true;
+    _augInputDetailsCtrl.text = (fc['aug_input_details']  as String?) ?? '';
+    _primaryCommConcern     = fc['primary_comm_concern']  as String?;
+    _commSynthesisCtrl.text = (fc['synthesis_notes']      as String?) ?? '';
+
+    // 27c — Section 10 (differential diagnosis).
+    final dd = a.differentialDiagnosisPayload;
+    _ddOverrideMayo         = dd['override_mayo'] == true;
+    _ddMayoOverride         = dd['mayo_override']         as String?;
+    _ddOverallSeverity      = dd['overall_severity']      as String?;
+    _ddSeverityRationaleCtrl.text = (dd['severity_rationale'] as String?) ?? '';
+    _ddOverrideSubsystems   = dd['override_subsystems'] == true;
+    final dso = dd['subsystems_affected_override'];
+    if (dso is List) {
+      _ddSubsystemsAffectedOverride..clear()..addAll(dso.map((e) => e.toString()));
+    }
+    _ddDiffFromCasCtrl.text          = (dd['diff_from_cas']           as String?) ?? '';
+    _ddDiffFromPhonologicalCtrl.text = (dd['diff_from_phonological']  as String?) ?? '';
+    _ddDiffFromDelayCtrl.text        = (dd['diff_from_delay']         as String?) ?? '';
+    _ddDiffFromArticulationCtrl.text = (dd['diff_from_articulation']  as String?) ?? '';
+    _ddHypothesisConfidence          = dd['hypothesis_confidence']    as String?;
+    _ddHypothesisStatementCtrl.text  = (dd['hypothesis_statement']    as String?) ?? '';
+    final ddF = dd['contributing_factors'];
+    if (ddF is List) {
+      _ddContributingFactors..clear()..addAll(ddF.map((e) => e.toString()));
+    }
+    _ddContributingNotesCtrl.text    = (dd['contributing_notes']      as String?) ?? '';
+
+    // 27c — Section 15 (clinical impression) + cross-domain flags.
+    final ci = a.clinicalImpressionPayload;
+    _ciFinalDxCtrl.text       = (ci['final_diagnosis']      as String?) ?? '';
+    _ciIcdCodeCtrl.text       = (ci['icd_code']             as String?) ?? '';
+    _ciCogLinguistic          = ci['cognitive_linguistic']  as String?;
+    _ciFamilySupport          = ci['family_support']        as String?;
+    final cca = ci['comorbidities_affecting_outcome'];
+    if (cca is List) {
+      _ciComorbiditiesAffectingOutcome..clear()
+        ..addAll(cca.map((e) => e.toString()));
+    }
+    _ciEtiologyTrajectory     = ci['etiology_trajectory']   as String?;
+    _ciOverallPrognosis       = ci['overall_prognosis']     as String?;
+    _ciPrognosticRationaleCtrl.text = (ci['prognostic_rationale'] as String?) ?? '';
+    final ciInt = ci['recommended_interventions'];
+    if (ciInt is List) {
+      _ciInterventions..clear()..addAll(ciInt.map((e) => e.toString()));
+    }
+    _ciTherapyReasoningCtrl.text = (ci['therapy_reasoning'] as String?) ?? '';
+    _ciIntensityCtrl.text     = ci['therapy_intensity_per_week']?.toString() ?? '';
+    _ciSessionCountCtrl.text  = ci['estimated_session_count']?.toString() ?? '';
+    _ciSessionDurationCtrl.text = ci['session_duration_min']?.toString() ?? '';
+    _ciFrequency              = ci['frequency']             as String?;
+    _ciDischargeCriteriaCtrl.text = (ci['discharge_criteria'] as String?) ?? '';
+    _ciFunctionalOutcomesCtrl.text = (ci['functional_outcome_targets'] as String?) ?? '';
+    final ciRef = ci['referrals'];
+    if (ciRef is List) {
+      _ciReferrals..clear()..addAll(ciRef.map((e) => e.toString()));
+    }
+    _ciReferralReasoningCtrl.text = (ci['referral_reasoning'] as String?) ?? '';
+    final ciEdu = ci['caregiver_education'];
+    if (ciEdu is List) {
+      _ciCaregiverEdu..clear()..addAll(ciEdu.map((e) => e.toString()));
+    }
+    _ciFinalNarrativeCtrl.text = (ci['final_narrative'] as String?) ?? '';
+    // Cross-domain flags from typed parent BOOLEAN columns.
+    _flagDysphagiaReferral    = a.flagDysphagiaReferral;
+    _flagAacAssessment        = a.flagAacAssessment;
+  }
+
+  /// Seeds Section 8 chip selection on first hydrate from etiology
+  /// captured in Section 1. SLP changes after that point persist
+  /// through cerebral_palsy_payload.subforms_selected. Mapping uses
+  /// the human-readable etiology values the Section 1 chip picker
+  /// writes (e.g. 'Cerebral palsy', not snake_case).
+  void _seedSubformDefaults(PedDysarthriaAssessment a) {
+    if (_subformsSelected.isNotEmpty) return; // SLP already chose
+    final etio = a.etiologyCategory ?? _etiology;
+    if (etio == null) return;
+    if (etio == 'Cerebral palsy') {
+      _subformsSelected.add('cp');
+    }
+    if (etio.startsWith('Post-encephalitis') ||
+        etio.contains('meningitis')) {
+      _subformsSelected.add('post_enc_men');
+    }
+    if (etio.startsWith('Post-TBI')) {
+      _subformsSelected.add('post_tbi');
+    }
+    if (etio == 'Genetic syndrome') {
+      _subformsSelected.add('genetic');
+    }
+    if (etio.startsWith('Idiopathic') ||
+        etio == 'Other neurological' ||
+        etio == 'Mitochondrial disease' ||
+        etio == 'Pediatric stroke') {
+      _subformsSelected.add('mixed_idiopathic');
+    }
+  }
+
+  /// Seeds Section 12 from a previously saved ped_dys_qol_scores row.
+  /// Per-item FOCUS-34 answers aren't persisted; totals reload from
+  /// the typed columns and per-item state resets on hard refresh.
+  void _hydrateQol(Map<String, dynamic> row) {
+    if (row.isEmpty) return;
+    final f = row['focus34_total'];
+    if (f is num) _focus34TotalLoaded = f.toInt();
+    final pc = row['parent_confidence_rating'];
+    if (pc is num) {
+      _parentConfidenceLoaded = pc.toInt();
+      _parentConfidence       = pc.toInt().clamp(1, 10);
+    }
+    final ti = row['teacher_impact_rating'];
+    if (ti is num) {
+      _teacherImpactLoaded = ti.toInt();
+      _teacherImpact       = ti.toInt().clamp(1, 10);
+    }
+    final pi = row['peer_interaction_rating'];
+    if (pi is num) {
+      _peerInteractionLoaded = pi.toInt();
+      _peerInteraction       = pi.toInt().clamp(1, 10);
+    }
+    _qolNotesCtrl.text = (row['notes'] as String?) ?? '';
   }
 
   // 27b — typed Section 4 hydrators.
@@ -1363,6 +1728,204 @@ class _PedDysarthriaCaptureSectionState
         .catchError((e) => _toast('Could not save $label: $e'));
   }
 
+  // 27c — Section 8 narrative jsonbs (5 subforms). Each persists to
+  // its own column; subform chip selection itself rides as a sibling
+  // key on cerebral_palsy_payload so we don't need a new column for
+  // the metadata.
+  Future<void> _saveCerebralPalsy() async {
+    _savePayload('cerebral_palsy_payload', {
+      'subforms_selected':         _subformsSelected.toList(),
+      'spasticity_distribution':   _cpSpasticityDistCtrl.text.trim(),
+      'movement_pattern':          _cpMovementPatternCtrl.text.trim(),
+      'postural_support':          _cpPosturalSupportCtrl.text.trim(),
+      'botox_history_speech':      _cpBotoxHistoryCtrl.text.trim(),
+      'botox_impact_speech':       _cpBotoxImpactSpeech,
+      'orthopedic_surgery_history': _cpOrthopedicSurgeryCtrl.text.trim(),
+      'notes':                     _cpNotesCtrl.text.trim(),
+    }, 'Cerebral Palsy');
+  }
+
+  Future<void> _savePostEncephalitis() async {
+    _savePayload('post_encephalitis_payload', {
+      'acute_illness_type':        _peAcuteIllnessType,
+      'acute_illness_onset_date':  _peOnsetDate?.toIso8601String().substring(0, 10),
+      'acute_illness_severity':    _peAcuteSeverity,
+      'recovery_trajectory':       _peRecoveryTrajectory,
+      'recovery_details':          _peRecoveryDetailsCtrl.text.trim(),
+      'comorbid_impairments':      _peComorbidImpairments.toList(),
+      'sequelae_notes':            _peSequelaeNotesCtrl.text.trim(),
+    }, 'Post-encephalitis / meningitis');
+  }
+
+  Future<void> _savePostTbi() async {
+    _savePayload('post_tbi_payload', {
+      'mechanism_of_injury':       _tbiMechanism,
+      'other_mechanism_specify':   _tbiOtherMechanismCtrl.text.trim(),
+      'gcs_at_presentation':       _parseInt(_tbiGcsCtrl.text),
+      'time_post_injury_months':   _parseInt(_tbiTimePostInjuryCtrl.text),
+      'coma_duration_days':        _parseInt(_tbiComaDurationCtrl.text),
+      'pta_duration_days':         _parseInt(_tbiPtaDurationCtrl.text),
+      'recovery_trajectory':       _tbiRecoveryTrajectory,
+      'cognitive_communication_concerns': _tbiCogConcerns.toList(),
+      'behavioral_concerns':       _tbiBehavioralConcerns.toList(),
+      'ranchos_level':             _tbiRanchosLevel,
+      'notes':                     _tbiNotesCtrl.text.trim(),
+    }, 'Post-TBI');
+  }
+
+  Future<void> _saveGeneticSyndrome() async {
+    _savePayload('genetic_syndrome_payload', {
+      'confirmed_etiology':        _genConfirmedEtiologyCtrl.text.trim(),
+      'genetic_testing_details':   _genTestingDetailsCtrl.text.trim(),
+      'motor_speech_features':     _genMotorSpeechFeaturesCtrl.text.trim(),
+      'family_history':            _genFamilyHistoryCtrl.text.trim(),
+      'counseling_received':       _genCounselingReceived,
+      'notes':                     _genNotesCtrl.text.trim(),
+    }, 'Genetic syndrome');
+  }
+
+  Future<void> _saveMixedIdiopathic() async {
+    _savePayload('mixed_idiopathic_payload', {
+      'differential_reasoning':    _miDifferentialReasoningCtrl.text.trim(),
+      'working_hypothesis':        _miWorkingHypothesisCtrl.text.trim(),
+      'pending_investigations':    _miPendingInvestigations.toList(),
+      'investigation_timeline':    _miInvestigationTimelineCtrl.text.trim(),
+      'notes':                     _miNotesCtrl.text.trim(),
+    }, 'Mixed / Idiopathic');
+  }
+
+  // 27c — Section 9.
+  Future<void> _saveFunctionalCommunication() async {
+    _savePayload('functional_communication_payload', {
+      'receptive_approach':        _recLangApproach,
+      'receptive_battery':         _recLangBatteryCtrl.text.trim(),
+      'receptive_profile':         _recLangProfile,
+      'receptive_notes':           _recLangNotesCtrl.text.trim(),
+      'expressive_approach':       _expLangApproach,
+      'expressive_battery':        _expLangBatteryCtrl.text.trim(),
+      'expressive_estimate':       _expLangEstimate,
+      'expressive_notes':          _expLangNotesCtrl.text.trim(),
+      'symbolic_play':             _symbolicPlay,
+      'cognitive_level':           _cognitiveLevel,
+      'cognitive_batteries':       _cogBatteries.toList(),
+      'cognitive_symbolic_notes':  _cogSymbolicNotesCtrl.text.trim(),
+      'aac_candidacy':             _aacCandidacy,
+      'aac_reasoning':             _aacReasoningCtrl.text.trim(),
+      'aug_input_effective':       _augInputEffective,
+      'aug_input_details':         _augInputDetailsCtrl.text.trim(),
+      'primary_comm_concern':      _primaryCommConcern,
+      'synthesis_notes':           _commSynthesisCtrl.text.trim(),
+    }, 'Functional Communication');
+  }
+
+  // 27c — Section 10 + Mayo override write-back to typed parent column.
+  Future<void> _saveDifferentialDx() async {
+    _savePayload('differential_diagnosis_payload', {
+      'override_mayo':             _ddOverrideMayo,
+      'mayo_override':             _ddMayoOverride,
+      'overall_severity':          _ddOverallSeverity,
+      'severity_rationale':        _ddSeverityRationaleCtrl.text.trim(),
+      'override_subsystems':       _ddOverrideSubsystems,
+      'subsystems_affected_override': _ddSubsystemsAffectedOverride.toList(),
+      'diff_from_cas':             _ddDiffFromCasCtrl.text.trim(),
+      'diff_from_phonological':    _ddDiffFromPhonologicalCtrl.text.trim(),
+      'diff_from_delay':           _ddDiffFromDelayCtrl.text.trim(),
+      'diff_from_articulation':    _ddDiffFromArticulationCtrl.text.trim(),
+      'hypothesis_confidence':     _ddHypothesisConfidence,
+      'hypothesis_statement':      _ddHypothesisStatementCtrl.text.trim(),
+      'contributing_factors':      _ddContributingFactors.toList(),
+      'contributing_notes':        _ddContributingNotesCtrl.text.trim(),
+    }, 'Differential Dx');
+    // When SLP overrides Mayo type in Section 10, mirror to parent
+    // mayo_dysarthria_type so Section 15's auto-pull + future report
+    // composer see the final value.
+    if (_ddOverrideMayo && _ddMayoOverride != null) {
+      try {
+        await _service.saveTypedColumns(
+          assessmentId: _assessment!.id,
+          data:         {'mayo_dysarthria_type': _ddMayoOverride},
+        );
+      } catch (e) {
+        _toast('Could not write back Mayo override: $e');
+      }
+    }
+  }
+
+  // 27c — Section 12 typed QoL.
+  Future<void> _saveQol() async {
+    if (_assessment == null) return;
+    final f34 = _focus34Items.isEmpty
+        ? null
+        : _focus34Items.values.fold<int>(0, (a, b) => a + b);
+    final data = <String, dynamic>{
+      'focus34_total':            ?f34,
+      'parent_confidence_rating': _parentConfidence,
+      'teacher_impact_rating':    _teacherImpact,
+      'peer_interaction_rating':  _peerInteraction,
+      'notes':                    _qolNotesCtrl.text.trim(),
+    };
+    try {
+      await _service.saveTypedMeasures(
+        assessmentId: _assessment!.id,
+        tableName:    'ped_dys_qol_scores',
+        data:         data,
+      );
+      setState(() {
+        _focus34TotalLoaded     = f34;
+        _parentConfidenceLoaded = _parentConfidence;
+        _teacherImpactLoaded    = _teacherImpact;
+        _peerInteractionLoaded  = _peerInteraction;
+      });
+    } catch (e) {
+      _toast('Could not save QoL scores: $e');
+    }
+  }
+
+  // 27c — Section 15 narrative + cross-domain alert flags to typed
+  // parent BOOLEAN columns. NEVER auto-derived — SLP-toggled only.
+  Future<void> _saveClinicalImpression() async {
+    _savePayload('clinical_impression_payload', {
+      'final_diagnosis':           _ciFinalDxCtrl.text.trim(),
+      'icd_code':                  _ciIcdCodeCtrl.text.trim(),
+      'cognitive_linguistic':      _ciCogLinguistic,
+      'family_support':            _ciFamilySupport,
+      'comorbidities_affecting_outcome': _ciComorbiditiesAffectingOutcome.toList(),
+      'etiology_trajectory':       _ciEtiologyTrajectory,
+      'overall_prognosis':         _ciOverallPrognosis,
+      'prognostic_rationale':      _ciPrognosticRationaleCtrl.text.trim(),
+      'recommended_interventions': _ciInterventions.toList(),
+      'therapy_reasoning':         _ciTherapyReasoningCtrl.text.trim(),
+      'therapy_intensity_per_week': _parseDecimal(_ciIntensityCtrl.text),
+      'estimated_session_count':   _parseInt(_ciSessionCountCtrl.text),
+      'session_duration_min':      _parseInt(_ciSessionDurationCtrl.text),
+      'frequency':                 _ciFrequency,
+      'discharge_criteria':        _ciDischargeCriteriaCtrl.text.trim(),
+      'functional_outcome_targets': _ciFunctionalOutcomesCtrl.text.trim(),
+      'referrals':                 _ciReferrals.toList(),
+      'referral_reasoning':        _ciReferralReasoningCtrl.text.trim(),
+      'caregiver_education':       _ciCaregiverEdu.toList(),
+      'final_narrative':           _ciFinalNarrativeCtrl.text.trim(),
+    }, 'Clinical Impression');
+  }
+
+  Future<void> _saveCrossDomainFlags() async {
+    if (_assessment == null) return;
+    try {
+      await _service.saveTypedColumns(
+        assessmentId: _assessment!.id,
+        data: {
+          'flag_dysphagia_referral': _flagDysphagiaReferral,
+          'flag_aac_assessment':     _flagAacAssessment,
+        },
+      );
+    } catch (e) {
+      _toast('Could not save cross-domain flags: $e');
+    }
+  }
+
+  // _savePayload is defined above (Section 4 narrative dispatchers
+  // share it with these new 27c saves).
+
   Future<void> _addFollowUp() async {
     if (_assessment == null) return;
     final baselineId = _assessment!.isBaseline
@@ -1452,29 +2015,29 @@ class _PedDysarthriaCaptureSectionState
             tagline: 'Loudness / rate / placement / resonance probe responses; therapy match.',
             child: _section7Body()),
         const SizedBox(height: 10),
-        _stub(8,  'Etiology-Specific Subforms',
-            'CP, post-encephalitis, post-TBI, genetic syndrome, pediatric stroke.',
-            '4.0.7.27c'),
+        _section(id: 'sec8',  number: 8,  title: 'Etiology-Specific Subforms',
+            tagline: 'CP, post-encephalitis/meningitis, post-TBI, genetic, mixed/idiopathic — auto-suggested from Section 1.',
+            child: _section8Body()),
         const SizedBox(height: 10),
-        _stub(9,  'Functional Communication Screen',
-            'Setting-specific intelligibility tracked over time, peer use.',
-            '4.0.7.27c'),
+        _section(id: 'sec9',  number: 9,  title: 'Functional Communication Screen',
+            tagline: 'Receptive + expressive language, symbolic / cognitive level, AAC candidacy.',
+            child: _section9Body()),
         const SizedBox(height: 10),
-        _stub(10, 'Differential Diagnosis',
-            'Mayo type, working hypothesis, dysarthria-vs-CAS rule-outs.',
-            '4.0.7.27c'),
+        _section(id: 'sec10', number: 10, title: 'Differential Diagnosis',
+            tagline: 'Mayo final classification, severity, subsystems, dysarthria-vs-CAS reasoning.',
+            child: _section10Body()),
         const SizedBox(height: 10),
         _section(id: 'sec11', number: 11, title: 'Outcome Tracking',
             tagline: 'Baseline vs most recent follow-up across all measures.',
             child: _section11Body()),
         const SizedBox(height: 10),
-        _stub(12, 'Functional Communication & QoL',
-            'FOCUS-34, parent / teacher / peer ratings.',
-            '4.0.7.27c'),
+        _section(id: 'sec12', number: 12, title: 'Functional Communication & QoL',
+            tagline: 'FOCUS-34 typed total + 3 caregiver / teacher / peer ratings.',
+            child: _section12Body()),
         const SizedBox(height: 10),
-        _stub(15, 'Final Clinical Impression & Plan',
-            'Diagnosis, severity, plan, dysphagia + AAC referral toggles.',
-            '4.0.7.27c'),
+        _section(id: 'sec15', number: 15, title: 'Final Clinical Impression & Plan',
+            tagline: 'Diagnosis, severity, prognosis, plan, referrals, cross-domain alert flags.',
+            child: _section15Body()),
       ],
     );
   }
@@ -1541,6 +2104,7 @@ class _PedDysarthriaCaptureSectionState
     );
   }
 
+  // ignore: unused_element
   Widget _stub(int number, String title, String tagline, String comingIn) {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -3276,6 +3840,961 @@ class _PedDysarthriaCaptureSectionState
             _stimApproachReasoningCtrl, multi: true,
             onSave: _saveStimulability),
       ],
+    );
+  }
+
+  // ── Section 8 body — Etiology-Specific Subforms ───────────────────
+  Widget _section8Body() {
+    String chipKey(String label) => switch (label) {
+          'CP'                                => 'cp',
+          'Post-encephalitis / meningitis'    => 'post_enc_men',
+          'Post-TBI'                          => 'post_tbi',
+          'Genetic syndrome'                  => 'genetic',
+          'Mixed / Idiopathic'                => 'mixed_idiopathic',
+          _                                   => label.toLowerCase(),
+        };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('Subform selector'),
+        Wrap(
+          spacing: 6, runSpacing: 6,
+          children: [
+            for (final label in const [
+              'CP', 'Post-encephalitis / meningitis', 'Post-TBI',
+              'Genetic syndrome', 'Mixed / Idiopathic',
+            ])
+              _yesNoChip(label, _subformsSelected.contains(chipKey(label)),
+                  () {
+                final k = chipKey(label);
+                setState(() {
+                  if (_subformsSelected.contains(k)) {
+                    _subformsSelected.remove(k);
+                  } else {
+                    _subformsSelected.add(k);
+                  }
+                });
+                _saveCerebralPalsy();
+              }),
+          ],
+        ),
+        if (_subformsSelected.isEmpty)
+          _ghostNote(
+              'Pick one or more subforms based on the etiology you logged in Section 1. Multiple etiologies (e.g. post-TBI on top of CP) are supported.'),
+        if (_subformsSelected.contains('cp')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8A · Cerebral Palsy'),
+          _section8aBody(),
+        ],
+        if (_subformsSelected.contains('post_enc_men')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8B · Post-encephalitis or meningitis sequelae'),
+          _section8bBody(),
+        ],
+        if (_subformsSelected.contains('post_tbi')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8C · Post-TBI'),
+          _section8cBody(),
+        ],
+        if (_subformsSelected.contains('genetic')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8D · Genetic syndrome'),
+          _section8dBody(),
+        ],
+        if (_subformsSelected.contains('mixed_idiopathic')) ...[
+          const SizedBox(height: 18),
+          _subsectionHeader('8E · Mixed / Idiopathic'),
+          _section8eBody(),
+        ],
+      ],
+    );
+  }
+
+  Widget _section8aBody() {
+    final cpSummary = _cpSubtype ?? '—';
+    final levels = [
+      if (_gmfcsLevel != null) 'GMFCS $_gmfcsLevel',
+      if (_macsLevel != null)  'MACS $_macsLevel',
+      if (_cfcsLevel != null)  'CFCS $_cfcsLevel',
+      if (_edacsLevel != null) 'EDACS $_edacsLevel',
+      if (_vfcsLevel != null)  'VFCS $_vfcsLevel',
+    ].join(' · ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _readOnlyRow('CP subtype (from Section 1)', cpSummary),
+        _readOnlyRow('Classification levels (from Section 1)',
+            levels.isEmpty ? '—' : levels),
+        _textField('Spasticity distribution observation',
+            _cpSpasticityDistCtrl, multi: true,
+            onSave: _saveCerebralPalsy),
+        _textField('Movement disorder pattern (during speech, at rest)',
+            _cpMovementPatternCtrl, multi: true,
+            onSave: _saveCerebralPalsy),
+        _textField('Postural support during speech',
+            _cpPosturalSupportCtrl, multi: true,
+            onSave: _saveCerebralPalsy),
+        _textField('Botox history affecting speech-relevant muscles',
+            _cpBotoxHistoryCtrl, multi: true,
+            onSave: _saveCerebralPalsy),
+        _readOnlyRow('Date of last Botox injection (from Section 1)',
+            _lastBotoxDate?.toIso8601String().substring(0, 10) ?? '—'),
+        _singleChips('Botox impact on speech (subjective)',
+            const ['Improved', 'No change', 'Worsened', 'Not yet observed'],
+            _cpBotoxImpactSpeech, (v) {
+          setState(() => _cpBotoxImpactSpeech = v);
+          _saveCerebralPalsy();
+        }),
+        _textField('Orthopedic surgery history affecting respiration',
+            _cpOrthopedicSurgeryCtrl, multi: true,
+            hint: 'Scoliosis, spinal fusion, hip surgery, etc.',
+            onSave: _saveCerebralPalsy),
+        _textField('CP-specific notes', _cpNotesCtrl,
+            multi: true, onSave: _saveCerebralPalsy),
+      ],
+    );
+  }
+
+  Widget _section8bBody() {
+    final monthsPostIllness = _peOnsetDate == null
+        ? null
+        : (DateTime.now().difference(_peOnsetDate!).inDays / 30.4).round();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _singleChips('Acute illness type', const [
+          'Encephalitis (viral)', 'Encephalitis (bacterial)',
+          'Meningitis (viral)', 'Meningitis (bacterial)',
+          'Meningoencephalitis', 'Unknown',
+        ], _peAcuteIllnessType, (v) {
+          setState(() => _peAcuteIllnessType = v);
+          _savePostEncephalitis();
+        }),
+        _datePickerRow('Acute illness onset date', _peOnsetDate, (d) {
+          setState(() => _peOnsetDate = d);
+          _savePostEncephalitis();
+        }),
+        if (monthsPostIllness != null)
+          _readOnlyRow('Time post-illness', '$monthsPostIllness months'),
+        _singleChips('Acute illness severity',
+            const ['Mild', 'Moderate', 'Severe', 'Critical (PICU)'],
+            _peAcuteSeverity, (v) {
+          setState(() => _peAcuteSeverity = v);
+          _savePostEncephalitis();
+        }),
+        _singleChips('Recovery trajectory observed', const [
+          'Improving', 'Plateau', 'Variable', 'Declining',
+          'Too early to tell',
+        ], _peRecoveryTrajectory, (v) {
+          setState(() => _peRecoveryTrajectory = v);
+          _savePostEncephalitis();
+        }),
+        _textField('Recovery details', _peRecoveryDetailsCtrl,
+            multi: true, onSave: _savePostEncephalitis),
+        _multiChips('Comorbid impairments post-illness', const [
+          'Cognitive impairment', 'Motor impairment', 'Seizure disorder',
+          'Hearing loss', 'Vision impairment', 'Behavioral changes',
+          'Sleep disturbance', 'None observed',
+        ], _peComorbidImpairments, (v, sel) {
+          setState(() {
+            if (sel) {
+              _peComorbidImpairments.add(v);
+            } else {
+              _peComorbidImpairments.remove(v);
+            }
+          });
+          _savePostEncephalitis();
+        }),
+        _textField('Sequelae notes', _peSequelaeNotesCtrl,
+            multi: true, onSave: _savePostEncephalitis),
+      ],
+    );
+  }
+
+  Widget _section8cBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _singleChips('Mechanism of injury', const [
+          'Road traffic accident', 'Fall',
+          'Non-accidental injury', 'Sports', 'Other (specify)',
+        ], _tbiMechanism, (v) {
+          setState(() => _tbiMechanism = v);
+          _savePostTbi();
+        }),
+        if (_tbiMechanism == 'Other (specify)')
+          _textField('Other mechanism specify', _tbiOtherMechanismCtrl,
+              onSave: _savePostTbi),
+        _numField('GCS at presentation', _tbiGcsCtrl,
+            unit: '/15', onSave: _savePostTbi),
+        _numField('Time post-injury', _tbiTimePostInjuryCtrl,
+            unit: 'months', onSave: _savePostTbi),
+        _numField('Coma duration', _tbiComaDurationCtrl,
+            unit: 'days', onSave: _savePostTbi),
+        _numField('Post-traumatic amnesia (PTA) duration',
+            _tbiPtaDurationCtrl, unit: 'days', onSave: _savePostTbi),
+        _singleChips('Recovery trajectory observed', const [
+          'Improving', 'Plateau', 'Variable', 'Declining',
+          'Too early to tell',
+        ], _tbiRecoveryTrajectory, (v) {
+          setState(() => _tbiRecoveryTrajectory = v);
+          _savePostTbi();
+        }),
+        _multiChips('Cognitive-communication concerns', const [
+          'Attention', 'Memory', 'Executive function',
+          'Pragmatics', 'Awareness', 'Word retrieval',
+          'Reasoning', 'Information processing speed',
+        ], _tbiCogConcerns, (v, sel) {
+          setState(() {
+            if (sel) {
+              _tbiCogConcerns.add(v);
+            } else {
+              _tbiCogConcerns.remove(v);
+            }
+          });
+          _savePostTbi();
+        }),
+        _multiChips('Behavioral concerns', const [
+          'Disinhibition', 'Apathy', 'Agitation',
+          'Confabulation', 'Perseveration', 'Impulsivity',
+        ], _tbiBehavioralConcerns, (v, sel) {
+          setState(() {
+            if (sel) {
+              _tbiBehavioralConcerns.add(v);
+            } else {
+              _tbiBehavioralConcerns.remove(v);
+            }
+          });
+          _savePostTbi();
+        }),
+        _singleChips('Ranchos Los Amigos Level (current)', const [
+          'I (No response)', 'II (Generalized)', 'III (Localized)',
+          'IV (Confused-agitated)', 'V (Confused-inappropriate)',
+          'VI (Confused-appropriate)', 'VII (Automatic-appropriate)',
+          'VIII (Purposeful-appropriate)',
+        ], _tbiRanchosLevel, (v) {
+          setState(() => _tbiRanchosLevel = v);
+          _savePostTbi();
+        }),
+        _textField('TBI-specific notes', _tbiNotesCtrl,
+            multi: true, onSave: _savePostTbi),
+      ],
+    );
+  }
+
+  Widget _section8dBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _textField('Confirmed genetic etiology',
+            _genConfirmedEtiologyCtrl,
+            hint: 'e.g. Worster-Drought, Möbius, Down syndrome, 22q11.2, FOXP2',
+            onSave: _saveGeneticSyndrome),
+        _textField('Genetic testing details', _genTestingDetailsCtrl,
+            multi: true, hint: 'Which test, when, result',
+            onSave: _saveGeneticSyndrome),
+        _textField('Syndrome-specific motor speech features',
+            _genMotorSpeechFeaturesCtrl, multi: true,
+            onSave: _saveGeneticSyndrome),
+        _textField('Family history', _genFamilyHistoryCtrl,
+            multi: true,
+            hint: 'Other affected family members, inheritance pattern',
+            onSave: _saveGeneticSyndrome),
+        _yesNo('Genetic counseling received?', _genCounselingReceived,
+            (v) {
+          setState(() => _genCounselingReceived = v);
+          _saveGeneticSyndrome();
+        }),
+        _textField('Genetic syndrome notes', _genNotesCtrl,
+            multi: true, onSave: _saveGeneticSyndrome),
+      ],
+    );
+  }
+
+  Widget _section8eBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _textField('Differential reasoning',
+            _miDifferentialReasoningCtrl, multi: true,
+            hint: "Why not a specific etiology yet",
+            onSave: _saveMixedIdiopathic),
+        _textField('Working hypothesis', _miWorkingHypothesisCtrl,
+            multi: true, onSave: _saveMixedIdiopathic),
+        _multiChips('Pending investigations', const [
+          'Genetic testing', 'Neuroimaging', 'EEG',
+          'Metabolic workup', 'Audiological evaluation',
+          'Ophthalmological evaluation', 'None pending',
+        ], _miPendingInvestigations, (v, sel) {
+          setState(() {
+            if (sel) {
+              _miPendingInvestigations.add(v);
+            } else {
+              _miPendingInvestigations.remove(v);
+            }
+          });
+          _saveMixedIdiopathic();
+        }),
+        _textField('Investigation timeline',
+            _miInvestigationTimelineCtrl, multi: true,
+            onSave: _saveMixedIdiopathic),
+        _textField('Mixed / idiopathic notes', _miNotesCtrl,
+            multi: true, onSave: _saveMixedIdiopathic),
+      ],
+    );
+  }
+
+  // ── Section 9 body — Functional Communication Screen ──────────────
+  Widget _section9Body() {
+    final receptiveAge = _receptiveAgeCtrl.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Receptive language'),
+        _singleChips('Receptive language assessment approach', const [
+          'Informal observation only', 'Formal assessment',
+          'External report',
+        ], _recLangApproach, (v) {
+          setState(() => _recLangApproach = v);
+          _saveFunctionalCommunication();
+        }),
+        if (_recLangApproach == 'Formal assessment' ||
+            _recLangApproach == 'External report')
+          _textField('Receptive language battery used',
+              _recLangBatteryCtrl, onSave: _saveFunctionalCommunication),
+        _readOnlyRow('Receptive language age estimate (Section 1)',
+            receptiveAge.isEmpty ? '—' : '$receptiveAge mo'),
+        _singleChips('Receptive language profile', const [
+          'Within normal limits', 'Mildly reduced',
+          'Moderately reduced', 'Severely reduced',
+          'Unable to assess',
+        ], _recLangProfile, (v) {
+          setState(() => _recLangProfile = v);
+          _saveFunctionalCommunication();
+        }),
+        _textField('Receptive notes', _recLangNotesCtrl,
+            multi: true, onSave: _saveFunctionalCommunication),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Expressive language attempts'),
+        _singleChips('Expressive language assessment approach', const [
+          'Informal observation only', 'Formal assessment',
+          'External report',
+        ], _expLangApproach, (v) {
+          setState(() => _expLangApproach = v);
+          _saveFunctionalCommunication();
+        }),
+        if (_expLangApproach == 'Formal assessment' ||
+            _expLangApproach == 'External report')
+          _textField('Expressive battery used', _expLangBatteryCtrl,
+              onSave: _saveFunctionalCommunication),
+        _singleChips('Intelligibility-corrected expressive estimate',
+            const [
+              'Within normal limits', 'Mildly reduced',
+              'Moderately reduced', 'Severely reduced',
+              'Cannot determine due to motor severity',
+            ], _expLangEstimate, (v) {
+          setState(() => _expLangEstimate = v);
+          _saveFunctionalCommunication();
+        }),
+        _ghostNote(
+            'Account for motor execution affecting expressive output. If child can convey complex ideas via gesture / AAC / writing, language is preserved even when speech intelligibility is severely reduced.'),
+        _textField('Expressive notes', _expLangNotesCtrl,
+            multi: true, onSave: _saveFunctionalCommunication),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Symbolic play and cognition'),
+        _singleChips('Symbolic play observation', const [
+          'Age-appropriate', 'Emerging', 'Limited',
+          'Not observed', 'Not assessable',
+        ], _symbolicPlay, (v) {
+          setState(() => _symbolicPlay = v);
+          _saveFunctionalCommunication();
+        }),
+        _singleChips('Cognitive level estimate (informal)', const [
+          'Age-appropriate', 'Mildly delayed', 'Moderately delayed',
+          'Severely delayed', 'Cannot determine',
+        ], _cognitiveLevel, (v) {
+          setState(() => _cognitiveLevel = v);
+          _saveFunctionalCommunication();
+        }),
+        _multiChips('Cognitive batteries used (if formal)', const [
+          'WPPSI', 'WISC', 'MISIC', 'Vineland', 'Bayley',
+          'Other (specify)',
+        ], _cogBatteries, (v, sel) {
+          setState(() {
+            if (sel) {
+              _cogBatteries.add(v);
+            } else {
+              _cogBatteries.remove(v);
+            }
+          });
+          _saveFunctionalCommunication();
+        }),
+        _textField('Cognitive-symbolic notes', _cogSymbolicNotesCtrl,
+            multi: true, onSave: _saveFunctionalCommunication),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · AAC candidacy considerations'),
+        _singleChips('AAC candidacy at this assessment', const [
+          'Strong candidate', 'Moderate candidate',
+          'Continue speech-only',
+          'Already using AAC effectively', 'Reassess in future',
+        ], _aacCandidacy, (v) {
+          setState(() => _aacCandidacy = v);
+          _saveFunctionalCommunication();
+        }),
+        _textField('AAC reasoning', _aacReasoningCtrl,
+            multi: true, onSave: _saveFunctionalCommunication),
+        _ghostNote(
+            'AAC candidacy is a clinical judgment, not auto-derived. Consider: motor-language gap, family readiness, intelligibility ceiling, fatigue patterns.'),
+        _yesNo('Augmented input strategies effective',
+            _augInputEffective, (v) {
+          setState(() => _augInputEffective = v);
+          _saveFunctionalCommunication();
+        }),
+        if (_augInputEffective)
+          _textField('Augmented input details', _augInputDetailsCtrl,
+              multi: true, onSave: _saveFunctionalCommunication),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Communication-cognition synthesis'),
+        _singleChips('Primary communication concern', const [
+          'Motor execution (dysarthria)',
+          'Language (developmental)',
+          'Mixed motor-language',
+          'Cognitive-communication',
+          'Behavioral / regulatory',
+        ], _primaryCommConcern, (v) {
+          setState(() => _primaryCommConcern = v);
+          _saveFunctionalCommunication();
+        }),
+        _textField('Synthesis notes', _commSynthesisCtrl,
+            multi: true, onSave: _saveFunctionalCommunication),
+      ],
+    );
+  }
+
+  // ── Section 10 body — Differential Diagnosis ──────────────────────
+  Widget _section10Body() {
+    final autoMayo = _mayoType ?? '—';
+    final autoSubsystems = <String>[
+      if (_respSeverity == 'Severe' || _respSeverity == 'Moderate') 'Respiration',
+      if (_phonSeverity == 'Severe' || _phonSeverity == 'Moderate') 'Phonation',
+      if (_articSeverity == 'Severe' || _articSeverity == 'Moderate') 'Articulation',
+      if (_resonanceSeverity == 'Severe' || _resonanceSeverity == 'Moderate') 'Resonance',
+      if (_prosodySeverity == 'Severe' || _prosodySeverity == 'Moderate') 'Prosody',
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Mayo dysarthria type final classification'),
+        _readOnlyRow('Mayo type (from Section 1)', autoMayo),
+        _ghostNote(
+            'Section 1 captures initial Mayo classification hypothesis. Section 10 is where you finalize after observing five subsystems.'),
+        _yesNo('Override Mayo type?', _ddOverrideMayo, (v) {
+          setState(() => _ddOverrideMayo = v);
+          _saveDifferentialDx();
+        }),
+        if (_ddOverrideMayo)
+          _singleChips('Mayo type override', const [
+            'Spastic', 'Flaccid', 'Ataxic', 'Hypokinetic',
+            'Hyperkinetic', 'Mixed', 'Unilateral UMN',
+          ], _ddMayoOverride, (v) {
+            setState(() {
+              _ddMayoOverride = v;
+              if (v != null) _mayoType = v; // sync to Section 1's local
+            });
+            _saveDifferentialDx();
+          }),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Severity grading'),
+        _singleChips('Overall severity',
+            const ['Mild', 'Moderate', 'Severe', 'Profound'],
+            _ddOverallSeverity, (v) {
+          setState(() => _ddOverallSeverity = v);
+          _saveDifferentialDx();
+        }),
+        _textField('Severity rationale', _ddSeverityRationaleCtrl,
+            multi: true, onSave: _saveDifferentialDx),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Subsystems most affected'),
+        _readOnlyRow(
+            'Auto-pulled (Moderate or Severe in Section 4)',
+            autoSubsystems.isEmpty ? '—' : autoSubsystems.join(', ')),
+        _yesNo('Override subsystems-affected list?',
+            _ddOverrideSubsystems, (v) {
+          setState(() => _ddOverrideSubsystems = v);
+          _saveDifferentialDx();
+        }),
+        if (_ddOverrideSubsystems)
+          _multiChips('Subsystems most affected (override)',
+              const ['Respiration', 'Phonation', 'Articulation',
+                     'Resonance', 'Prosody'],
+              _ddSubsystemsAffectedOverride, (v, sel) {
+            setState(() {
+              if (sel) {
+                _ddSubsystemsAffectedOverride.add(v);
+              } else {
+                _ddSubsystemsAffectedOverride.remove(v);
+              }
+            });
+            _saveDifferentialDx();
+          }),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Differential reasoning'),
+        _ghostNote(
+            'Dysarthria = motor execution / weakness. CAS = motor planning / inconsistency. Key differentiators: consistency of errors, oral mech findings, neurological signs.'),
+        _textField('Differentiating from CAS', _ddDiffFromCasCtrl,
+            multi: true, onSave: _saveDifferentialDx),
+        _textField('Differentiating from phonological disorder',
+            _ddDiffFromPhonologicalCtrl, multi: true,
+            onSave: _saveDifferentialDx),
+        _textField('Differentiating from speech-language delay',
+            _ddDiffFromDelayCtrl, multi: true,
+            onSave: _saveDifferentialDx),
+        _textField('Differentiating from articulation disorder',
+            _ddDiffFromArticulationCtrl, multi: true,
+            onSave: _saveDifferentialDx),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Working hypothesis'),
+        _singleChips('Working hypothesis confidence',
+            const ['Provisional', 'Working', 'Confirmed'],
+            _ddHypothesisConfidence, (v) {
+          setState(() => _ddHypothesisConfidence = v);
+          _saveDifferentialDx();
+        }),
+        _textField('Working hypothesis statement',
+            _ddHypothesisStatementCtrl, multi: true,
+            onSave: _saveDifferentialDx),
+
+        const SizedBox(height: 14),
+        _groupLabel('F · Contributing factors'),
+        _multiChips('Factors', const [
+          'Cognitive level', 'Hearing status',
+          'Behavioral / cooperation', 'Family support',
+          'Fatigue / endurance', 'Comorbid orthopedic',
+          'Comorbid feeding', 'Limited language exposure',
+          'Multilingual environment', 'Socioeconomic factors',
+          'Educational placement appropriate',
+          'Inappropriate placement',
+        ], _ddContributingFactors, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ddContributingFactors.add(v);
+            } else {
+              _ddContributingFactors.remove(v);
+            }
+          });
+          _saveDifferentialDx();
+        }),
+        _textField('Contributing factors notes',
+            _ddContributingNotesCtrl, multi: true,
+            onSave: _saveDifferentialDx),
+      ],
+    );
+  }
+
+  // ── Section 12 body — FOCUS-34 + 3 ratings ────────────────────────
+  Widget _section12Body() {
+    final hasItems = _focus34Items.values.any((v) => v > 0);
+    final f34Total = _focus34Items.values.fold<int>(0, (a, b) => a + b);
+    final showFocus = _focus34AdminMode != null &&
+        _focus34AdminMode != 'Not administered';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · FOCUS-34 (Focus on Outcomes of Communication Under Six)'),
+        _ghostNote(
+            'FOCUS-34 is the gold-standard pediatric communication outcome measure. 34 items each 0–7. Higher = better functional communication. Currently captured as total only — per-item persistence is on the 4.0.7.27c-fix1 backlog.'),
+        _singleChips('FOCUS-34 administration mode', const [
+          'Caregiver self-completed',
+          'Clinician-administered with caregiver',
+          'Not administered',
+        ], _focus34AdminMode, (v) {
+          setState(() => _focus34AdminMode = v);
+          _saveQol();
+        }),
+        if (showFocus) ...[
+          for (var i = 1; i <= 34; i++) _focus34Row(i),
+          const SizedBox(height: 6),
+          _qolBadge(
+            label: 'FOCUS-34 total',
+            total: hasItems ? f34Total : 0,
+            maxScore: 238, // 34 × 7
+          ),
+          if (_focus34TotalLoaded != null && _focus34TotalLoaded != f34Total) ...[
+            const SizedBox(height: 4),
+            Text('Last saved total: $_focus34TotalLoaded',
+                style: GoogleFonts.dmSans(
+                    fontSize: 11, color: _inkGhost,
+                    fontStyle: FontStyle.italic)),
+          ],
+          _ghostNote(
+              'FOCUS-34 tracks change over time. Capture baseline now, re-administer at 3–6 month intervals.'),
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Caregiver / teacher / peer ratings (1–10)'),
+        _ratingSlider('Parent communication confidence',
+            _parentConfidence, (v) {
+          setState(() => _parentConfidence = v);
+        }, _saveQol),
+        _ghostNote(
+            'How confident does the parent feel that their child can communicate in daily life?'),
+        if (_parentConfidenceLoaded != null && _parentConfidenceLoaded != _parentConfidence) ...[
+          Text('Last saved: $_parentConfidenceLoaded',
+              style: GoogleFonts.dmSans(
+                  fontSize: 11, color: _inkGhost,
+                  fontStyle: FontStyle.italic)),
+        ],
+        _ratingSlider('Teacher communication impact',
+            _teacherImpact, (v) {
+          setState(() => _teacherImpact = v);
+        }, _saveQol),
+        _ghostNote(
+            "How much does the child's communication difficulty affect classroom participation? Higher = greater impact (lower is better).") ,
+        if (_teacherImpactLoaded != null && _teacherImpactLoaded != _teacherImpact) ...[
+          Text('Last saved: $_teacherImpactLoaded',
+              style: GoogleFonts.dmSans(
+                  fontSize: 11, color: _inkGhost,
+                  fontStyle: FontStyle.italic)),
+        ],
+        _ratingSlider('Peer interaction quality',
+            _peerInteraction, (v) {
+          setState(() => _peerInteraction = v);
+        }, _saveQol),
+        _ghostNote(
+            'How effectively does the child communicate with peers? Higher = better.'),
+        if (_peerInteractionLoaded != null && _peerInteractionLoaded != _peerInteraction) ...[
+          Text('Last saved: $_peerInteractionLoaded',
+              style: GoogleFonts.dmSans(
+                  fontSize: 11, color: _inkGhost,
+                  fontStyle: FontStyle.italic)),
+        ],
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Notes'),
+        _textField('QoL administration notes', _qolNotesCtrl,
+            multi: true, onSave: _saveQol),
+      ],
+    );
+  }
+
+  Widget _focus34Row(int i) {
+    final v = _focus34Items[i] ?? 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text('$i. FOCUS-34 item $i',
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _ink)),
+              ),
+              Text('$v',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 12, color: _ink,
+                      fontWeight: FontWeight.w600)),
+              Text(' / 7',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 11, color: _inkGhost)),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              activeTrackColor: _teal,
+              inactiveTrackColor: _line,
+              thumbColor: _teal,
+              overlayColor: _teal.withValues(alpha: 0.18),
+            ),
+            child: Slider(
+              value: v.toDouble(),
+              min: 0, max: 7, divisions: 7,
+              onChanged: (d) => setState(() => _focus34Items[i] = d.toInt()),
+              onChangeEnd: (_) => _saveQol(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _ratingSlider(String label, int value,
+      ValueChanged<int> onChanged, VoidCallback onCommit) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(label,
+                    style: GoogleFonts.dmSans(
+                        fontSize: 12, color: _inkGhost,
+                        fontWeight: FontWeight.w500)),
+              ),
+              Text('$value',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 13, color: _ink,
+                      fontWeight: FontWeight.w600)),
+              Text(' / 10',
+                  style: GoogleFonts.dmSans(
+                      fontSize: 11, color: _inkGhost)),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              activeTrackColor: _teal,
+              inactiveTrackColor: _line,
+              thumbColor: _teal,
+              overlayColor: _teal.withValues(alpha: 0.18),
+            ),
+            child: Slider(
+              value: value.toDouble().clamp(1, 10),
+              min: 1, max: 10, divisions: 9,
+              onChanged: (d) => onChanged(d.toInt()),
+              onChangeEnd: (_) => onCommit(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Section 15 body — Final Clinical Impression & Plan ────────────
+  Widget _section15Body() {
+    final mayoFinal = (_ddOverrideMayo ? _ddMayoOverride : null) ?? _mayoType ?? '—';
+    final severityFinal = _ddOverallSeverity ?? '—';
+    final etiologyDisplay = _etiology ?? '—';
+    final subsystemsAffected = _ddOverrideSubsystems
+        ? _ddSubsystemsAffectedOverride.toList()
+        : <String>[
+            if (_respSeverity == 'Severe' || _respSeverity == 'Moderate') 'Respiration',
+            if (_phonSeverity == 'Severe' || _phonSeverity == 'Moderate') 'Phonation',
+            if (_articSeverity == 'Severe' || _articSeverity == 'Moderate') 'Articulation',
+            if (_resonanceSeverity == 'Severe' || _resonanceSeverity == 'Moderate') 'Resonance',
+            if (_prosodySeverity == 'Severe' || _prosodySeverity == 'Moderate') 'Prosody',
+          ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _groupLabel('A · Final diagnosis'),
+        _textField('Final diagnosis', _ciFinalDxCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+        _textField('ICD-style code', _ciIcdCodeCtrl,
+            hint: 'e.g. R47.1 Dysarthria and anarthria, or G80.x for CP-related',
+            onSave: _saveClinicalImpression),
+        _readOnlyRow('Mayo dysarthria type (from Section 10)', mayoFinal),
+        _readOnlyRow('Severity grading (from Section 10)', severityFinal),
+
+        const SizedBox(height: 14),
+        _groupLabel('B · Etiology classification'),
+        _readOnlyRow('Etiology (from Section 1)', etiologyDisplay),
+
+        const SizedBox(height: 14),
+        _groupLabel('C · Subsystems affected (most-to-least)'),
+        _readOnlyRow('Subsystems',
+            subsystemsAffected.isEmpty ? '—' : subsystemsAffected.join(' · ')),
+
+        const SizedBox(height: 14),
+        _groupLabel('D · Prognostic factors'),
+        _readOnlyRow(
+            'Stimulability response (from Section 7)',
+            _stimRecommendedApproaches.isEmpty
+                ? '—'
+                : '${_stimRecommendedApproaches.length} approach(es) recommended'),
+        _singleChips('Cognitive-linguistic profile',
+            const ['Strong (preserved cognition / language)',
+                   'Moderate', 'Limited'],
+            _ciCogLinguistic, (v) {
+          setState(() => _ciCogLinguistic = v);
+          _saveClinicalImpression();
+        }),
+        _singleChips('Family support',
+            const ['Strong', 'Moderate', 'Limited', 'Concerns'],
+            _ciFamilySupport, (v) {
+          setState(() => _ciFamilySupport = v);
+          _saveClinicalImpression();
+        }),
+        _multiChips('Comorbidities affecting outcome (auto-populated, editable)',
+            const [
+              'Intellectual disability', 'ASD', 'Seizure disorder',
+              'Feeding/swallowing concerns', 'Drooling functional impact',
+              'Visual impairment', 'Hearing impairment',
+              'Sensory processing differences', 'Other',
+            ], _ciComorbiditiesAffectingOutcome, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ciComorbiditiesAffectingOutcome.add(v);
+            } else {
+              _ciComorbiditiesAffectingOutcome.remove(v);
+            }
+          });
+          _saveClinicalImpression();
+        }),
+        _singleChips('Etiology trajectory', const [
+          'Improving (post-acute recovery phase)',
+          'Stable', 'Progressive', 'Unknown',
+        ], _ciEtiologyTrajectory, (v) {
+          setState(() => _ciEtiologyTrajectory = v);
+          _saveClinicalImpression();
+        }),
+        _singleChips('Overall prognosis',
+            const ['Good', 'Fair', 'Guarded', 'Poor'],
+            _ciOverallPrognosis, (v) {
+          setState(() => _ciOverallPrognosis = v);
+          _saveClinicalImpression();
+        }),
+        _textField('Prognostic rationale', _ciPrognosticRationaleCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('E · Management plan'),
+        _multiChips('Recommended therapy approaches', const [
+          'LSVT-LOUD', 'SPEAK OUT!', 'PROMPT',
+          'Articulation drill', 'Rate control therapy',
+          'Breath group manipulation', 'Loudness building',
+          'Phrasing strategies',
+          'Compensatory / strategic approach',
+          'AAC integration', 'Parent / caregiver training',
+          'Beckman oral motor (note: weak evidence)',
+        ], _ciInterventions, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ciInterventions.add(v);
+            } else {
+              _ciInterventions.remove(v);
+            }
+          });
+          _saveClinicalImpression();
+        }),
+        _textField('Therapy approach reasoning',
+            _ciTherapyReasoningCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+        _numField('Therapy intensity', _ciIntensityCtrl,
+            unit: 'sessions/week', onSave: _saveClinicalImpression),
+        _numField('Estimated session count', _ciSessionCountCtrl,
+            unit: 'sessions', onSave: _saveClinicalImpression),
+        _numField('Session duration', _ciSessionDurationCtrl,
+            unit: 'min', onSave: _saveClinicalImpression),
+        _singleChips('Frequency', const [
+          'Twice weekly', 'Weekly', 'Biweekly', 'Monthly', 'As needed',
+        ], _ciFrequency, (v) {
+          setState(() => _ciFrequency = v);
+          _saveClinicalImpression();
+        }),
+        _textField('Discharge criteria', _ciDischargeCriteriaCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+        _textField('Functional outcome targets',
+            _ciFunctionalOutcomesCtrl, multi: true,
+            onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('F · Referrals'),
+        _multiChips('Referrals needed', const [
+          'Neurology', 'Orthopedics (postural / spasticity)',
+          'Physiatry', 'Audiology',
+          'OT (postural support / AAC access)',
+          'Feeding clinic', 'Educational support',
+          'Genetic counseling', 'Psychology', 'Other',
+        ], _ciReferrals, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ciReferrals.add(v);
+            } else {
+              _ciReferrals.remove(v);
+            }
+          });
+          _saveClinicalImpression();
+        }),
+        _textField('Referral reasoning', _ciReferralReasoningCtrl,
+            multi: true, onSave: _saveClinicalImpression),
+
+        const SizedBox(height: 14),
+        _groupLabel('G · Cross-domain alerts'),
+        _yesNo('Flag for dysphagia assessment?',
+            _flagDysphagiaReferral, (v) {
+          setState(() => _flagDysphagiaReferral = v);
+          _saveCrossDomainFlags();
+        }),
+        _ghostNote(
+            'Toggle on if oral mech findings, feeding concerns from Section 1, or EDACS level suggests dysphagia evaluation is warranted.'),
+        _yesNo('Flag for AAC assessment?', _flagAacAssessment, (v) {
+          setState(() => _flagAacAssessment = v);
+          _saveCrossDomainFlags();
+        }),
+        _ghostNote(
+            'Toggle on if intelligibility patterns, motor-language gap, or family priorities suggest AAC trial is warranted.'),
+
+        const SizedBox(height: 14),
+        _groupLabel('H · Caregiver education priorities'),
+        _multiChips('Education topics', const [
+          'Communication strategies', 'Posture for speech',
+          'AAC access training', 'Home practice support',
+          'School communication advocacy',
+          'Realistic expectations setting', 'Sibling involvement',
+          'Multi-language strategy',
+        ], _ciCaregiverEdu, (v, sel) {
+          setState(() {
+            if (sel) {
+              _ciCaregiverEdu.add(v);
+            } else {
+              _ciCaregiverEdu.remove(v);
+            }
+          });
+          _saveClinicalImpression();
+        }),
+
+        const SizedBox(height: 14),
+        _groupLabel('I · Final clinical synthesis'),
+        _textField('Final clinical narrative', _ciFinalNarrativeCtrl,
+            multi: true,
+            hint: 'The 1-paragraph summary that goes into the SLP final report',
+            onSave: _saveClinicalImpression),
+      ],
+    );
+  }
+
+  Widget _readOnlyRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 220,
+            child: Text(label,
+                style: GoogleFonts.dmSans(
+                    fontSize: 12, color: _inkGhost,
+                    fontWeight: FontWeight.w500)),
+          ),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: _tealSoft.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _teal.withValues(alpha: 0.4)),
+              ),
+              child: Text(value,
+                  style: GoogleFonts.dmSans(
+                      fontSize: 12, color: _teal,
+                      fontWeight: FontWeight.w500)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

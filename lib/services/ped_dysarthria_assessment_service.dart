@@ -76,6 +76,14 @@ class PedDysarthriaAssessmentService {
       'cognitive_comm_screen_payload',
       'differential_diagnosis_payload',
       'clinical_impression_payload',
+      // 27c — Section 8 etiology subforms (each persists own column).
+      'cerebral_palsy_payload',
+      'post_encephalitis_payload',
+      'post_tbi_payload',
+      'genetic_syndrome_payload',
+      'mixed_idiopathic_payload',
+      // 27c — Section 9 functional communication screen.
+      'functional_communication_payload',
     };
     if (!allowed.contains(columnName)) {
       throw ArgumentError(
@@ -271,7 +279,10 @@ class PedDysarthriaAssessmentService {
         OutcomeGroup(label: 'Functional Communication & QoL', rows: [
           OutcomeRow(label: 'FOCUS-34 total',         baseline: n(baseQol, 'focus34_total'),            latest: n(latestQol, 'focus34_total'),            direction: 'higher'),
           OutcomeRow(label: 'Parent confidence',      baseline: n(baseQol, 'parent_confidence_rating'), latest: n(latestQol, 'parent_confidence_rating'), direction: 'higher'),
-          OutcomeRow(label: 'Teacher impact',         baseline: n(baseQol, 'teacher_impact_rating'),    latest: n(latestQol, 'teacher_impact_rating'),    direction: 'higher'),
+          // 27c — teacher_impact direction is 'lower' since "higher
+          // impact" means more disruption / more communication
+          // breakdown affecting classroom participation.
+          OutcomeRow(label: 'Teacher impact',         baseline: n(baseQol, 'teacher_impact_rating'),    latest: n(latestQol, 'teacher_impact_rating'),    direction: 'lower'),
           OutcomeRow(label: 'Peer interaction',       baseline: n(baseQol, 'peer_interaction_rating'),  latest: n(latestQol, 'peer_interaction_rating'),  direction: 'higher'),
         ]),
       ],

@@ -73,6 +73,16 @@ class PedDysarthriaAssessment {
   final Map<String, dynamic> cognitiveCommScreenPayload;
   final Map<String, dynamic> differentialDiagnosisPayload;
   final Map<String, dynamic> clinicalImpressionPayload;
+  // Phase 4.0.7.27c — Section 8 etiology subforms each get their own
+  // jsonb so SLP can multi-select chips and each surface keeps its
+  // data even when hidden.
+  final Map<String, dynamic> cerebralPalsyPayload;
+  final Map<String, dynamic> postEncephalitisPayload; // covers meningitis too
+  final Map<String, dynamic> postTbiPayload;
+  final Map<String, dynamic> geneticSyndromePayload;
+  final Map<String, dynamic> mixedIdiopathicPayload;
+  // Phase 4.0.7.27c — Section 9 functional communication screen.
+  final Map<String, dynamic> functionalCommunicationPayload;
 
   final DateTime createdAt;
 
@@ -117,6 +127,12 @@ class PedDysarthriaAssessment {
     this.cognitiveCommScreenPayload   = const {},
     this.differentialDiagnosisPayload = const {},
     this.clinicalImpressionPayload    = const {},
+    this.cerebralPalsyPayload         = const {},
+    this.postEncephalitisPayload      = const {},
+    this.postTbiPayload               = const {},
+    this.geneticSyndromePayload       = const {},
+    this.mixedIdiopathicPayload       = const {},
+    this.functionalCommunicationPayload = const {},
     required this.createdAt,
   });
 
@@ -176,6 +192,12 @@ class PedDysarthriaAssessment {
       cognitiveCommScreenPayload:   mapOf('cognitive_comm_screen_payload'),
       differentialDiagnosisPayload: mapOf('differential_diagnosis_payload'),
       clinicalImpressionPayload:    mapOf('clinical_impression_payload'),
+      cerebralPalsyPayload:         mapOf('cerebral_palsy_payload'),
+      postEncephalitisPayload:      mapOf('post_encephalitis_payload'),
+      postTbiPayload:               mapOf('post_tbi_payload'),
+      geneticSyndromePayload:       mapOf('genetic_syndrome_payload'),
+      mixedIdiopathicPayload:       mapOf('mixed_idiopathic_payload'),
+      functionalCommunicationPayload: mapOf('functional_communication_payload'),
       createdAt: dateOf('created_at') ?? DateTime.now(),
     );
   }
