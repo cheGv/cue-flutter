@@ -3382,7 +3382,7 @@ bool _hasSessionSinceAchievement(
     final d = DateTime.tryParse(dateStr);
     if (d == null) continue;
     final sessionDate = DateTime(d.year, d.month, d.day);
-    if (!sessionDate.isBefore(cutoffDate)) return true;
+    if (sessionDate.isAfter(cutoffDate)) return true;
   }
   return false;
 }
