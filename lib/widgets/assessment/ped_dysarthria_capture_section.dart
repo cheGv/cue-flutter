@@ -1411,7 +1411,7 @@ class _PedDysarthriaCaptureSectionState
         data[column] = _settingPct[mapKey];
       }
     }
-    writeIfTouched('familiar_caregivers',  'listener_familiar_caregivers_pct');
+    writeIfTouched('familiar_caregivers',  'listener_familiar_primary_pct');
     writeIfTouched('family_non_primary',   'listener_family_pct');
     writeIfTouched('peers',                'listener_peers_pct');
     writeIfTouched('teachers',             'listener_teachers_pct');
