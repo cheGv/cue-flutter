@@ -20,12 +20,13 @@ const List<({String code, String label})> kClinicalAreas = [
   (code: 'pediatric-language',       label: 'Pediatric Language'),
   (code: 'autism-developmental',     label: 'Autism + Developmental'),
   (code: 'speech-sound-disorders',   label: 'Speech Sound Disorders'),
-  (code: 'pediatric-motor-speech',   label: 'Pediatric Motor Speech'),
-  // Phase 4.0.7.27a — pediatric-motor-speech stays as the umbrella for
-  // unresolved differential; these two land alongside it as resolved
-  // diagnoses with their own assessment surfaces.
-  (code: 'pediatric-cas',            label: 'Pediatric CAS'),
+  // Phase 4.0.7.27c-prep — CAS and Dysarthria promoted to primary
+  // selections. Umbrella demoted to differential-pending fallback;
+  // surfaced in the picker with distinct visual treatment (italic,
+  // muted) to signal it is not a first-choice option.
+  (code: 'pediatric-cas',            label: 'Pediatric CAS (Childhood Apraxia of Speech)'),
   (code: 'pediatric-dysarthria',     label: 'Pediatric Dysarthria'),
+  (code: 'pediatric-motor-speech',   label: 'Pediatric Motor Speech — differential pending'),
   (code: 'fluency',                  label: 'Fluency'),
   (code: 'voice',                    label: 'Voice'),
   (code: 'adult-language-cognitive', label: 'Adult Language & Cognitive'),

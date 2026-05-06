@@ -1228,9 +1228,70 @@ class _AddClientScreenState extends State<AddClientScreen> {
           onChanged: (p) => _domainSpecificPayload = p,
         );
         break;
-      // 4.0.7.24c-l — voice, ssd, dysphagia, adult-language-cognitive,
-      // adult-motor-speech, etc. drop in here as their intake widgets
-      // ship.
+
+      // ── Phase 4.0.7.27c-prep — area-specific placeholders ────────────────
+
+      case 'pediatric-cas':
+        // Authoring planned for 4.0.7.28 series.
+        section = GenericIntakePlaceholder(
+          key: ValueKey('intake_placeholder_$clinicalArea'),
+          clinicalArea: clinicalArea,
+          clinicalAreaLabel: 'Pediatric CAS',
+          bodyText: 'Authoring planned in 4.0.7.28 series.',
+        );
+        break;
+
+      case 'pediatric-dysarthria':
+        // Assessment capture surface shipped in 27a-c; intake authoring
+        // is next in 27d.
+        section = GenericIntakePlaceholder(
+          key: ValueKey('intake_placeholder_$clinicalArea'),
+          clinicalArea: clinicalArea,
+          clinicalAreaLabel: 'Pediatric Dysarthria',
+          bodyText:
+              'Capture surface shipped (27a-c). '
+              'Intake surface authoring pending in 27d.',
+        );
+        break;
+
+      case 'pediatric-motor-speech':
+        // Umbrella for unresolved CAS / dysarthria differential. Once
+        // differential is resolved, migrate client to the specific area.
+        section = GenericIntakePlaceholder(
+          key: ValueKey('intake_placeholder_$clinicalArea'),
+          clinicalArea: clinicalArea,
+          clinicalAreaLabel: 'Pediatric Motor Speech',
+          headerSuffix: '— DIFFERENTIAL PENDING',
+          bodyText:
+              'For unresolved CAS / dysarthria differential. Once the '
+              'differential is clear, migrate the client to the specific area.',
+        );
+        break;
+
+      case 'voice':
+        // Voice capture surface is live in the Assessing tab.
+        section = GenericIntakePlaceholder(
+          key: ValueKey('intake_placeholder_$clinicalArea'),
+          clinicalArea: clinicalArea,
+          clinicalAreaLabel: 'Voice',
+          headerSuffix: '— NOW SHIPPED',
+          bodyText: 'Now shipped — capture surface is in the Assessing tab.',
+        );
+        break;
+
+      case 'hearing-aural-rehab':
+        // ALD capture surface is live in the Assessing tab.
+        section = GenericIntakePlaceholder(
+          key: ValueKey('intake_placeholder_$clinicalArea'),
+          clinicalArea: clinicalArea,
+          clinicalAreaLabel: 'Hearing & Aural Rehab',
+          headerSuffix: '— NOW SHIPPED',
+          bodyText:
+              'ALD and aural rehab capture surface now shipped — '
+              'available in the Assessing tab.',
+        );
+        break;
+
       default:
         section = GenericIntakePlaceholder(
           key: ValueKey('intake_placeholder_$clinicalArea'),
@@ -1275,8 +1336,20 @@ class _AddClientScreenState extends State<AddClientScreen> {
             for (final a in kClinicalAreas)
               DropdownMenuItem<String>(
                 value: a.code,
-                child: Text(a.label,
-                    style: const TextStyle(color: kCueInk)),
+                // Phase 4.0.7.27c-prep — umbrella is demoted to a
+                // secondary / fallback option. Render it italic + muted
+                // to signal it is not a first-choice selection.
+                child: a.code == 'pediatric-motor-speech'
+                    ? const Text(
+                        'Pediatric Motor Speech — differential pending',
+                        style: TextStyle(
+                          color: kCueSubtitleInk,
+                          fontStyle: FontStyle.italic,
+                          fontSize: 13,
+                        ),
+                      )
+                    : Text(a.label,
+                        style: const TextStyle(color: kCueInk)),
               ),
           ],
           onChanged: (v) {

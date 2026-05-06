@@ -29,14 +29,32 @@ class GenericIntakePlaceholder extends StatelessWidget {
   /// via clinicalAreaLabel(code). Drives the eyebrow and body copy.
   final String clinicalAreaLabel;
 
+  /// Phase 4.0.7.27c-prep — optional override for the eyebrow suffix
+  /// that follows the area label (e.g. '— NOW SHIPPED',
+  /// '— DIFFERENTIAL PENDING'). Defaults to '— COMING SOON' when null.
+  final String? headerSuffix;
+
+  /// Phase 4.0.7.27c-prep — optional override for the body copy.
+  /// When provided, replaces the generic "We're building…" text with
+  /// area-specific roadmap context so stale references are never shown.
+  final String? bodyText;
+
   const GenericIntakePlaceholder({
     super.key,
     required this.clinicalArea,
     required this.clinicalAreaLabel,
+    this.headerSuffix,
+    this.bodyText,
   });
 
   @override
   Widget build(BuildContext context) {
+    final suffix = headerSuffix ?? '— COMING SOON';
+    final body = bodyText ??
+        "We're building domain-specific intake fields for "
+        '$clinicalAreaLabel. For now, the basic information and '
+        'concern field above are sufficient.';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
@@ -49,7 +67,7 @@ class GenericIntakePlaceholder extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${clinicalAreaLabel.toUpperCase()} INTAKE — COMING SOON',
+            '${clinicalAreaLabel.toUpperCase()} INTAKE $suffix',
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
@@ -59,10 +77,7 @@ class GenericIntakePlaceholder extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            "We're building domain-specific intake fields for "
-            '$clinicalAreaLabel. For now, the basic information and '
-            'concern field above are sufficient. Authoring this section '
-            'happens in 4.0.7.24c–l.',
+            body,
             style: GoogleFonts.dmSans(
               fontSize: 13,
               color: _amberStubInk,
