@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/today_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/assessment_case_screen.dart';
+import 'screens/new_assessment_case_screen.dart';
 import 'theme/cue_theme.dart';
 import 'theme/theme_notifier.dart';
 import 'utils/daily_chart_log.dart';
@@ -123,6 +124,13 @@ class CueApp extends StatelessWidget {
           final name = settings.name;
           if (name == null) return null;
           final uri = Uri.parse(name);
+          // 4.0.7.27c-split — /new-assessment → slim assessment intake
+          if (uri.path == '/new-assessment') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const NewAssessmentCaseScreen(),
+            );
+          }
           // /assessing/:clientId → AssessmentCaseScreen
           if (uri.pathSegments.length == 2 &&
               uri.pathSegments[0] == 'assessing') {

@@ -14,7 +14,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../widgets/app_layout.dart';
-import 'add_client_screen.dart';
+// 4.0.7.27c-split — assessment intake split out of AddClientScreen
+// (which is now therapy-only). New entry point lives in
+// NewAssessmentCaseScreen — slim 10-field intake routes directly into
+// the assessment capture surface.
+import 'new_assessment_case_screen.dart';
 // 4.0.7.24c — AssessmentCaseScreen no longer imported here; the
 // _openCase flow pushes via the named route '/assessing/:clientId'
 // resolved by main.dart's onGenerateRoute handler.
@@ -74,14 +78,16 @@ class _AssessingScreenState extends State<AssessingScreen> {
   }
 
   Future<void> _openAdd() async {
-    final added = await Navigator.push<bool>(
+    // 4.0.7.27c-split — slim assessment intake. Pushes the new screen,
+    // which on submit replaces itself with the assessment capture
+    // surface; control returns here only via the back button.
+    await Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            const AddClientScreen(engagementType: 'assessment_only'),
+        builder: (_) => const NewAssessmentCaseScreen(),
       ),
     );
-    if (added == true || mounted) await _load();
+    if (mounted) await _load();
   }
 
   Future<void> _openCase(Map<String, dynamic> client) async {
@@ -181,7 +187,7 @@ class _AssessingScreenState extends State<AssessingScreen> {
         onPressed: _openAdd,
         icon: const Icon(Icons.add_rounded, size: 18, color: _amber),
         label: Text(
-          'Add new assessment case',
+          'New assessment case',
           style: GoogleFonts.dmSans(
               fontSize: 14, color: _amber, fontWeight: FontWeight.w500),
         ),
@@ -214,7 +220,7 @@ class _AssessingScreenState extends State<AssessingScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            "Tap 'Add new assessment case' to start one.",
+            "Tap 'New assessment case' to start one.",
             style: GoogleFonts.dmSans(fontSize: 13, color: _inkGhost),
           ),
         ],

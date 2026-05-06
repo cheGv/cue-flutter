@@ -84,16 +84,14 @@ const List<({String value, String label})> _populationOptions = [
 class AddClientScreen extends StatefulWidget {
   final Map<String, dynamic>? existingClient;
 
-  /// Phase 4.0.7.24 — engagement type for new client creation. Defaults
-  /// to 'therapy' for back-compat with the existing Clients-screen
-  /// add flow. Set to 'assessment_only' when entered from the
-  /// Assessing screen's "Add new assessment case" CTA.
-  final String engagementType;
-
+  /// Phase 4.0.7.27c-split — this screen is therapy-only. The
+  /// assessment intake split into a dedicated entry point
+  /// (NewAssessmentCaseScreen) reachable from the Assessing tab.
+  /// The engagementType param was removed; all clients created here
+  /// are engagement_type='therapy', engagement_status='active'.
   const AddClientScreen({
     super.key,
     this.existingClient,
-    this.engagementType = 'therapy',
   });
 
   @override
@@ -634,20 +632,17 @@ class _AddClientScreenState extends State<AddClientScreen> {
         clientId = widget.existingClient!['id'] as String;
         await _supabase.from('clients').update(data).eq('id', clientId);
       } else {
-        // Phase 4.0.7.24 — engagement_type drives whether the new
-        // client lands under Clients (therapy) or Assessing
-        // (assessment_only). engagement_status is 'awaiting_intake'
-        // for fresh assessment cases, 'active' for therapy.
+        // Phase 4.0.7.27c-split — this screen is therapy-only.
+        // Assessment cases land via NewAssessmentCaseScreen from the
+        // Assessing tab. All clients created here are therapy/active.
         final inserted = await _supabase
             .from('clients')
             .insert({
               ...data,
               'total_sessions':    0,
               'clinician_id':      userId,
-              'engagement_type':   widget.engagementType,
-              'engagement_status': widget.engagementType == 'assessment_only'
-                  ? 'awaiting_intake'
-                  : 'active',
+              'engagement_type':   'therapy',
+              'engagement_status': 'active',
             })
             .select('id')
             .single();
@@ -708,11 +703,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
   @override
   Widget build(BuildContext context) {
     return AppLayout(
-      title: _isEditMode
-          ? 'Edit client'
-          : (widget.engagementType == 'assessment_only'
-              ? 'New assessment case'
-              : 'Add client'),
+      title: _isEditMode ? 'Edit client' : 'Add client',
       activeRoute: 'roster',
       body: Container(
         color: kCuePaper,
@@ -1229,34 +1220,18 @@ class _AddClientScreenState extends State<AddClientScreen> {
         );
         break;
 
-      // ── Phase 4.0.7.27c-prep — area-specific placeholders ────────────────
-
-      case 'pediatric-cas':
-        // Authoring planned for 4.0.7.28 series.
-        section = GenericIntakePlaceholder(
-          key: ValueKey('intake_placeholder_$clinicalArea'),
-          clinicalArea: clinicalArea,
-          clinicalAreaLabel: 'Pediatric CAS',
-          bodyText: 'Authoring planned in 4.0.7.28 series.',
-        );
-        break;
-
-      case 'pediatric-dysarthria':
-        // Assessment capture surface shipped in 27a-c; intake authoring
-        // is next in 27d.
-        section = GenericIntakePlaceholder(
-          key: ValueKey('intake_placeholder_$clinicalArea'),
-          clinicalArea: clinicalArea,
-          clinicalAreaLabel: 'Pediatric Dysarthria',
-          bodyText:
-              'Capture surface shipped (27a-c). '
-              'Intake surface authoring pending in 27d.',
-        );
-        break;
+      // ── Phase 4.0.7.27c-split — therapy-only intake router ───────────────
+      // This screen creates therapy clients only. Assessment cases land
+      // through NewAssessmentCaseScreen and route directly into their
+      // capture surface; therapy intake never references the Assessing
+      // tab. Areas without a therapy intake widget yet fall through to
+      // the generic placeholder below.
 
       case 'pediatric-motor-speech':
-        // Umbrella for unresolved CAS / dysarthria differential. Once
-        // differential is resolved, migrate client to the specific area.
+        // Umbrella for unresolved CAS / dysarthria differential. The
+        // copy here is therapy-context — once a child arrives in the
+        // therapy roster under this umbrella, the SLP should refine
+        // the area on the client profile.
         section = GenericIntakePlaceholder(
           key: ValueKey('intake_placeholder_$clinicalArea'),
           clinicalArea: clinicalArea,
@@ -1264,31 +1239,8 @@ class _AddClientScreenState extends State<AddClientScreen> {
           headerSuffix: '— DIFFERENTIAL PENDING',
           bodyText:
               'For unresolved CAS / dysarthria differential. Once the '
-              'differential is clear, migrate the client to the specific area.',
-        );
-        break;
-
-      case 'voice':
-        // Voice capture surface is live in the Assessing tab.
-        section = GenericIntakePlaceholder(
-          key: ValueKey('intake_placeholder_$clinicalArea'),
-          clinicalArea: clinicalArea,
-          clinicalAreaLabel: 'Voice',
-          headerSuffix: '— NOW SHIPPED',
-          bodyText: 'Now shipped — capture surface is in the Assessing tab.',
-        );
-        break;
-
-      case 'hearing-aural-rehab':
-        // ALD capture surface is live in the Assessing tab.
-        section = GenericIntakePlaceholder(
-          key: ValueKey('intake_placeholder_$clinicalArea'),
-          clinicalArea: clinicalArea,
-          clinicalAreaLabel: 'Hearing & Aural Rehab',
-          headerSuffix: '— NOW SHIPPED',
-          bodyText:
-              'ALD and aural rehab capture surface now shipped — '
-              'available in the Assessing tab.',
+              'differential is clear, refine the clinical area on the '
+              'client profile.',
         );
         break;
 
