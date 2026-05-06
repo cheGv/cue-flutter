@@ -746,9 +746,18 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
     final updatedAt = DateTime.now().toUtc().toIso8601String();
     try {
+      // Phase 4.0.7.27c-goals-archive — write achieved_at alongside
+      // status. The timestamp drives the "celebrating until next
+      // session" cutoff; the legacy updated_at is preserved as the
+      // generic mutation marker. If a future flow flips status back to
+      // 'active', that path should null achieved_at.
       await _supabase
           .from('long_term_goals')
-          .update({'status': 'achieved', 'updated_at': updatedAt})
+          .update({
+            'status':       'achieved',
+            'updated_at':   updatedAt,
+            'achieved_at':  updatedAt,
+          })
           .eq('id', id);
     } catch (e) {
       if (mounted) {
@@ -761,7 +770,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
     if (!mounted) return;
     final updatedGoal = {
-      ...ltg, 'status': 'achieved', 'updated_at': updatedAt,
+      ...ltg,
+      'status':       'achieved',
+      'updated_at':   updatedAt,
+      'achieved_at':  updatedAt,
     };
 
     // Full-screen overlay; auto-dismisses after 3s.
@@ -1418,13 +1430,19 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   Widget _buildGoalsSection(_C c, double hPad, {bool isMobile = false}) {
     final clientName = _client['name'] as String? ?? '';
 
+    // Phase 4.0.7.27c-goals-archive — switched from _spineFuture to
+    // _readyFuture so the goals area can read the sessions list and
+    // compute the celebrating-vs-archived split. Both futures are
+    // already kicked off in initState; reading _readyFuture here costs
+    // nothing extra.
     return Padding(
       padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 0),
-      child: FutureBuilder<_SpineData>(
-        future: _spineFuture,
+      child: FutureBuilder<_ReadyData>(
+        future: _readyFuture,
         builder: (ctx, snapshot) {
-          final allLtgs      = snapshot.data?.ltgs ?? [];
-          final stgs         = snapshot.data?.stgs ?? [];
+          final allLtgs      = snapshot.data?.spine.ltgs ?? const [];
+          final stgs         = snapshot.data?.spine.stgs ?? const [];
+          final sessions     = snapshot.data?.sessions   ?? const [];
           final achievedLtgs = allLtgs.where(_isLtgAchieved).toList();
           final activeLtgs   = allLtgs
               .where((l) => _isLtgActive(l) && !_isLtgAchieved(l))
@@ -1432,6 +1450,31 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           final inactiveLtgs = allLtgs
               .where((l) => !_isLtgActive(l) && !_isLtgAchieved(l))
               .toList();
+
+          // 27c-goals-archive — celebrating LTGs are achieved goals
+          // with no session post-dating their achievement timestamp;
+          // archived LTGs are the rest. Sort archive newest-first so
+          // the most recent achievement sits at the top when the
+          // section expands.
+          final celebratingLtgs = <Map<String, dynamic>>[];
+          final archivedLtgs    = <Map<String, dynamic>>[];
+          for (final ltg in achievedLtgs) {
+            if (_hasSessionSinceAchievement(ltg, sessions)) {
+              archivedLtgs.add(ltg);
+            } else {
+              celebratingLtgs.add(ltg);
+            }
+          }
+          archivedLtgs.sort((a, b) {
+            final ad = _ltgAchievementCutoff(a);
+            final bd = _ltgAchievementCutoff(b);
+            if (ad == null && bd == null) return 0;
+            if (ad == null) return 1;
+            if (bd == null) return -1;
+            return bd.compareTo(ad); // DESC
+          });
+
+          final activeAndInactive = [...activeLtgs, ...inactiveLtgs];
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1475,24 +1518,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   ),
                 )
               else ...[
-                // ── Achieved goals (Phase 2) — celebrating cards on top ──
-                ...achievedLtgs.map((ltg) {
-                  final achievedDate = _formatAchievedDate(
-                      ltg['updated_at'] as String?);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: CueGap.s16),
-                    child: CelebratingGoalCard(
-                      goal:         ltg,
-                      achievedDate: achievedDate,
-                    ),
-                  );
-                }),
-                if (achievedLtgs.isNotEmpty &&
-                    (activeLtgs.isNotEmpty || inactiveLtgs.isNotEmpty))
-                  const SizedBox(height: CueGap.achievedToActiveGap),
-
-                // ── Active + inactive (legacy LTG block) ─────────────────
-                ...[...activeLtgs, ...inactiveLtgs].map((ltg) {
+                // ── SECTION 1: Active (+ inactive) goals ─────────────────
+                // 27c-goals-archive: active block now leads. Achieved
+                // LTGs no longer occupy the top of the goals area; they
+                // either sit in the celebrating section below (until
+                // the next session is logged) or in the archive.
+                ...activeAndInactive.map((ltg) {
                   final ltgId   = ltg['id'].toString();
                   final ltgStgs = stgs
                       .where((s) =>
@@ -1504,6 +1535,44 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                         isMobile: isMobile),
                   );
                 }),
+
+                // ── SECTION 2: Celebrating ──────────────────────────────
+                // Pride-of-place treatment held verbatim from the prior
+                // build (CelebratingGoalCard with cuttlefish + GOAL
+                // ACHIEVED · Mastered eyebrow). Multiple celebrating
+                // goals stack vertically; achievement timestamp now
+                // sources from achieved_at (falling back to updated_at).
+                if (celebratingLtgs.isNotEmpty) ...[
+                  if (activeAndInactive.isNotEmpty)
+                    const SizedBox(height: CueGap.achievedToActiveGap),
+                  ...celebratingLtgs.map((ltg) {
+                    final cutoff = _ltgAchievementCutoff(ltg);
+                    final achievedDate = cutoff == null
+                        ? null
+                        : _formatAchievedDate(
+                            cutoff.toUtc().toIso8601String());
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: CueGap.s16),
+                      child: CelebratingGoalCard(
+                        goal:         ltg,
+                        achievedDate: achievedDate,
+                      ),
+                    );
+                  }),
+                ],
+
+                // ── SECTION 3: Achievements archive ─────────────────────
+                if (archivedLtgs.isNotEmpty) ...[
+                  if (activeAndInactive.isNotEmpty ||
+                      celebratingLtgs.isNotEmpty)
+                    const SizedBox(height: CueGap.achievedToActiveGap),
+                  _AchievementsArchive(
+                    c:          c,
+                    ltgs:       archivedLtgs,
+                    clientName: clientName,
+                    onChanged:  _refreshSpine,
+                  ),
+                ],
               ],
             ],
           );
@@ -3062,6 +3131,181 @@ class _CueStudyBriefState extends State<_CueStudyBrief>
   }
 }
 
+// ── _AchievementsArchive ──────────────────────────────────────────────────────
+//
+// Phase 4.0.7.27c-goals-archive — collapsed-by-default section that
+// holds previously-celebrated LTGs once at least one session has been
+// logged after their achievement. Smaller cards, no cuttlefish,
+// "Mastered · {date}" eyebrow + plain goal text. The section preserves
+// the dignity of past achievements without consuming pride-of-place.
+class _AchievementsArchive extends StatefulWidget {
+  final _C c;
+  final List<Map<String, dynamic>> ltgs;
+  final String clientName;
+  final VoidCallback onChanged;
+  const _AchievementsArchive({
+    required this.c,
+    required this.ltgs,
+    required this.clientName,
+    required this.onChanged,
+  });
+
+  @override
+  State<_AchievementsArchive> createState() => _AchievementsArchiveState();
+}
+
+class _AchievementsArchiveState extends State<_AchievementsArchive> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.c;
+    final n = widget.ltgs.length;
+    return Container(
+      decoration: BoxDecoration(
+        color: c.surface,
+        border: Border.all(color: c.line, width: CueSize.hairline),
+        borderRadius: BorderRadius.circular(CueRadius.s16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Toggle row
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            borderRadius: BorderRadius.circular(CueRadius.s16),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: CueGap.s16, vertical: CueGap.s14),
+              child: Row(
+                children: [
+                  Text(
+                    'Achievements',
+                    style: GoogleFonts.dmSans(
+                      fontSize:   14,
+                      color:      c.ink,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _expanded
+                        ? '$n ${n == 1 ? 'goal' : 'goals'}'
+                        : '$n ${n == 1 ? 'goal achieved' : 'goals achieved'}',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 12,
+                      color:    c.ghost,
+                    ),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    _expanded
+                        ? Icons.keyboard_arrow_up_rounded
+                        : Icons.keyboard_arrow_down_rounded,
+                    size:  20,
+                    color: c.ghost,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Expanded list — smaller, dignified entries
+          if (_expanded) ...[
+            Container(height: CueSize.hairline, color: c.line),
+            for (var i = 0; i < widget.ltgs.length; i++) ...[
+              _ArchivedLtgRow(
+                c:          c,
+                ltg:        widget.ltgs[i],
+                clientName: widget.clientName,
+                onChanged:  widget.onChanged,
+              ),
+              if (i != widget.ltgs.length - 1)
+                Container(height: CueSize.hairline, color: c.line),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ArchivedLtgRow extends StatelessWidget {
+  final _C c;
+  final Map<String, dynamic> ltg;
+  final String clientName;
+  final VoidCallback onChanged;
+  const _ArchivedLtgRow({
+    required this.c,
+    required this.ltg,
+    required this.clientName,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final goalText = ((ltg['goal_text']     as String?) ??
+                      (ltg['original_text'] as String?) ??
+                      '').trim();
+    final cutoff = _ltgAchievementCutoff(ltg);
+    final dateLabel = cutoff == null
+        ? null
+        : _formatAchievedDate(cutoff.toUtc().toIso8601String());
+
+    return InkWell(
+      onTap: () async {
+        // Reuse the existing LTG detail view. onSaved is a no-op here;
+        // we trigger the parent's spine refresh on pop so the archive
+        // re-renders if the SLP edited anything inside.
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => LtgEditScreen(
+              goal:       ltg,
+              clientName: clientName,
+              onSaved:    (_) {},
+            ),
+          ),
+        );
+        onChanged();
+      },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+            CueGap.s16, CueGap.s12, CueGap.s16, CueGap.s12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              dateLabel == null
+                  ? 'MASTERED'
+                  : 'MASTERED · ${dateLabel.toUpperCase()}',
+              style: GoogleFonts.dmSans(
+                fontSize:      10,
+                fontWeight:    FontWeight.w600,
+                color:         c.teal,
+                letterSpacing: 1.3,
+              ),
+            ),
+            if (goalText.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                goalText,
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  color:    c.ink,
+                  height:   1.5,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── _GoalsSkeleton ────────────────────────────────────────────────────────────
 
 class _GoalsSkeleton extends StatelessWidget {
@@ -3100,6 +3344,47 @@ bool _isLtgActive(Map<String, dynamic> ltg) {
 bool _isLtgAchieved(Map<String, dynamic> ltg) {
   final status = (ltg['status'] as String?)?.toLowerCase();
   return status == 'achieved';
+}
+
+/// Phase 4.0.7.27c-goals-archive — returns the achievement cutoff
+/// timestamp for an LTG, preferring the typed `achieved_at` column and
+/// falling back to `updated_at` for legacy rows that pre-date the
+/// 27c migration. Null only when both are missing.
+DateTime? _ltgAchievementCutoff(Map<String, dynamic> ltg) {
+  final raw = (ltg['achieved_at'] as String?) ??
+      (ltg['updated_at'] as String?);
+  if (raw == null || raw.isEmpty) return null;
+  try {
+    return DateTime.parse(raw).toLocal();
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Phase 4.0.7.27c-goals-archive — true iff at least one session row
+/// has a date on or after the LTG's achievement cutoff. Drives the
+/// celebrating-vs-archived split: while no session has been logged
+/// since achievement, the LTG sits in pride-of-place; once a session
+/// post-dates the cutoff, it collapses into the achievements archive.
+///
+/// Sessions are matched on the `date` column (YYYY-MM-DD). The cutoff
+/// timestamp is reduced to its local calendar day before comparison so
+/// a same-day post-achievement session moves the LTG into the archive
+/// (matching the spec's `.gte('date', achievedAt)` semantics).
+bool _hasSessionSinceAchievement(
+    Map<String, dynamic> ltg, List<Map<String, dynamic>> sessions) {
+  final cutoff = _ltgAchievementCutoff(ltg);
+  if (cutoff == null) return false;
+  final cutoffDate = DateTime(cutoff.year, cutoff.month, cutoff.day);
+  for (final s in sessions) {
+    final dateStr = s['date'] as String?;
+    if (dateStr == null) continue;
+    final d = DateTime.tryParse(dateStr);
+    if (d == null) continue;
+    final sessionDate = DateTime(d.year, d.month, d.day);
+    if (!sessionDate.isBefore(cutoffDate)) return true;
+  }
+  return false;
 }
 
 String? _formatAchievedDate(String? iso) {

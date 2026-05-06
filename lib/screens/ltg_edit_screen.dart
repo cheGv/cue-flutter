@@ -570,9 +570,16 @@ class _LtgEditScreenState extends State<LtgEditScreen>
 
     final updatedAt = DateTime.now().toUtc().toIso8601String();
     try {
+      // Phase 4.0.7.27c-goals-archive — also persist achieved_at.
+      // Backs the "celebrating until next session" cutoff on the
+      // client profile goals area.
       await _supabase
           .from('long_term_goals')
-          .update({'status': 'achieved', 'updated_at': updatedAt})
+          .update({
+            'status':       'achieved',
+            'updated_at':   updatedAt,
+            'achieved_at':  updatedAt,
+          })
           .eq('id', id);
     } catch (e) {
       if (mounted) {
@@ -586,8 +593,9 @@ class _LtgEditScreenState extends State<LtgEditScreen>
     if (!mounted) return;
     final updatedGoal = {
       ...widget.goal,
-      'status':     'achieved',
-      'updated_at': updatedAt,
+      'status':       'achieved',
+      'updated_at':   updatedAt,
+      'achieved_at':  updatedAt,
     };
 
     // Fire the 3s overlay; it auto-dismisses via Navigator.maybePop.
