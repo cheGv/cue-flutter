@@ -101,6 +101,26 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   bool _attesting = false;
   bool _attested  = false;
 
+  // Phase 4.0.7.23c-deploy — v2 contract surface state. Populated by
+  // _generatePlan() after a successful response. Drives the three new
+  // render states (safeguarding halt, clarifying-question, goals).
+  // Three fields are populated for future render surfaces (domain badge,
+  // confidence indicator, plan-level priority chip strip) but not read
+  // by V1 UI; flagged ignore to keep the analyzer quiet.
+  String? _safeguardingFlag;
+  String? _clarifyingQuestion;
+  String? _childNameUsed;
+  String? _familyQuoteHeld;
+  // ignore: unused_field
+  num?    _domainConfidence;
+  // ignore: unused_field
+  List<String> _domains = [];
+  // ignore: unused_field
+  List<Map<String, dynamic>> _priorityChips = [];
+  bool _parseFailed = false;
+  final TextEditingController _clarifyingResponseController =
+      TextEditingController();
+
   static const List<String> _loadingMessages = [
     'Reading the chart...',
     'Assessing regulatory profile...',
@@ -157,6 +177,7 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   void dispose() {
     _hypothesisController.dispose();
     _scrollController.dispose();
+    _clarifyingResponseController.dispose();
     super.dispose();
   }
 
@@ -171,7 +192,13 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
     }
   }
 
-  Future<void> _generatePlan() async {
+  Future<void> _generatePlan({String? clarifyingResponse}) async {
+    // Phase 4.0.7.23c-deploy — clarifyingResponse is the SLP's answer to
+    // a prior clarifying question, threaded into the next call. The
+    // previous question rides as previous_clarifying_question so the
+    // proxy can format the round-trip into the user message.
+    final priorQuestion = _clarifyingQuestion;
+
     setState(() {
       _isGenerating = true;
       _errorMessage = null;
@@ -179,6 +206,15 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
       _goals = [];
       _attested = false;
       _loadingMessage = _loadingMessages[0];
+      // v2 surface state — clear before each call.
+      _safeguardingFlag = null;
+      _clarifyingQuestion = null;
+      _childNameUsed = null;
+      _familyQuoteHeld = null;
+      _domainConfidence = null;
+      _domains = [];
+      _priorityChips = [];
+      _parseFailed = false;
     });
 
     // Cycle loading messages every 6 seconds
@@ -214,33 +250,91 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
           },
           if (_hypothesisController.text.trim().isNotEmpty)
             'clinician_hypothesis': _hypothesisController.text.trim(),
+          // Phase 4.0.7.23c-deploy — clarifying-question round-trip
+          // fields. Both are optional; proxy threads them into the v2
+          // user message when both are present.
+          if (clarifyingResponse != null && clarifyingResponse.trim().isNotEmpty)
+            'clarifying_response': clarifyingResponse.trim(),
+          if (clarifyingResponse != null && priorQuestion != null)
+            'previous_clarifying_question': priorQuestion,
         }),
       ).timeout(const Duration(seconds: 90));
 
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      Map<String, dynamic> body;
+      try {
+        body = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (_) {
+        // Non-JSON body — treat as parse failure.
+        setState(() {
+          _isGenerating = false;
+          _parseFailed = true;
+        });
+        return;
+      }
 
-      if (response.statusCode != 201) {
+      // Server returns 200 for safeguarding/clarifying-only branches and
+      // 201 for happy-path persistence. Anything else is an error.
+      if (response.statusCode != 200 && response.statusCode != 201) {
         throw Exception(body['error'] ?? 'Server error ${response.statusCode}');
       }
 
-      setState(() {
-        _planId = body['plan_id'] as String;
-        _plan   = body;
-        print('PLAN KEYS: ${body.keys.toList()}');
-        print('TRACE VALUE: ${body['reasoning_trace']}');
-        _goals  = List<Map<String, dynamic>>.from(
-          (body['goals'] as List).map((g) => Map<String, dynamic>.from(g as Map)),
-        );
-        _isGenerating = false;
-      });
+      // v2 contract parsing — wrapped in try so any malformed shape lands
+      // on the soft fallback rather than the red error card.
+      try {
+        final goalsList = (body['goals'] as List?) ?? [];
+        final priorityChipsRaw = (body['priority_chips'] as List?) ?? [];
+        final domainsRaw = (body['domain'] as List?) ?? [];
+
+        setState(() {
+          _planId = body['plan_id'] as String?;
+          _plan = body;
+          _goals = List<Map<String, dynamic>>.from(
+            goalsList.map((g) => Map<String, dynamic>.from(g as Map)),
+          );
+          _safeguardingFlag = body['safeguarding_flag'] as String?;
+          _clarifyingQuestion = body['clarifying_question'] as String?;
+          _childNameUsed = body['child_name_used'] as String?;
+          _familyQuoteHeld = body['family_quote_held'] as String?;
+          _domainConfidence = body['domain_confidence'] as num?;
+          _domains = domainsRaw
+              .map((d) => d?.toString() ?? '')
+              .where((d) => d.isNotEmpty)
+              .toList();
+          _priorityChips = priorityChipsRaw
+              .map((c) => Map<String, dynamic>.from(c as Map))
+              .toList();
+          _isGenerating = false;
+          // Clear the response field so the next clarifying turn starts fresh.
+          _clarifyingResponseController.clear();
+        });
+
+        // Fallback trigger — no goals AND no clarifying question AND
+        // no safeguarding flag means the response is effectively empty.
+        final hasGoals = _goals.isNotEmpty;
+        final hasClarifying = (_clarifyingQuestion ?? '').isNotEmpty;
+        final hasSafeguarding = (_safeguardingFlag ?? '').isNotEmpty;
+        if (!hasGoals && !hasClarifying && !hasSafeguarding) {
+          setState(() => _parseFailed = true);
+          return;
+        }
+      } catch (e) {
+        debugPrint('[generate-goals] parse failure: $e');
+        setState(() {
+          _isGenerating = false;
+          _parseFailed = true;
+        });
+        return;
+      }
 
       // Scroll down to show the results
       await Future.delayed(const Duration(milliseconds: 300));
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 600),
-        curve: Curves.easeOut,
-      );
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 600),
+          curve: Curves.easeOut,
+        );
+      }
     } catch (e) {
       setState(() {
         _isGenerating = false;
@@ -416,21 +510,54 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
             if (_errorMessage != null)
               _buildErrorCard(),
 
-            // Results
-            if (_plan != null) ...[
-              const SizedBox(height: 8),
-              _buildLayerHeader('LAYER 02', 'Reasoning trace'),
-              const SizedBox(height: 14),
-              _buildReasoningTrace(),
-              const SizedBox(height: 32),
+            // Phase 4.0.7.23c-deploy — soft fallback when v2 returns a
+            // shape we can't make sense of. Distinct from _errorMessage,
+            // which surfaces transport / 4xx errors in the red card.
+            if (_parseFailed)
+              _buildParseFallbackCard(),
 
-              _buildLayerHeader('LAYER 03', 'Goal draft'),
-              const SizedBox(height: 14),
-              ..._goals.asMap().entries.map((e) => _buildGoalCard(e.key, e.value)),
+            // Results — branched on v2 return shape:
+            //   1. safeguarding_flag set → halt card, suppress goals
+            //   2. clarifying_question set + no goals → ask card
+            //   3. goals present → reasoning trace + goal cards + attest
+            if (_plan != null && !_parseFailed) ...[
+              if (_safeguardingFlag != null) ...[
+                const SizedBox(height: 8),
+                _buildSafeguardingCard(),
+                const SizedBox(height: 40),
+              ] else if ((_clarifyingQuestion ?? '').isNotEmpty &&
+                  _goals.isEmpty) ...[
+                const SizedBox(height: 8),
+                _buildClarifyingCard(),
+                const SizedBox(height: 40),
+              ] else if (_goals.isNotEmpty) ...[
+                // Phase 4.0.7.23c-deploy — reasoning trace panel only
+                // renders when v2 emitted a non-empty trace. v2 typically
+                // returns null; v1 plans (legacy) still render the panel.
+                if (((_plan?['reasoning_trace'] as String?) ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _buildLayerHeader('LAYER 02', 'Reasoning trace'),
+                  const SizedBox(height: 14),
+                  _buildReasoningTrace(),
+                  const SizedBox(height: 32),
+                ],
 
-              const SizedBox(height: 40),
-              _buildAttestationSection(),
-              const SizedBox(height: 40),
+                _buildLayerHeader('LAYER 03', 'Goal draft'),
+                const SizedBox(height: 14),
+                if ((_childNameUsed ?? '').isNotEmpty ||
+                    (_familyQuoteHeld ?? '').isNotEmpty) ...[
+                  _buildAnchorLine(),
+                  const SizedBox(height: 12),
+                ],
+                ..._goals
+                    .asMap()
+                    .entries
+                    .map((e) => _buildGoalCard(e.key, e.value)),
+
+                const SizedBox(height: 40),
+                _buildAttestationSection(),
+                const SizedBox(height: 40),
+              ],
             ],
           ],
         ),
@@ -949,6 +1076,29 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
         [];
     final isEdited = goal['is_edited'] == true;
 
+    // Phase 4.0.7.23c-deploy — priority_chips_json is denormalized onto
+    // every LTG by the proxy (V1 simplification; refactor flagged for
+    // 23c-fix1). Tolerant of three on-the-wire shapes: List (Supabase
+    // JSONB → List), String (re-encoded JSON), or null/absent.
+    final dynamic chipsRaw = goal['priority_chips_json'];
+    List<Map<String, dynamic>> chips = [];
+    try {
+      if (chipsRaw is List) {
+        chips = chipsRaw
+            .whereType<Map>()
+            .map((c) => Map<String, dynamic>.from(c))
+            .toList();
+      } else if (chipsRaw is String && chipsRaw.isNotEmpty) {
+        final parsed = jsonDecode(chipsRaw);
+        if (parsed is List) {
+          chips = parsed
+              .whereType<Map>()
+              .map((c) => Map<String, dynamic>.from(c))
+              .toList();
+        }
+      }
+    } catch (_) {/* leave chips empty */}
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
@@ -1005,28 +1155,78 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+                // Phase 4.0.7.23c-deploy — render v2's ltg_candidates[].text
+                // directly. v1's title/notes synthesis is gone; goal_text
+                // is now the single canonical surface for the LTG.
                 Text(
-                  goal['notes'] as String? ??
-                      goal['title'] as String? ?? '',
+                  goal['goal_text'] as String? ?? '',
                   style: const TextStyle(
                       fontFamily: 'SF Pro Display',
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                       color: _ink,
-                      height: 1.3),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  goal['goal_text'] as String? ?? '',
-                  style: const TextStyle(
-                      fontSize: 13,
-                      color: _inkSoft,
-                      height: 1.55),
+                      height: 1.4),
                 ),
               ],
             ),
           ),
+
+          // Phase 4.0.7.23c-deploy — priority chips strip. Visual register
+          // matches the evidence tag chip footer: bordered tokens with
+          // monospace label. Long-press surfaces the rationale in a
+          // SnackBar. Suppressed entirely when chips is empty.
+          if (chips.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text('PRIORITY',
+                      style: TextStyle(
+                          fontSize: 9,
+                          letterSpacing: 0.8,
+                          fontFamily: 'monospace',
+                          color: _inkGhost,
+                          fontWeight: FontWeight.w600)),
+                  ...chips.map((chip) {
+                    final label = (chip['label'] as String?) ?? '';
+                    final rationale = (chip['rationale'] as String?) ?? '';
+                    return GestureDetector(
+                      onLongPress: rationale.isEmpty
+                          ? null
+                          : () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(rationale),
+                                  backgroundColor: _ink,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _tealSoft,
+                          border: Border.all(color: _teal),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          label,
+                          style: const TextStyle(
+                              fontSize: 10,
+                              fontFamily: 'monospace',
+                              color: _ink),
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
 
           Divider(color: _line.withOpacity(0.5), height: 1),
 
@@ -1054,8 +1254,12 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
                         ),
                       ),
                       Expanded(
+                        // Phase 4.0.7.23c-deploy — v2's stg_candidates[].text
+                        // lands in `specific`. `measurable` is no longer
+                        // emitted (mastery captured in mastery_criterion);
+                        // empty-string fallback covers v1 rows.
                         child: Text(
-                          '${sto['specific'] ?? ''} — ${sto['measurable'] ?? ''}',
+                          (sto['specific'] as String?) ?? '',
                           style: const TextStyle(
                               fontSize: 13,
                               color: _inkSoft,
@@ -1112,6 +1316,272 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
                 ],
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  // Phase 4.0.7.23c-deploy — v2 surface state cards. ───────────────────────
+
+  /// Anchor line shown above the goal cards when v2 surfaced the child's
+  /// name and/or the family quote it built the plan around. Render-only
+  /// transparency about what v2 grounded on; no SLP labour.
+  Widget _buildAnchorLine() {
+    final name = _childNameUsed?.trim() ?? '';
+    final quote = _familyQuoteHeld?.trim() ?? '';
+    final parts = <String>[];
+    if (name.isNotEmpty) parts.add(name);
+    if (quote.isNotEmpty) parts.add('"$quote"');
+    if (parts.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text(
+        'Cue used: ${parts.join(' / ')}',
+        style: const TextStyle(
+          fontFamily: 'SF Pro Display',
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+          color: _inkGhost,
+          height: 1.5,
+        ),
+      ),
+    );
+  }
+
+  /// Safeguarding halt card — v2 returned a safeguarding_flag. The goals
+  /// list, reasoning trace, and attestation section are all suppressed.
+  /// The SLP can write a clarifying note that re-fires _generatePlan().
+  Widget _buildSafeguardingCard() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBF1),
+        border: Border.all(color: _amber),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _ArcLogo(),
+              const SizedBox(width: 10),
+              const Text(
+                'A concern worth pausing on',
+                style: TextStyle(
+                  fontFamily: 'SF Pro Display',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: _ink,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            _safeguardingFlag ?? '',
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.6,
+              color: _ink,
+              fontWeight: FontWeight.w300,
+            ),
+          ),
+          if ((_clarifyingQuestion ?? '').isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Divider(color: _amber.withValues(alpha: 0.4), height: 1),
+            const SizedBox(height: 18),
+            Text(
+              _clarifyingQuestion!,
+              style: const TextStyle(
+                fontSize: 14,
+                fontStyle: FontStyle.italic,
+                color: _inkSoft,
+                height: 1.55,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildClarifyingResponseField(),
+            const SizedBox(height: 14),
+            _buildContinueButton(),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Clarifying-question card — v2 returned a clarifying_question with no
+  /// goals (WHEN UNCERTAIN return shape). Lighter visual register than
+  /// safeguarding; same input + Continue affordance.
+  Widget _buildClarifyingCard() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _ArcLogo(),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _clarifyingQuestion ?? '',
+                  style: const TextStyle(
+                    fontFamily: 'SF Pro Display',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w400,
+                    color: _ink,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          _buildClarifyingResponseField(),
+          const SizedBox(height: 14),
+          _buildContinueButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClarifyingResponseField() {
+    return TextField(
+      controller: _clarifyingResponseController,
+      maxLines: 4,
+      minLines: 3,
+      style: const TextStyle(fontSize: 14, color: _ink, height: 1.5),
+      decoration: InputDecoration(
+        hintText: 'Your note',
+        hintStyle: const TextStyle(color: _inkGhost, fontSize: 14),
+        filled: true,
+        fillColor: _paper,
+        contentPadding: const EdgeInsets.all(14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: _line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: _line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: _teal),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContinueButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _ink,
+          foregroundColor: _paper,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 0,
+        ),
+        onPressed: _isGenerating
+            ? null
+            : () {
+                final answer = _clarifyingResponseController.text.trim();
+                if (answer.isEmpty) return;
+                _generatePlan(clarifyingResponse: answer);
+              },
+        child: const Text(
+          'Continue',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
+  }
+
+  /// Soft fallback when v2 returns a shape we can't make sense of —
+  /// no goals, no clarifying question, no safeguarding flag. Distinct
+  /// from the red _buildErrorCard which surfaces transport / 4xx errors.
+  Widget _buildParseFallbackCard() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 22),
+      decoration: BoxDecoration(
+        color: _paper2,
+        border: Border.all(color: _line),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _ArcLogo(),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Cue is having trouble drafting goals right now. '
+                  'Try again in a moment, or capture the goals manually.',
+                  style: TextStyle(
+                    fontFamily: 'SF Pro Display',
+                    fontSize: 14,
+                    color: _ink,
+                    height: 1.55,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _ink,
+                    side: const BorderSide(color: _ink),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  onPressed: _isGenerating ? null : () => _generatePlan(),
+                  child: const Text('Try again'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _ink,
+                    foregroundColor: _paper,
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => LtgEditScreen(
+                          goal: {'client_id': widget.clientId},
+                          clientName: widget.clientName,
+                          onSaved: (_) {},
+                        ),
+                      ),
+                    );
+                  },
+                  child: const Text('Capture manually'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

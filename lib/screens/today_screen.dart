@@ -352,7 +352,12 @@ class _TodayScreenState extends State<TodayScreen> {
           _supabase
               .from('long_term_goals')
               .select()
-              .eq('client_id', clientId),
+              .eq('client_id', clientId)
+              // Phase 4.0.7.23c-deploy — exclude pending_attestation v2
+              // drafts from today-screen brief generation. Same rationale
+              // as pre_session_brief: unattested candidates must not feed
+              // the brief LLM context.
+              .eq('status', 'active'),
         ]);
         stgRows = goalResults[0] as List;
         ltgRows = goalResults[1] as List;

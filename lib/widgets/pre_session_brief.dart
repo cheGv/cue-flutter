@@ -110,7 +110,11 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
           _supabase
               .from('long_term_goals')
               .select()
-              .eq('client_id', clientId),
+              .eq('client_id', clientId)
+              // Phase 4.0.7.23c-deploy — exclude pending_attestation v2
+              // drafts from the brief LLM context. Drafts shouldn't
+              // shape the SLP's pre-session view of active goals.
+              .eq('status', 'active'),
         ]);
         stgRows = goalResults[0] as List;
         ltgRows = goalResults[1] as List;

@@ -3338,7 +3338,14 @@ class _GoalsSkeleton extends StatelessWidget {
 
 bool _isLtgActive(Map<String, dynamic> ltg) {
   final status = ltg['status'] as String?;
-  return status != 'discontinued' && status != 'met' && status != 'achieved';
+  // Phase 4.0.7.23c-deploy — pending_attestation LTGs are v2 drafts that
+  // live in Build with Cue until the SLP signs the plan. They are not
+  // active clinical goals and must not appear on the client profile's
+  // active list, the chip strip, or any "active goals" surface.
+  return status != 'discontinued' &&
+      status != 'met' &&
+      status != 'achieved' &&
+      status != 'pending_attestation';
 }
 
 bool _isLtgAchieved(Map<String, dynamic> ltg) {
