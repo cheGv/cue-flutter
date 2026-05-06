@@ -449,14 +449,30 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
   bool _isSameDate(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
-  /// Past: "yesterday" / "2 days ago" / weekday name within 7d / "12 Aug".
+  /// Past: "today" / "yesterday" / "{N} days ago" / "{N} weeks ago".
+  ///
+  /// Phase 4.0.7.27c-split-fix2 — the previous version called this from
+  /// "Note pending from ..." and returned weekday names ("Tuesday") or
+  /// short dates ("12 Aug") for anything older than yesterday, which
+  /// read as a hard date label rather than a duration. The bug also
+  /// surfaced as "Note pending from yesterday" on a card whose own date
+  /// rendered as today — a UTC-vs-local-day mismatch when the timestamp
+  /// straddled midnight in the SLP's timezone.
+  ///
+  /// Both inputs are normalized to local-date-only before subtracting,
+  /// so the count is wall-calendar days, not 24-hour windows. UTC
+  /// timestamps coming from Supabase get .toLocal() first.
   String _relativePast(DateTime d, DateTime ref) {
-    if (_isSameDate(d, ref)) return 'today';
-    final yesterday = ref.subtract(const Duration(days: 1));
-    if (_isSameDate(d, yesterday)) return 'yesterday';
-    final delta = ref.difference(d).inDays;
-    if (delta > 1 && delta < 7) return _weekdayName(d.weekday);
-    return _shortDate(d);
+    final dLocal   = d.toLocal();
+    final dDate    = DateTime(dLocal.year, dLocal.month, dLocal.day);
+    final refLocal = ref.toLocal();
+    final refDate  = DateTime(refLocal.year, refLocal.month, refLocal.day);
+    final daysAgo  = refDate.difference(dDate).inDays;
+    if (daysAgo <= 0) return 'today';
+    if (daysAgo == 1) return 'yesterday';
+    if (daysAgo < 7) return '$daysAgo days ago';
+    final weeks = daysAgo ~/ 7;
+    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
   }
 
   /// Future: "tomorrow" / "this Friday" (within 7d) / "in N days".

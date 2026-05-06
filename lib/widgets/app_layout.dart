@@ -9,6 +9,10 @@ import '../screens/slp_profile_screen.dart';
 import '../theme/theme_notifier.dart';
 import '../theme/cue_theme.dart';
 import 'cue_cuttlefish.dart';
+// Phase 4.0.7.27c-split-fix2 — CueStudyFab default removed; only
+// client-aware screens pass an explicit instance via cueStudyFab.
+// Import retained for the doc comment reference but unused at runtime.
+// ignore: unused_import
 import 'cue_study_fab.dart';
 const double _kSidebarFull      = 220;
 const double _kSidebarCollapsed = 56;
@@ -29,7 +33,17 @@ class AppLayout extends StatelessWidget {
   final String activeRoute;
   final Widget? floatingActionButton;
   final List<Widget> actions;
-  // When provided, replaces the global CueStudyFab (allows context-aware override).
+  /// Cue Study FAB override. Phase 1 product law: Cue Study is per-
+  /// client only — there is no global thread. So screens without
+  /// client context (Today, Clients, Assessing, Narrator, Settings)
+  /// don't render a FAB at all. Client-aware screens pass an
+  /// explicit CueStudyFab(...) instance with the chart payload
+  /// pre-bound. Phase 4.0.7.27c-split-fix2: previously the default
+  /// rendered an empty CueStudyFab() that, on tap, fired a
+  /// "Open a client's Chart..." snackbar — surfacing the empty-state
+  /// copy as a global toast on every non-Cue-Study screen. The
+  /// default is now SizedBox.shrink(); the empty-state copy moves
+  /// to whichever screen actually surfaces a Cue Study empty view.
   final Widget? cueStudyFab;
 
   const AppLayout({
@@ -71,7 +85,7 @@ class AppLayout extends StatelessWidget {
                       Positioned(
                         bottom: 72,
                         left:   16,
-                        child:  cueStudyFab ?? const CueStudyFab(),
+                        child:  cueStudyFab ?? const SizedBox.shrink(),
                       ),
                     ],
                   ),
@@ -119,7 +133,7 @@ class AppLayout extends StatelessWidget {
                     Positioned(
                       bottom: 32,
                       left:   16,
-                      child:  cueStudyFab ?? const CueStudyFab(),
+                      child:  cueStudyFab ?? const SizedBox.shrink(),
                     ),
                   ],
                 ),
