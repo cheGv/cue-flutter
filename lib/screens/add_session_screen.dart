@@ -71,15 +71,25 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
 
   Future<void> _loadActiveStg() async {
     try {
+      // Phase 4.0.7.27d-stg-focus-resolver-fix — STG text lives in
+      // `specific` for every proxy-generated STG (v1 and v2). `goal_text`
+      // and `target_behavior` are legacy columns kept for back-compat
+      // with prototype-era rows. Fallback chain matches every other STG
+      // reader in the codebase (pre_session_brief, chart_context,
+      // client_profile_screen).
       final rows = await _supabase
           .from('short_term_goals')
-          .select('goal_text')
+          .select('goal_text, specific, target_behavior')
           .eq('client_id', widget.clientId)
           .eq('status', 'active')
           .limit(1);
       if (mounted) {
-        final text = rows.isNotEmpty
-            ? (rows.first['goal_text'] as String? ?? '').trim()
+        final row = rows.isNotEmpty ? rows.first : null;
+        final text = row != null
+            ? ((row['specific'] as String?)
+                ?? (row['goal_text'] as String?)
+                ?? (row['target_behavior'] as String?)
+                ?? '').trim()
             : null;
         setState(() {
           _activeStg   = (text != null && text.isNotEmpty) ? text : null;
