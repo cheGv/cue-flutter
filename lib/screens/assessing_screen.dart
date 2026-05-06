@@ -329,6 +329,7 @@ class _AssessmentCaseCard extends StatelessWidget {
   String _humanStatus(String code) {
     switch (code) {
       case 'awaiting_intake':  return 'awaiting intake';
+      case 'in_assessment':    return 'in assessment';
       case 'in_progress':      return 'in progress';
       case 'report_pending':   return 'report pending';
       case 'report_delivered': return 'report delivered';
