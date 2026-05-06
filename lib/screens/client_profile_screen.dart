@@ -3118,7 +3118,12 @@ String? _formatAchievedDate(String? iso) {
 
 String _extractSoapPreview(Map<String, dynamic> session) {
   final note = session['soap_note'];
-  if (note == null) return 'Session documented';
+  // Phase 4.0.7.27c-cleanup2 — return empty when there's nothing to
+  // preview. The timeline card's subtitle render guard suppresses an
+  // empty subtitle row entirely; the footer pill ('Pending
+  // documentation' / 'View note →') carries the documentation-status
+  // signal alone, with no overlap.
+  if (note == null) return '';
   try {
     final map = note is String
         ? jsonDecode(note) as Map<String, dynamic>
@@ -3133,7 +3138,7 @@ String _extractSoapPreview(Map<String, dynamic> session) {
           : observation;
     }
   } catch (_) {}
-  return 'Session documented';
+  return '';
 }
 
 String _formatTargetDate(String dateStr) {
