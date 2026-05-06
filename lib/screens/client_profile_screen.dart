@@ -453,37 +453,16 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // ── Navigation ────────────────────────────────────────────────────────────
 
   Future<void> _openGoalAuthoring() async {
-    final population = _client['population_type'] as String? ?? 'asd_aac';
     final clientId = _client['id'].toString();
     final clientName = _client['name'] as String? ?? '';
     final sessionCount = _client['total_sessions'] as int? ?? 0;
 
-    // Phase 4.0.7 — for developmental_stuttering clients, gate Build-plan
-    // on Layer-04 plan_inputs being locked. If they aren't yet, route
-    // through the pre-therapy planning surface first; that screen calls
-    // pushReplacement → GoalAuthoringScreen on lock+proceed.
-    if (population == 'developmental_stuttering') {
-      final locked = await isPlanInputsLocked(
-        supabase: _supabase,
-        clientId: clientId,
-      );
-      if (!locked) {
-        if (!mounted) return;
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => PreTherapyPlanningFluencyScreen(
-              clientId:     clientId,
-              clientName:   clientName,
-              sessionCount: sessionCount,
-            ),
-          ),
-        );
-        if (mounted) _refreshSpine();
-        return;
-      }
-    }
-
+    // Phase 4.0.7.27d-population-router-removal — Build with Cue now
+    // routes every client straight to GoalAuthoringScreen (the v2-wired
+    // surface) regardless of population_type. The previous fluency
+    // detour through PreTherapyPlanningFluencyScreen has been removed;
+    // that screen + isPlanInputsLocked stay in the repo as orphan code
+    // for the Phase 2 multi-domain rebuild.
     if (!mounted) return;
     await Navigator.push(
       context,
@@ -506,6 +485,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   // Phase 4.0.7 — chart-side entry point for editing plan inputs without
   // proceeding to authoring. Used by the "Plan inputs" pill on the bar.
+  // Phase 4.0.7.27d-population-router-removal — caller pill removed; this
+  // method is currently unreachable. Kept in place for the Phase 2
+  // multi-domain rebuild to resurface a domain-aware version.
+  // ignore: unused_element
   Future<void> _openPlanInputs() async {
     await Navigator.push<bool>(
       context,
@@ -1336,12 +1319,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     // truncate at the desktop ConstrainedBox(max: 560) cap. Now each pill
     // takes its natural width; the bar shrink-wraps on desktop and
     // scrolls horizontally on mobile when content exceeds viewport.
-    // Phase 4.0.7 — show a "Plan inputs" pill between Session and Build
-    // plan for developmental_stuttering clients. asd_aac sees the bar
-    // unchanged.
-    final population = _client['population_type'] as String? ?? 'asd_aac';
-    final showPlanInputs = population == 'developmental_stuttering';
-
+    // Phase 4.0.7.27d-population-router-removal — the fluency-only
+    // "Plan inputs" pill (which routed to PreTherapyPlanningFluencyScreen)
+    // has been removed. The bar is now identical for every client; Phase
+    // 2 multi-domain will resurface a domain-aware plan-inputs affordance.
     final pillRow = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1352,15 +1333,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           onTap:     _openAddSession,
         ),
         divider,
-        if (showPlanInputs) ...[
-          _FabBarItem(
-            icon:      Icon(Icons.tune, size: 14, color: c.amber),
-            label:     'Plan inputs',
-            labelColor: c.amber,
-            onTap:     _openPlanInputs,
-          ),
-          divider,
-        ],
         _FabBarItem(
           // Cue Study — the conversational clinical reasoning surface.
           // Phase 3.3: renamed from "Ask Cue" for codebase-vocabulary

@@ -5,7 +5,9 @@ import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import 'narrate_session_screen.dart';
 import 'report_screen.dart';
-import 'session_mode_picker_screen.dart';
+// Phase 4.0.7.27d-population-router-removal — SessionModePickerView no
+// longer routed to. Kept in repo as orphan code for Phase 2 multi-domain
+// rebuild. The import is dropped here; re-add when routing is restored.
 
 class AddSessionScreen extends StatefulWidget {
   final String clientId;
@@ -29,9 +31,12 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   bool     _stgLoading = true;
   bool     _saving     = false;
 
-  // Phase 4.0.4 — population routing. While null, render a quiet skeleton
-  // so we don't briefly flash the legacy AAC flow before swapping to the
-  // mode picker for developmental_stuttering clients.
+  // Phase 4.0.4 — population routing. Phase 4.0.7.27d-population-router
+  // -removal: the developmental_stuttering routing edge was removed but
+  // the fetch infrastructure stays in place for the Phase 2 multi-domain
+  // rebuild to resurrect. _populationType is currently unread; the
+  // loading flag still gates a quiet skeleton on first paint.
+  // ignore: unused_field
   String? _populationType;
   bool    _populationLoading = true;
 
@@ -189,18 +194,12 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       );
     }
 
-    if (_populationType == 'developmental_stuttering') {
-      return AppLayout(
-        title: 'New session — ${widget.clientName}',
-        activeRoute: 'roster',
-        body: SessionModePickerView(
-          clientId:   widget.clientId,
-          clientName: widget.clientName,
-        ),
-      );
-    }
-
-    // ASD/AAC and any other legacy population — Phase 4.0 register.
+    // Phase 4.0.7.27d-population-router-removal — population_type no
+    // longer gates the new-session surface. Every client hits the
+    // unified Narrate / Type entry-mode row below regardless of clinical
+    // domain. The fluency-specific SessionModePickerView (live entry /
+    // debrief / parent interview) is kept in the repo as orphan code
+    // for the Phase 2 multi-domain rebuild.
     return AppLayout(
       title:       'New session — ${widget.clientName}',
       activeRoute: 'roster',
