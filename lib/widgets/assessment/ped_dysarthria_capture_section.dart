@@ -843,8 +843,9 @@ class _PedDysarthriaCaptureSectionState
     _ddkTuhCtrl.text    = row['tuh_per_sec']?.toString() ?? '';
     _ddkKuhCtrl.text    = row['kuh_per_sec']?.toString() ?? '';
     _ddkPatakaCtrl.text = row['pataka_per_sec']?.toString() ?? '';
-    _ddkRegularity      = row['regularity'] as String?;
-    _ddkAccuracy        = row['accuracy']   as String?;
+    // 27b-fix1 — schema columns are ddk_regularity / ddk_accuracy.
+    _ddkRegularity      = row['ddk_regularity'] as String?;
+    _ddkAccuracy        = row['ddk_accuracy']   as String?;
   }
 
   void _hydrateSubsystemSeverity(Map<String, dynamic> row) {
@@ -1122,8 +1123,9 @@ class _PedDysarthriaCaptureSectionState
       'tuh_per_sec':    _parseDecimal(_ddkTuhCtrl.text),
       'kuh_per_sec':    _parseDecimal(_ddkKuhCtrl.text),
       'pataka_per_sec': _parseDecimal(_ddkPatakaCtrl.text),
-      'regularity':     _ddkRegularity,
-      'accuracy':       _ddkAccuracy,
+      // 27b-fix1 — schema columns are ddk_regularity / ddk_accuracy.
+      'ddk_regularity': _ddkRegularity,
+      'ddk_accuracy':   _ddkAccuracy,
     };
     try {
       await _service.saveTypedMeasures(

@@ -203,21 +203,22 @@ class AerodynamicMeasures {
   });
 }
 
-/// Section 4 — typed DDK rates.
+/// Section 4 — typed DDK rates. Field names mirror the schema's
+/// ddk_regularity / ddk_accuracy columns (27b-fix1 correction).
 class DdkRates {
   final num? puhPerSec;
   final num? tuhPerSec;
   final num? kuhPerSec;
   final num? patakaPerSec;
-  final String? regularity;
-  final String? accuracy;
+  final String? ddkRegularity;
+  final String? ddkAccuracy;
   const DdkRates({
     this.puhPerSec,
     this.tuhPerSec,
     this.kuhPerSec,
     this.patakaPerSec,
-    this.regularity,
-    this.accuracy,
+    this.ddkRegularity,
+    this.ddkAccuracy,
   });
 }
 
