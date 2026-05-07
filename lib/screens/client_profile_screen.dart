@@ -2155,7 +2155,16 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     String clientId,
     String clientName,
   ) {
-    final hasNote = entry.rawData?['soap_note'] != null;
+    // Phase 4.0.7.31b-timeline-notes-aware — third site of the legacy
+    // "soap_note is the only session content" assumption pattern (after
+    // report_screen.dart:196 fixed in aec81a9 and _sessionIsEmpty fixed
+    // in 1ee37ba). soap_note OR notes counts as documentation; either is
+    // a tap-able review target. Tri-state visual ("Notes captured ·
+    // Generate report?") deferred to 4.0.7.34 design pass.
+    final raw      = entry.rawData;
+    final hasSoap  = (raw?['soap_note'] as String?)?.trim().isNotEmpty == true;
+    final hasNotes = (raw?['notes']     as String?)?.trim().isNotEmpty == true;
+    final hasNote  = hasSoap || hasNotes;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
