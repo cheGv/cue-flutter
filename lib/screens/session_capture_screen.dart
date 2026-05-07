@@ -43,6 +43,7 @@ import '../services/session_archive_service.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/voice_note_sheet.dart';
+import 'report_screen.dart';
 
 class SessionCaptureScreen extends StatefulWidget {
   final String    clientId;
@@ -191,6 +192,13 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
   bool    _saving = false;
   int     _consecutiveAutoSaveFailures = 0;
   bool    _offlineBannerDismissed = false;
+  // Phase 4.0.7.31-unified-save-flow — empty-save guard. Set true when
+  // the SLP taps Save (or Save & Generate) with no prose AND no
+  // population_payload entries; renders the inline "Add notes or fill a
+  // detail to save." annotation under the action row. Reset on the next
+  // input event by _onAnyInputChanged so the annotation disappears the
+  // moment the SLP starts typing.
+  bool    _emptySaveAttempt = false;
 
   static const Duration _autoSavePeriod = Duration(seconds: 30);
 
@@ -200,6 +208,22 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
     _selectedDate = widget.selectedDate ?? DateTime.now();
     _loadClinicalArea();
     _autosaveTimer = Timer.periodic(_autoSavePeriod, (_) => _autoSaveTick());
+    // Empty-save annotation is dismissed by any input event.
+    _proseCtrl.addListener(_onAnyInputChanged);
+  }
+
+  void _onAnyInputChanged() {
+    if (_emptySaveAttempt) {
+      setState(() => _emptySaveAttempt = false);
+    }
+  }
+
+  bool get _hasSaveContent {
+    if (_proseCtrl.text.trim().isNotEmpty) return true;
+    for (final c in _fieldCtrls.values) {
+      if (c.text.trim().isNotEmpty) return true;
+    }
+    return false;
   }
 
   @override
@@ -229,7 +253,11 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
   }
 
   TextEditingController _ctrlFor(String fieldId) =>
-      _fieldCtrls.putIfAbsent(fieldId, TextEditingController.new);
+      _fieldCtrls.putIfAbsent(fieldId, () {
+        final c = TextEditingController();
+        c.addListener(_onAnyInputChanged);
+        return c;
+      });
 
   // Builds the population_payload map from any non-empty optional fields.
   // Returns null when nothing is filled, so we don't write `{}` and waste
@@ -328,49 +356,71 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
   }
 
   // ── Final save ─────────────────────────────────────────────────────────────
+  //
+  // Phase 4.0.7.31-unified-save-flow — _save() and _saveAndGenerate()
+  // share the same persistence path via _persistComplete(). The split
+  // lets Save snackbar+pop to the chart, while Save & Generate
+  // pushReplacement to ReportScreen with autoGenerate: true. Failure
+  // handling is identical: snackbar, no navigation, no state loss.
+
+  /// Writes (or flips) the session row to status='complete'. Returns
+  /// the session id on success, throws on failure. Auto-save banner /
+  /// counter is reset on success. Does not touch UI navigation — that's
+  /// the caller's responsibility.
+  Future<int> _persistComplete() async {
+    final prose   = _proseCtrl.text.trim();
+    final payload = _buildPopulationPayload();
+    int? sessionId = _draftSessionId;
+
+    if (sessionId == null) {
+      final uid = _supabase.auth.currentUser?.id;
+      final inserted = await _supabase
+          .from('sessions')
+          .insert({
+            'client_id':   widget.clientId,
+            'client_name': widget.clientName,
+            'date':        _formatDateIso(_selectedDate),
+            'notes':       prose,
+            'status':      'complete',
+            'user_id':     ?uid,
+          })
+          .select()
+          .single();
+      sessionId = (inserted['id'] as num?)?.toInt();
+      if (payload != null && sessionId != null) {
+        await _supabase
+            .from('sessions')
+            .update({'population_payload': payload})
+            .eq('id', sessionId);
+      }
+      _draftSessionId = sessionId;
+    } else {
+      await _supabase
+          .from('sessions')
+          .update({
+            'notes':              prose,
+            'status':             'complete',
+            'population_payload': ?payload,
+          })
+          .eq('id', sessionId);
+    }
+
+    _onAutoSaveSuccess();
+    if (sessionId == null) {
+      throw StateError('Insert returned no id');
+    }
+    return sessionId;
+  }
 
   Future<void> _save() async {
     if (_saving) return;
+    if (!_hasSaveContent) {
+      setState(() => _emptySaveAttempt = true);
+      return;
+    }
     setState(() => _saving = true);
     try {
-      final prose   = _proseCtrl.text.trim();
-      final payload = _buildPopulationPayload();
-      if (_draftSessionId == null) {
-        final uid = _supabase.auth.currentUser?.id;
-        final inserted = await _supabase
-            .from('sessions')
-            .insert({
-              'client_id':   widget.clientId,
-              'client_name': widget.clientName,
-              'date':        _formatDateIso(_selectedDate),
-              'notes':       prose,
-              'status':      'complete',
-              'user_id':     ?uid,
-            })
-            .select()
-            .single();
-        final newId = (inserted['id'] as num?)?.toInt();
-        if (payload != null && newId != null) {
-          await _supabase
-              .from('sessions')
-              .update({'population_payload': payload})
-              .eq('id', newId);
-        }
-        _draftSessionId = newId;
-      } else {
-        await _supabase
-            .from('sessions')
-            .update({
-              'notes':              prose,
-              'status':             'complete',
-              'population_payload': ?payload,
-            })
-            .eq('id', _draftSessionId!);
-      }
-
-      // Banner / counter clear on a confirmed write.
-      _onAutoSaveSuccess();
-
+      await _persistComplete();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -378,18 +428,67 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
           duration: Duration(milliseconds: 1200),
         ),
       );
-      // Brief inline confirmation, then return to the chart.
       await Future.delayed(const Duration(milliseconds: 1000));
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
+        SnackBar(content: Text('Save failed — your text is safe. Try again.')),
       );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  Future<void> _saveAndGenerate() async {
+    if (_saving) return;
+    if (!_hasSaveContent) {
+      setState(() => _emptySaveAttempt = true);
+      return;
+    }
+    setState(() => _saving = true);
+    int? sessionId;
+    try {
+      sessionId = await _persistComplete();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Save failed — your text is safe. Try again.'),
+        ),
+      );
+      setState(() => _saving = false);
+      return;
+    }
+
+    if (!mounted) return;
+    // In-memory session map mirrors the row we just persisted. No
+    // re-fetch round trip — values match what _persistComplete wrote.
+    final sessionMap = <String, dynamic>{
+      'id':          sessionId,
+      'client_id':   widget.clientId,
+      'client_name': widget.clientName,
+      'date':        _formatDateIso(_selectedDate),
+      'notes':       _proseCtrl.text.trim(),
+      'status':      'complete',
+    };
+
+    // pushReplacement so the back-button from ReportScreen returns to
+    // the client profile (AddSessionScreen also pops on the result=true
+    // path, which percolates upward), not to a stale capture screen.
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReportScreen(
+          session:      sessionMap,
+          clientName:   widget.clientName,
+          clientId:     widget.clientId,
+          autoGenerate: true,
+        ),
+      ),
+      result: true,
+    );
   }
 
   // ── Delete (soft) ──────────────────────────────────────────────────────────
@@ -768,6 +867,11 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
   }
 
   Widget _buildActionRow() {
+    // Dynamic destructive label: "Discard" before any auto-save tick
+    // has fired (no DB row yet, no soft-delete needed); "Delete session"
+    // once a draft row exists (archive_dialog runs the soft-delete).
+    final destructiveLabel =
+        _draftSessionId == null ? 'Discard' : 'Delete session';
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
       decoration: const BoxDecoration(
@@ -776,55 +880,107 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
           top: BorderSide(color: kCueBorder, width: kCueCardBorderW),
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextButton(
-            onPressed: _saving ? null : _delete,
-            style: TextButton.styleFrom(
-              foregroundColor: kCueMutedInk,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 12),
-            ),
-            child: Text(
-              'Delete session',
-              style: GoogleFonts.dmSans(
-                fontSize:   14,
-                fontWeight: FontWeight.w500,
-                color:      kCueMutedInk,
-              ),
-            ),
-          ),
-          const Spacer(),
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            style: FilledButton.styleFrom(
-              backgroundColor: kCueAmber,
-              disabledBackgroundColor: kCueAmber.withValues(alpha: 0.5),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 24, vertical: 14),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(kCueCardRadius),
-              ),
-            ),
-            child: _saving
-                ? const SizedBox(
-                    width:  18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      color:       Colors.white,
-                      strokeWidth: 2,
-                    ),
-                  )
-                : Text(
-                    'Save',
-                    style: GoogleFonts.dmSans(
-                      fontSize:   15,
-                      fontWeight: FontWeight.w600,
-                      color:      Colors.white,
-                    ),
+          Row(
+            children: [
+              // Tertiary: Discard / Delete session — muted, no border.
+              TextButton.icon(
+                onPressed: _saving ? null : _delete,
+                icon: const Icon(
+                    Icons.delete_outline, size: 18, color: kCueMutedInk),
+                label: Text(
+                  destructiveLabel,
+                  style: GoogleFonts.dmSans(
+                    fontSize:   14,
+                    fontWeight: FontWeight.w500,
+                    color:      kCueMutedInk,
                   ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 12),
+                ),
+              ),
+              const Spacer(),
+              // Secondary: Save — outlined ink, no fill.
+              OutlinedButton(
+                onPressed: _saving ? null : _save,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kCueInk,
+                  side: const BorderSide(color: kCueBorder),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(kCueCardRadius),
+                  ),
+                ),
+                child: Text(
+                  'Save',
+                  style: GoogleFonts.dmSans(
+                    fontSize:   14,
+                    fontWeight: FontWeight.w500,
+                    color:      kCueInk,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Primary: Save & Generate — filled amber + sparkle. The
+              // encouraged path; absorbs the AI-generation work the SLP
+              // would otherwise have to trigger separately on
+              // ReportScreen.
+              FilledButton.icon(
+                onPressed: _saving ? null : _saveAndGenerate,
+                style: FilledButton.styleFrom(
+                  backgroundColor: kCueAmber,
+                  disabledBackgroundColor:
+                      kCueAmber.withValues(alpha: 0.5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(kCueCardRadius),
+                  ),
+                ),
+                icon: _saving
+                    ? const SizedBox(
+                        width:  16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          color:       Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.auto_awesome, size: 16),
+                label: Text(
+                  'Save & Generate',
+                  style: GoogleFonts.dmSans(
+                    fontSize:   14,
+                    fontWeight: FontWeight.w600,
+                    color:      Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
+          // Empty-save annotation — quiet, polite, dismissed by next
+          // input event. Subtitle ink, 13px, 8px above its container's
+          // bottom edge (matches spec amendment 4 in the unified flow).
+          if (_emptySaveAttempt) ...[
+            const SizedBox(height: 8),
+            Semantics(
+              liveRegion: true,
+              child: Text(
+                'Add notes or fill a detail to save.',
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  color:    kCueSubtitleInk,
+                  height:   1.4,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

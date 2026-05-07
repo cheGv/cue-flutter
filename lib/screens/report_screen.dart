@@ -9,25 +9,38 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/session_archive_service.dart';
+import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/cue_study_icon.dart';
 import 'narrate_session_screen.dart';
 
 const _bg   = Color(0xFFF2EFE9);
 const _ink  = Color(0xFF0A0A0A);
-const _teal = Color(0xFF1D9E75);
 const _line = Color(0xFFD8D5CE);
+
+// Phase 4.0.7.31-unified-save-flow — the legacy `_teal` (0xFF1D9E75) was
+// the original Phase 2.6 clinical-action color in this screen. Replaced
+// with kCueAmber/kCueAmberDeep/kCueEyebrowInk per Phase 4.0 register.
+// The teal token still owns clinical actions on the chart screen (per
+// CLAUDE.md lock); only ReportScreen's CTAs were the visual fossil.
 
 class ReportScreen extends StatefulWidget {
   final Map<String, dynamic> session;
   final String clientName;
   final String? clientId;
+  /// Phase 4.0.7.31 — when true, kicks off `_generateReport()` on first
+  /// frame after mount (only if the session doesn't already have a saved
+  /// note). Set by SessionCaptureScreen's Save & Generate flow. Default
+  /// false preserves legacy behavior on the timeline + narrate entry
+  /// points.
+  final bool autoGenerate;
 
   const ReportScreen({
     super.key,
     required this.session,
     required this.clientName,
     this.clientId,
+    this.autoGenerate = false,
   });
 
   @override
@@ -107,6 +120,20 @@ class _ReportScreenState extends State<ReportScreen> {
     final savedNote = widget.session['soap_note'] as String?;
     if (savedNote != null && savedNote.trim().isNotEmpty) {
       _initFromSavedNote(savedNote.trim());
+    }
+    // Phase 4.0.7.31-unified-save-flow — auto-trigger generation on the
+    // Save & Generate path. Skip when a note is already saved (legacy
+    // entry points re-use this screen for review/edit) or when the
+    // session is so empty there's nothing to generate from. The post-
+    // frame schedule defers the first setState until after build, so
+    // the loading spinner appears on the second frame instead of fighting
+    // the initial paint.
+    if (widget.autoGenerate &&
+        !_hasSavedNote &&
+        !_sessionIsEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _generateReport();
+      });
     }
   }
 
@@ -193,7 +220,13 @@ class _ReportScreenState extends State<ReportScreen> {
       final prompted = '${s['prompted_responses'] ?? 0}';
       final goalMet = '${s['goal_met'] ?? ''}';
       final affect = '${s['client_affect'] ?? ''}';
-      final notes = '${s['next_session_focus'] ?? ''}';
+      // Phase 4.0.7.31-unified-save-flow — prose now lives in
+      // `sessions.notes` (SessionCaptureScreen 4.0.7.28). Legacy wizard
+      // rows wrote `next_session_focus` instead. Read both, prefer the
+      // new column. Without this fix Save & Generate ships an empty
+      // observation slot and the AI degrades to Mode A/EMPTY.
+      final notes =
+          '${s['notes'] ?? s['next_session_focus'] ?? ''}';
       final name = widget.clientName;
 
       final goalsList = goals
@@ -1109,9 +1142,9 @@ class _ReportScreenState extends State<ReportScreen> {
                           child: FilledButton.icon(
                             onPressed: _isLoading ? null : _generateReport,
                             style: FilledButton.styleFrom(
-                              backgroundColor: _teal,
+                              backgroundColor: kCueAmber,
                               disabledBackgroundColor:
-                                  _teal.withValues(alpha: 0.5),
+                                  kCueAmber.withValues(alpha: 0.5),
                               padding: const EdgeInsets.symmetric(
                                   vertical: 16),
                               shape: RoundedRectangleBorder(
@@ -1139,18 +1172,21 @@ class _ReportScreenState extends State<ReportScreen> {
                       // ── Error ─────────────────────────────────────────────
                       if (_error != null) ...[
                         const SizedBox(height: 16),
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color:        Colors.red.shade50,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.red.shade200),
+                        if (widget.autoGenerate)
+                          _buildAutoGenerateRecoveryCard()
+                        else
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color:        Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Text(_error!,
+                                style: TextStyle(
+                                    color: Colors.red.shade800,
+                                    fontSize: 14)),
                           ),
-                          child: Text(_error!,
-                              style: TextStyle(
-                                  color: Colors.red.shade800,
-                                  fontSize: 14)),
-                        ),
                       ],
 
                       // ── Session context card ───────────────────────────────
@@ -1176,7 +1212,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               FilledButton.icon(
                                 onPressed: _downloadPdf,
                                 style: FilledButton.styleFrom(
-                                  backgroundColor: _teal,
+                                  backgroundColor: kCueAmber,
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 20, vertical: 12),
                                   shape: RoundedRectangleBorder(
@@ -1227,7 +1263,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               value:    _attested,
                               onChanged: (v) =>
                                   setState(() => _attested = v ?? false),
-                              activeColor: _teal,
+                              activeColor: kCueAmber,
                             ),
                             const Expanded(
                               child: Text(
@@ -1246,8 +1282,8 @@ class _ReportScreenState extends State<ReportScreen> {
                             onPressed: _savingNote ? null : _saveSoapNote,
                             style: FilledButton.styleFrom(
                               backgroundColor: _attested
-                                  ? _teal
-                                  : _teal.withValues(alpha: 0.45),
+                                  ? kCueAmber
+                                  : kCueAmber.withValues(alpha: 0.45),
                               padding: const EdgeInsets.symmetric(
                                   vertical: 14),
                               shape: RoundedRectangleBorder(
@@ -1452,6 +1488,96 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
+  // Phase 4.0.7.31-unified-save-flow — recovery card shown when the
+  // autoGenerate path's first attempt fails. The notes are already
+  // persisted (Save & Generate writes status='complete' before
+  // navigating), so the SLP's work is safe regardless. Two outs:
+  // retry the AI call, or fall back to writing the report manually
+  // (which just opens the SOAP form in edit mode).
+  Widget _buildAutoGenerateRecoveryCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color:        kCueAmberSurface,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Notes are saved. The AI couldn't draft a report this time "
+            "— try again, or write the report yourself.",
+            style: GoogleFonts.dmSans(
+              fontSize: 14,
+              color:    kCueAmberText,
+              height:   1.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              FilledButton.icon(
+                onPressed: _isLoading ? null : _generateReport,
+                style: FilledButton.styleFrom(
+                  backgroundColor: kCueAmber,
+                  disabledBackgroundColor:
+                      kCueAmber.withValues(alpha: 0.5),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(kCueCardRadius),
+                  ),
+                ),
+                icon: _isLoading
+                    ? const SizedBox(
+                        width: 14, height: 14,
+                        child: CircularProgressIndicator(
+                          color:       Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : const Icon(Icons.refresh, size: 16),
+                label: Text(
+                  _isLoading ? 'Retrying…' : 'Retry generation',
+                  style: GoogleFonts.dmSans(
+                    fontSize:   14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton(
+                onPressed: () => setState(() {
+                  _error = null;
+                  _showNoteFields = true;
+                }),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: kCueInk,
+                  side: const BorderSide(color: kCueBorder),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(kCueCardRadius),
+                  ),
+                ),
+                child: Text(
+                  'Write it myself',
+                  style: GoogleFonts.dmSans(
+                    fontSize:   14,
+                    fontWeight: FontWeight.w500,
+                    color:      kCueInk,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEmptySessionState() {
     return Center(
       child: ConstrainedBox(
@@ -1486,8 +1612,8 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _teal,
-                side: const BorderSide(color: _teal),
+                foregroundColor: kCueAmberDeep,
+                side: const BorderSide(color: kCueAmberDeep),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
@@ -1582,10 +1708,10 @@ class _ReportScreenState extends State<ReportScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w700,
-              color: Colors.teal.shade600,
+              color: kCueEyebrowInk,
               letterSpacing: 0.6,
             ),
           ),
@@ -1613,7 +1739,7 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(color: Colors.teal),
+                borderSide: const BorderSide(color: kCueAmber),
               ),
             ),
           ),
@@ -1626,10 +1752,10 @@ class _ReportScreenState extends State<ReportScreen> {
       children: [
         Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w700,
-            color: Colors.teal.shade600,
+            color: kCueEyebrowInk,
             letterSpacing: 0.6,
           ),
         ),
