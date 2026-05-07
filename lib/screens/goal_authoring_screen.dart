@@ -804,8 +804,17 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
                       height: 1.55,
                     ),
                     decoration: InputDecoration(
-                      hintText:
-                          'What\'s your current working hypothesis about this child?',
+                      // Phase 4.0.7.31f — suppress hint while the Deepgram
+                      // interim overlay is rendering. Hint paints at 13px,
+                      // overlay text paints at 14px → mismatched baselines
+                      // produce a visible double-text-stream during the
+                      // interim window. Once a final lands and
+                      // _interimPreview resets, hint behavior returns to
+                      // normal (Flutter clears it on first controller
+                      // character). Manual-typing path is unaffected.
+                      hintText: _interimPreview.isEmpty
+                          ? 'What\'s your current working hypothesis about this child?'
+                          : null,
                       hintStyle:
                           const TextStyle(fontSize: 13, color: _inkGhost),
                       filled: true,
