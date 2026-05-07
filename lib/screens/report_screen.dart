@@ -733,7 +733,21 @@ class _ReportScreenState extends State<ReportScreen> {
       _asInt(widget.session['independent_responses']) > 0 ||
       _asInt(widget.session['prompted_responses']) > 0;
 
-  bool get _sessionIsEmpty => !_hasSavedNote && !_hasTranscript && !_hasTrialData;
+  // Phase 4.0.7.31a-hotfix — symmetric to the line-196 notes-vs-
+  // next_session_focus fix in aec81a9. The unified-flow session shape
+  // (SessionCaptureScreen Save & Generate) carries prose in `notes` with
+  // transcript NULL and no wizard fields. Without this getter
+  // _sessionIsEmpty returned true and the autoGenerate gate refused to
+  // fire. Also flips the build-tree branching for notes-only sessions
+  // re-opened from the timeline: they now reach the Generate Report CTA
+  // instead of the (incoherent) "Open Narrator" empty state.
+  bool get _hasNotes {
+    final v = widget.session['notes'] as String?;
+    return v != null && v.trim().isNotEmpty;
+  }
+
+  bool get _sessionIsEmpty =>
+      !_hasSavedNote && !_hasTranscript && !_hasTrialData && !_hasNotes;
 
   bool get _soapIsEmpty =>
       _sCtrl.text.trim().isEmpty &&
