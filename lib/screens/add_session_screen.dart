@@ -71,15 +71,15 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
 
   Future<void> _loadActiveStg() async {
     try {
-      // Phase 4.0.7.27d-stg-focus-resolver-fix — STG text lives in
-      // `specific` for every proxy-generated STG (v1 and v2). `goal_text`
-      // and `target_behavior` are legacy columns kept for back-compat
-      // with prototype-era rows. Fallback chain matches every other STG
-      // reader in the codebase (pre_session_brief, chart_context,
-      // client_profile_screen).
+      // Phase 4.0.7.27d-stg-focus-resolver-fix2 — STG text lives in
+      // `specific` for every proxy-generated STG (v1 and v2);
+      // `target_behavior` is the prototype-era fallback. `goal_text`
+      // does not exist on short_term_goals — selecting it 400s the
+      // request. Backlogged: 4.0.7.30-stg-resolver-audit (other
+      // readers still request goal_text and survive via catch blocks).
       final rows = await _supabase
           .from('short_term_goals')
-          .select('goal_text, specific, target_behavior')
+          .select('specific, target_behavior')
           .eq('client_id', widget.clientId)
           .eq('status', 'active')
           .limit(1);
@@ -87,7 +87,6 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
         final row = rows.isNotEmpty ? rows.first : null;
         final text = row != null
             ? ((row['specific'] as String?)
-                ?? (row['goal_text'] as String?)
                 ?? (row['target_behavior'] as String?)
                 ?? '').trim()
             : null;
