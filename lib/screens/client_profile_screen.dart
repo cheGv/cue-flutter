@@ -1039,6 +1039,78 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                   final isEmptyChart =
                                       !hasSessions && !hasActiveLtgs;
 
+                                  // Phase 4.0.7.27e-cue-noticed-draft-aware
+                                  // — when the chart's only signal is
+                                  // pending_attestation drafts (no
+                                  // sessions, no active LTGs), Cue HAS
+                                  // noticed something — it authored
+                                  // those drafts. Render attestation-
+                                  // aware copy here instead of falling
+                                  // through to the generic "story
+                                  // starts here" empty-state. Templated
+                                  // (no LLM fetch) so chart_context
+                                  // shape and proxy availability don't
+                                  // gate the message.
+                                  final draftLtgs = readySnap.data!.spine.ltgs
+                                      .where((l) =>
+                                          (l['status'] as String?) ==
+                                          'pending_attestation')
+                                      .toList();
+                                  final hasDraftLtgs = draftLtgs.isNotEmpty;
+
+                                  if (!hasSessions &&
+                                      !hasActiveLtgs &&
+                                      hasDraftLtgs) {
+                                    // Domain word from the dominant
+                                    // domain across drafts. Mixed-domain
+                                    // or unrecognized → drop the word
+                                    // ("Cue drafted 2 goals from the
+                                    // intake — review when you're
+                                    // ready.").
+                                    final domains = draftLtgs
+                                        .map((l) => (l['domain'] as String?)
+                                            ?.toUpperCase())
+                                        .where((d) =>
+                                            d != null && d.isNotEmpty)
+                                        .toSet();
+                                    String domainWord = '';
+                                    if (domains.length == 1) {
+                                      final d = domains.first!;
+                                      domainWord = const {
+                                        'AUT':   'autism',
+                                        'FLU':   'fluency',
+                                        'VOI':   'voice',
+                                        'ALD':   'language and cognitive',
+                                        'CAS':   'speech-motor',
+                                        'DYS':   'dysarthria',
+                                        'AAC':   'AAC',
+                                        'SSD':   'speech-sound',
+                                        'LIT':   'literacy',
+                                        'HEAR':  'hearing-aural',
+                                        'DYSPH': 'dysphagia',
+                                      }[d] ?? '';
+                                    }
+                                    final n          = draftLtgs.length;
+                                    final pluralS    = n == 1 ? '' : 's';
+                                    final domainPart = domainWord.isNotEmpty
+                                        ? '$domainWord '
+                                        : '';
+                                    return BriefThoughtCard(
+                                      thought:
+                                          'Cue drafted $n $domainPart'
+                                          'goal$pluralS from the intake '
+                                          "— review when you're ready.",
+                                      highlight:
+                                          "review when you're ready",
+                                      onThinkWithCue: _openCueStudySheet,
+                                      padding: EdgeInsets.fromLTRB(
+                                          hPad,
+                                          CueGap.s24,
+                                          hPad,
+                                          CueGap.s24),
+                                    );
+                                  }
+
                                   if (isEmptyChart) {
                                     // Phase 3.2.3 — name carries the
                                     // warmth, no gendered pronoun. The
