@@ -1064,9 +1064,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                     // Domain word from the dominant
                                     // domain across drafts. Mixed-domain
                                     // or unrecognized → drop the word
-                                    // ("Cue drafted 2 goals from the
-                                    // intake — review when you're
-                                    // ready.").
+                                    // ("3 goals waiting for Girish.").
                                     final domains = draftLtgs
                                         .map((l) => (l['domain'] as String?)
                                             ?.toUpperCase())
@@ -1095,13 +1093,25 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                     final domainPart = domainWord.isNotEmpty
                                         ? '$domainWord '
                                         : '';
+                                    // Phase 4.0.7.27e-cue-noticed-copy
+                                    // -revise — Indian English clinical
+                                    // register. firstName mirrors the
+                                    // pattern used in the isEmptyChart
+                                    // branch below; drops the "for X"
+                                    // tail gracefully when name absent.
+                                    final firstName = NameFormatter
+                                        .firstNameForGreeting(clientName);
+                                    final waitingFor = (firstName != null &&
+                                            firstName.isNotEmpty)
+                                        ? ' for $firstName'
+                                        : '';
                                     return BriefThoughtCard(
                                       thought:
-                                          'Cue drafted $n $domainPart'
-                                          'goal$pluralS from the intake '
-                                          "— review when you're ready.",
+                                          '$n $domainPart'
+                                          'goal$pluralS waiting$waitingFor.'
+                                          ' Have a look when you can.',
                                       highlight:
-                                          "review when you're ready",
+                                          'Have a look when you can',
                                       onThinkWithCue: _openCueStudySheet,
                                       padding: EdgeInsets.fromLTRB(
                                           hPad,
