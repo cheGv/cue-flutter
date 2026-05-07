@@ -10,11 +10,16 @@ import 'parent_interview_fluency_screen.dart';
 class SessionNoteScreen extends StatefulWidget {
   final String clientId;
   final String clientName;
+  // Phase 4.0.7.27d-typed-notes-routing-fix — date threaded from
+  // AddSessionScreen so the SLP's pick survives. Falls back to today
+  // when invoked without a date (back-compat).
+  final DateTime? selectedDate;
 
   const SessionNoteScreen({
     super.key,
     required this.clientId,
     required this.clientName,
+    this.selectedDate,
   });
 
   @override
@@ -242,7 +247,9 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
     try {
       await _supabase.from('sessions').insert({
         'client_id': widget.clientId,
-        'date': DateTime.now().toIso8601String().substring(0, 10),
+        'date': (widget.selectedDate ?? DateTime.now())
+            .toIso8601String()
+            .substring(0, 10),
         'barrier_motor': _barrierMotor,
         'barrier_linguistic': _barrierLinguistic,
         'barrier_cognitive': _barrierCognitive,

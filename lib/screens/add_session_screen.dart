@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import 'narrate_session_screen.dart';
-import 'report_screen.dart';
+import 'session_note_screen.dart';
 // Phase 4.0.7.27d-population-router-removal — SessionModePickerView no
 // longer routed to. Kept in repo as orphan code for Phase 2 multi-domain
 // rebuild. The import is dropped here; re-add when routing is restored.
@@ -152,19 +152,18 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   }
 
   Future<void> _addManually() async {
-    setState(() => _saving = true);
-    final session = await _createSession();
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (session == null) return;
-
+    // Phase 4.0.7.27d-typed-notes-routing-fix — route to SessionNoteScreen
+    // (the typed-input wizard) instead of ReportScreen (which renders an
+    // "Open Narrator" empty state for fresh sessions). SessionNoteScreen
+    // owns its own session row insertion in _save(); we no longer pre-
+    // create a session here, which would have left a duplicate row.
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => ReportScreen(
-          session:    session,
-          clientName: widget.clientName,
-          clientId:   widget.clientId,
+        builder: (_) => SessionNoteScreen(
+          clientId:     widget.clientId,
+          clientName:   widget.clientName,
+          selectedDate: _selectedDate,
         ),
       ),
     );
