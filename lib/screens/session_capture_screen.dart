@@ -1,0 +1,832 @@
+// lib/screens/session_capture_screen.dart
+//
+// Phase 4.0.7.28-session-capture-v1 — Prose-first session capture screen.
+// Replaces the 6-step SessionNoteScreen wizard as the destination of
+// AddSessionScreen's "Type session notes" button. SessionNoteScreen is
+// kept in the repo as orphan code for the Phase 2 multi-domain rebuild;
+// this screen owns every clinical_area uniformly.
+//
+// Architectural locks (don't deviate without a phase note):
+//   1. Domain awareness reads `clients.clinical_area` (16-code taxonomy
+//      from lib/constants/clinical_areas.dart), NOT `population_type`.
+//   2. Auto-save every 30s while the prose textarea is non-empty.
+//   3. Prose stays editable forever — no lock state.
+//   4. Single textarea — voice (VoiceNoteSheet, Web Speech API) and
+//      typed text interleave in the same controller.
+//   5. Soft-delete via session_archive_service (deleted_at/by/reason).
+//
+// Sessions table contract (verified against live schema):
+//   - INSERT shape on first save: client_id, client_name, date, notes,
+//     status, user_id (six columns). All other columns rely on schema
+//     defaults.
+//   - status enum: 'draft' | 'complete' | 'error'. Auto-save writes
+//     'draft'; final save writes 'complete'. The legacy 'captured' value
+//     would have failed a CHECK constraint.
+//   - Optional structured fields (Add details panel) write to
+//     population_payload (jsonb) via UPDATE on subsequent auto-saves and
+//     on final save. Never on the initial INSERT — preserves the locked
+//     six-column shape.
+//
+// Auto-save failure UX (per Phase 4.0.7.28 amendment 4):
+//   - Tick 1 fail   → silent retry next tick.
+//   - Tick 2 fail   → snackbar "Auto-save couldn't reach the server".
+//   - Tick 3+ fail  → persistent dismissable amber banner at top of body.
+//   - On any successful save: reset both the failure counter and the
+//     dismiss state.
+
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/session_archive_service.dart';
+import '../theme/cue_phase4_tokens.dart';
+import '../widgets/app_layout.dart';
+import '../widgets/voice_note_sheet.dart';
+
+class SessionCaptureScreen extends StatefulWidget {
+  final String    clientId;
+  final String    clientName;
+  final DateTime? selectedDate;
+
+  const SessionCaptureScreen({
+    super.key,
+    required this.clientId,
+    required this.clientName,
+    this.selectedDate,
+  });
+
+  @override
+  State<SessionCaptureScreen> createState() => _SessionCaptureScreenState();
+}
+
+// ── Domain-aware optional fields ─────────────────────────────────────────────
+//
+// Field IDs are stable JSONB keys for population_payload — do not rename
+// after they ship. Labels are SLP-facing; placeholder uses the same copy
+// rendered in muted ink.
+//
+// Six clinical_area codes get bespoke field sets; the remaining ten fall
+// through to the generic _kAllOthersFields default. Phase 4.0.7.29 will
+// route `aac` to the autism-developmental field set.
+
+class _CaptureField {
+  final String id;
+  final String label;
+  final bool   multiline; // 2-line for "what was tried", else 1-line.
+  const _CaptureField({
+    required this.id,
+    required this.label,
+    this.multiline = false,
+  });
+}
+
+const _CaptureField _fTriedToday = _CaptureField(
+  id: 'tried_today',
+  label: 'What was tried today?',
+  multiline: true,
+);
+const _CaptureField _fRegulatoryState = _CaptureField(
+  id: 'regulatory_state',
+  label: 'Regulatory state observed',
+);
+const _CaptureField _fFamilyObservation = _CaptureField(
+  id: 'family_observation',
+  label: 'Family / caregiver observation',
+);
+const _CaptureField _fNextSessionNote = _CaptureField(
+  id: 'next_session_note',
+  label: 'Anything to remember for next session',
+);
+const _CaptureField _fStutteringQualitative = _CaptureField(
+  id: 'stuttering_qualitative',
+  label: 'Stuttering observed (qualitative)',
+);
+const _CaptureField _fStrategiesTried = _CaptureField(
+  id: 'strategies_tried',
+  label: 'Strategies tried',
+);
+const _CaptureField _fAvoidance = _CaptureField(
+  id: 'avoidance_noticed',
+  label: 'Avoidance noticed',
+);
+const _CaptureField _fVocalQuality = _CaptureField(
+  id: 'vocal_quality',
+  label: 'Vocal quality observed',
+);
+const _CaptureField _fCommunicationStrategies = _CaptureField(
+  id: 'communication_strategies',
+  label: 'Communication strategies used',
+);
+const _CaptureField _fFamilyOrPartner = _CaptureField(
+  id: 'family_or_partner_observation',
+  label: 'Family / partner observation',
+);
+const _CaptureField _fSpeechProduction = _CaptureField(
+  id: 'speech_production',
+  label: 'Speech production observed',
+);
+
+const List<_CaptureField> _kAutismFields = [
+  _fTriedToday, _fRegulatoryState, _fFamilyObservation, _fNextSessionNote,
+];
+const List<_CaptureField> _kFluencyFields = [
+  _fStutteringQualitative, _fStrategiesTried, _fAvoidance, _fNextSessionNote,
+];
+const List<_CaptureField> _kVoiceFields = [
+  _fVocalQuality, _fStrategiesTried, _fFamilyObservation, _fNextSessionNote,
+];
+const List<_CaptureField> _kAdultLanguageFields = [
+  _fTriedToday, _fCommunicationStrategies, _fFamilyOrPartner, _fNextSessionNote,
+];
+const List<_CaptureField> _kPediatricDysarthriaFields = [
+  _fSpeechProduction, _fStrategiesTried, _fFamilyObservation, _fNextSessionNote,
+];
+const List<_CaptureField> _kDysphagiaFields = [
+  _fTriedToday, _fFamilyObservation, _fNextSessionNote,
+];
+const List<_CaptureField> _kAllOthersFields = [
+  _fTriedToday, _fFamilyObservation, _fNextSessionNote,
+];
+
+List<_CaptureField> _fieldsFor(String? clinicalArea) {
+  switch (clinicalArea) {
+    case 'autism-developmental':     return _kAutismFields;
+    case 'fluency':                  return _kFluencyFields;
+    case 'voice':                    return _kVoiceFields;
+    case 'adult-language-cognitive': return _kAdultLanguageFields;
+    case 'pediatric-dysarthria':     return _kPediatricDysarthriaFields;
+    case 'dysphagia':                return _kDysphagiaFields;
+    default:                         return _kAllOthersFields;
+  }
+}
+
+// ── Date formatting ──────────────────────────────────────────────────────────
+const List<String> _kMonthNames = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+String _formatDateLong(DateTime d) =>
+    '${d.day} ${_kMonthNames[d.month - 1]} ${d.year}';
+
+String _formatDateIso(DateTime d) =>
+    d.toIso8601String().substring(0, 10);
+
+// ── State ────────────────────────────────────────────────────────────────────
+
+class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
+  final _supabase = Supabase.instance.client;
+  final _proseCtrl = TextEditingController();
+
+  // Optional-field controllers, keyed by field id. Lazily populated as
+  // the SLP expands the Add details panel.
+  final Map<String, TextEditingController> _fieldCtrls = {};
+
+  late DateTime _selectedDate;
+  String? _clinicalArea;
+  bool    _detailsExpanded = false;
+  int?    _draftSessionId;
+  Timer?  _autosaveTimer;
+  bool    _saving = false;
+  int     _consecutiveAutoSaveFailures = 0;
+  bool    _offlineBannerDismissed = false;
+
+  static const Duration _autoSavePeriod = Duration(seconds: 30);
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = widget.selectedDate ?? DateTime.now();
+    _loadClinicalArea();
+    _autosaveTimer = Timer.periodic(_autoSavePeriod, (_) => _autoSaveTick());
+  }
+
+  @override
+  void dispose() {
+    _autosaveTimer?.cancel();
+    _proseCtrl.dispose();
+    for (final c in _fieldCtrls.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _loadClinicalArea() async {
+    try {
+      final row = await _supabase
+          .from('clients')
+          .select('clinical_area')
+          .eq('id', widget.clientId)
+          .isFilter('deleted_at', null)
+          .maybeSingle();
+      if (!mounted) return;
+      setState(() => _clinicalArea = row?['clinical_area'] as String?);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _clinicalArea = null); // falls through to ALL OTHERS
+    }
+  }
+
+  TextEditingController _ctrlFor(String fieldId) =>
+      _fieldCtrls.putIfAbsent(fieldId, TextEditingController.new);
+
+  // Builds the population_payload map from any non-empty optional fields.
+  // Returns null when nothing is filled, so we don't write `{}` and waste
+  // the JSONB slot.
+  Map<String, String>? _buildPopulationPayload() {
+    final out = <String, String>{};
+    for (final entry in _fieldCtrls.entries) {
+      final v = entry.value.text.trim();
+      if (v.isNotEmpty) out[entry.key] = v;
+    }
+    return out.isEmpty ? null : out;
+  }
+
+  // ── Auto-save ──────────────────────────────────────────────────────────────
+
+  Future<void> _autoSaveTick() async {
+    if (!mounted) return;
+    final prose = _proseCtrl.text.trim();
+    // Empty textarea — pause. Don't create a draft row for nothing, and
+    // don't blank out an existing draft (the SLP may erase momentarily
+    // between thoughts).
+    if (prose.isEmpty) return;
+
+    try {
+      if (_draftSessionId == null) {
+        // First persistence — INSERT the locked six-column shape with
+        // status='draft'. population_payload (if any) follows in a
+        // subsequent UPDATE so the INSERT shape stays canonical.
+        final uid = _supabase.auth.currentUser?.id;
+        final inserted = await _supabase
+            .from('sessions')
+            .insert({
+              'client_id':   widget.clientId,
+              'client_name': widget.clientName,
+              'date':        _formatDateIso(_selectedDate),
+              'notes':       prose,
+              'status':      'draft',
+              'user_id':     ?uid,
+            })
+            .select()
+            .single();
+        if (!mounted) return;
+        setState(() {
+          _draftSessionId = (inserted['id'] as num?)?.toInt();
+        });
+        // If the SLP filled optional fields before the first tick fired,
+        // flush them now so the draft row carries them too.
+        final payload = _buildPopulationPayload();
+        if (payload != null && _draftSessionId != null) {
+          await _supabase
+              .from('sessions')
+              .update({'population_payload': payload})
+              .eq('id', _draftSessionId!);
+        }
+      } else {
+        // Subsequent ticks — UPDATE prose + population_payload on the
+        // existing draft row. status stays 'draft' until final save.
+        final payload = _buildPopulationPayload();
+        await _supabase
+            .from('sessions')
+            .update({
+              'notes':              prose,
+              'population_payload': ?payload,
+            })
+            .eq('id', _draftSessionId!);
+      }
+      _onAutoSaveSuccess();
+    } catch (_) {
+      _onAutoSaveFailure();
+    }
+  }
+
+  void _onAutoSaveSuccess() {
+    if (!mounted) return;
+    if (_consecutiveAutoSaveFailures != 0 || _offlineBannerDismissed) {
+      setState(() {
+        _consecutiveAutoSaveFailures = 0;
+        _offlineBannerDismissed = false;
+      });
+    }
+  }
+
+  void _onAutoSaveFailure() {
+    if (!mounted) return;
+    setState(() => _consecutiveAutoSaveFailures += 1);
+    // Tick 1: silent. Tick 2: snackbar. Tick 3+: persistent banner.
+    if (_consecutiveAutoSaveFailures == 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Auto-save couldn't reach the server. We'll keep trying."),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+    // Banner visibility is computed in build() — no separate toggle.
+  }
+
+  // ── Final save ─────────────────────────────────────────────────────────────
+
+  Future<void> _save() async {
+    if (_saving) return;
+    setState(() => _saving = true);
+    try {
+      final prose   = _proseCtrl.text.trim();
+      final payload = _buildPopulationPayload();
+      if (_draftSessionId == null) {
+        final uid = _supabase.auth.currentUser?.id;
+        final inserted = await _supabase
+            .from('sessions')
+            .insert({
+              'client_id':   widget.clientId,
+              'client_name': widget.clientName,
+              'date':        _formatDateIso(_selectedDate),
+              'notes':       prose,
+              'status':      'complete',
+              'user_id':     ?uid,
+            })
+            .select()
+            .single();
+        final newId = (inserted['id'] as num?)?.toInt();
+        if (payload != null && newId != null) {
+          await _supabase
+              .from('sessions')
+              .update({'population_payload': payload})
+              .eq('id', newId);
+        }
+        _draftSessionId = newId;
+      } else {
+        await _supabase
+            .from('sessions')
+            .update({
+              'notes':              prose,
+              'status':             'complete',
+              'population_payload': ?payload,
+            })
+            .eq('id', _draftSessionId!);
+      }
+
+      // Banner / counter clear on a confirmed write.
+      _onAutoSaveSuccess();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Saved.'),
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
+      // Brief inline confirmation, then return to the chart.
+      await Future.delayed(const Duration(milliseconds: 1000));
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Save failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  // ── Delete (soft) ──────────────────────────────────────────────────────────
+
+  Future<void> _delete() async {
+    // No draft persisted yet → simple confirm-and-pop. Nothing to archive.
+    if (_draftSessionId == null) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Discard this session?'),
+          content: const Text(
+            "You haven't saved anything yet. Anything you've typed will be lost.",
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Keep editing'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+      if (discard == true && mounted) Navigator.pop(context, true);
+      return;
+    }
+
+    // Draft exists → soft-delete via the shared archive service. The
+    // service owns the confirm dialog + reason picker + PATCH.
+    final archived = await archiveSession(
+      context: context,
+      session: {'id': _draftSessionId},
+    );
+    if (archived && mounted) Navigator.pop(context, true);
+  }
+
+  // ── Date picker ────────────────────────────────────────────────────────────
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate:   DateTime(2020),
+      lastDate:    DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary:   kCueAmber,
+            onPrimary: Colors.white,
+            surface:   Colors.white,
+            onSurface: kCueInk,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  // ── Voice dictation ────────────────────────────────────────────────────────
+
+  Future<void> _openDictate() async {
+    final transcript = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const VoiceNoteSheet(
+        eyebrow:  'voice note',
+        subtitle: 'Speak freely. Transcript appends to your notes.',
+      ),
+    );
+    if (transcript == null || transcript.trim().isEmpty || !mounted) return;
+    // Append (don't overwrite). Two newlines as a paragraph separator
+    // when the existing prose isn't empty.
+    final existing = _proseCtrl.text;
+    final separator = existing.trim().isEmpty ? '' : '\n\n';
+    _proseCtrl.text = '$existing$separator${transcript.trim()}';
+    _proseCtrl.selection = TextSelection.collapsed(
+      offset: _proseCtrl.text.length,
+    );
+    setState(() {});
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
+  bool get _showOfflineBanner =>
+      _consecutiveAutoSaveFailures >= 3 && !_offlineBannerDismissed;
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = _fieldsFor(_clinicalArea);
+    return AppLayout(
+      title: 'Session — ${widget.clientName}',
+      activeRoute: 'roster',
+      body: Column(
+        children: [
+          if (_showOfflineBanner) _buildOfflineBanner(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildDateRow(),
+                      const SizedBox(height: 28),
+                      _buildProseSection(),
+                      const SizedBox(height: 12),
+                      _buildDictateAndDetailsRow(),
+                      if (_detailsExpanded) ...[
+                        const SizedBox(height: 16),
+                        _buildDetailsPanel(fields),
+                      ],
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          _buildActionRow(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfflineBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      decoration: const BoxDecoration(
+        color: kCueAmberSurface,
+        border: Border(
+          bottom: BorderSide(color: kCueBorder, width: kCueCardBorderW),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.cloud_off, size: 18, color: kCueAmberDeeper),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              "Auto-save offline — your text is safe locally until you tap Save.",
+              style: GoogleFonts.dmSans(
+                fontSize:   13,
+                color:      kCueAmberText,
+                height:     1.4,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            color: kCueAmberDeeper,
+            tooltip: 'Dismiss',
+            onPressed: () =>
+                setState(() => _offlineBannerDismissed = true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateRow() {
+    return InkWell(
+      onTap: _pickDate,
+      borderRadius: BorderRadius.circular(kCueCardRadius),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            const Icon(Icons.event, size: 18, color: kCueMutedInk),
+            const SizedBox(width: 10),
+            Text(
+              _formatDateLong(_selectedDate),
+              style: GoogleFonts.dmSans(
+                fontSize:   16,
+                fontWeight: FontWeight.w500,
+                color:      kCueInk,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '· tap to change',
+              style: GoogleFonts.dmSans(
+                fontSize: 13,
+                color:    kCueSubtitleInk,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProseSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'What happened today?',
+          style: GoogleFonts.dmSans(
+            fontSize:   22,
+            fontWeight: FontWeight.w500,
+            color:      kCueInk,
+            height:     1.3,
+          ),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _proseCtrl,
+          minLines: 8,
+          maxLines: null,
+          keyboardType: TextInputType.multiline,
+          style: GoogleFonts.dmSans(
+            fontSize: 15,
+            color:    kCueInk,
+            height:   1.55,
+          ),
+          decoration: InputDecoration(
+            hintText: 'Type or speak — write it however you remember it.',
+            hintStyle: GoogleFonts.dmSans(
+              fontSize:  15,
+              color:     kCueSubtitleInk,
+              height:    1.55,
+              fontStyle: FontStyle.italic,
+            ),
+            filled: true,
+            fillColor: kCueSurface,
+            contentPadding: const EdgeInsets.all(16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(kCueCardRadius),
+              borderSide: const BorderSide(
+                color: kCueBorder,
+                width: kCueCardBorderW,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(kCueCardRadius),
+              borderSide: const BorderSide(
+                color: kCueBorder,
+                width: kCueCardBorderW,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(kCueCardRadius),
+              borderSide: const BorderSide(
+                color: kCueAmber,
+                width: 1.0,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDictateAndDetailsRow() {
+    return Row(
+      children: [
+        TextButton.icon(
+          onPressed: _openDictate,
+          icon: const Icon(Icons.mic_none, size: 18, color: kCueAmberDeep),
+          label: Text(
+            'Dictate',
+            style: GoogleFonts.dmSans(
+              fontSize:   14,
+              fontWeight: FontWeight.w500,
+              color:      kCueAmberDeep,
+            ),
+          ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          ),
+        ),
+        const Spacer(),
+        TextButton.icon(
+          onPressed: () =>
+              setState(() => _detailsExpanded = !_detailsExpanded),
+          icon: Icon(
+            _detailsExpanded
+                ? Icons.keyboard_arrow_up
+                : Icons.keyboard_arrow_down,
+            size: 18,
+            color: kCueMutedInk,
+          ),
+          label: Text(
+            _detailsExpanded ? 'Hide details' : 'Add details',
+            style: GoogleFonts.dmSans(
+              fontSize:   14,
+              fontWeight: FontWeight.w500,
+              color:      kCueMutedInk,
+            ),
+          ),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailsPanel(List<_CaptureField> fields) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      decoration: BoxDecoration(
+        color: kCueSurface,
+        border: Border.all(color: kCueBorder, width: kCueCardBorderW),
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < fields.length; i++) ...[
+            _buildOptionalField(fields[i]),
+            if (i != fields.length - 1) const SizedBox(height: 12),
+          ],
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionalField(_CaptureField f) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          f.label,
+          style: GoogleFonts.dmSans(
+            fontSize:      11,
+            fontWeight:    FontWeight.w600,
+            color:         kCueEyebrowInk,
+            letterSpacing: kCueEyebrowLetterSpacing(11),
+          ),
+        ),
+        const SizedBox(height: 4),
+        TextField(
+          controller: _ctrlFor(f.id),
+          minLines: f.multiline ? 2 : 1,
+          maxLines: f.multiline ? 3 : 1,
+          style: GoogleFonts.dmSans(
+            fontSize: 14,
+            color:    kCueInk,
+            height:   1.5,
+          ),
+          decoration: InputDecoration(
+            hintText: f.label,
+            hintStyle: GoogleFonts.dmSans(
+              fontSize: 14,
+              color:    kCueSubtitleInk,
+              height:   1.5,
+            ),
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+            border: const UnderlineInputBorder(
+              borderSide: BorderSide(color: kCueBorder),
+            ),
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: kCueBorder),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: kCueAmber, width: 1.0),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionRow() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+      decoration: const BoxDecoration(
+        color: kCueSurface,
+        border: Border(
+          top: BorderSide(color: kCueBorder, width: kCueCardBorderW),
+        ),
+      ),
+      child: Row(
+        children: [
+          TextButton(
+            onPressed: _saving ? null : _delete,
+            style: TextButton.styleFrom(
+              foregroundColor: kCueMutedInk,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 12),
+            ),
+            child: Text(
+              'Delete session',
+              style: GoogleFonts.dmSans(
+                fontSize:   14,
+                fontWeight: FontWeight.w500,
+                color:      kCueMutedInk,
+              ),
+            ),
+          ),
+          const Spacer(),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            style: FilledButton.styleFrom(
+              backgroundColor: kCueAmber,
+              disabledBackgroundColor: kCueAmber.withValues(alpha: 0.5),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 24, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(kCueCardRadius),
+              ),
+            ),
+            child: _saving
+                ? const SizedBox(
+                    width:  18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      color:       Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : Text(
+                    'Save',
+                    style: GoogleFonts.dmSans(
+                      fontSize:   15,
+                      fontWeight: FontWeight.w600,
+                      color:      Colors.white,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}

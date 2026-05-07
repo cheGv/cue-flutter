@@ -1,8 +1,11 @@
 // lib/constants/clinical_areas.dart
 //
-// Phase 4.0.7.23 — single source of truth for the 14 SLP clinical
+// Phase 4.0.7.23 — single source of truth for the 16 SLP clinical
 // areas that match the framework library taxonomy and the
-// clients.clinical_area schema CHECK constraint.
+// clients.clinical_area schema CHECK constraint. Originally 14;
+// pediatric-cas, pediatric-dysarthria, and pediatric-motor-speech
+// were promoted in Phase 4.0.7.27c-prep (count corrected here in
+// Phase 4.0.7.28-session-capture-v1).
 //
 // Imported by:
 //   - lib/screens/goal_authoring_screen.dart  (4.0.7.23)
