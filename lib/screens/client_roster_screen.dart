@@ -331,7 +331,7 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
         clientId: entry.key,
         client:   c,
         trigger:  _AttentionTrigger.notePending,
-        copy:     'Note pending from ${_relativePast(dt, today)}.',
+        copy:     'Notes captured · ready to generate',
       ));
     }
 
@@ -462,6 +462,13 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
   /// Both inputs are normalized to local-date-only before subtracting,
   /// so the count is wall-calendar days, not 24-hour windows. UTC
   /// timestamps coming from Supabase get .toLocal() first.
+  ///
+  /// Phase 4.0.7.31d-roster-copy — temporarily unreferenced after the
+  /// "Note pending from {date}." copy was retired. Helper preserved for
+  /// resurrection in Phase 4.0.8 design language lock if the date-aware
+  /// tense returns. Remove the ignore directive when a call site comes
+  /// back.
+  // ignore: unused_element
   String _relativePast(DateTime d, DateTime ref) {
     final dLocal   = d.toLocal();
     final dDate    = DateTime(dLocal.year, dLocal.month, dLocal.day);
@@ -670,7 +677,7 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
             const SizedBox(width: CueGap.s12),
             Expanded(
               child: Text(
-                'needs you',
+                'to finish today',
                 style: CueType.bodySmall.copyWith(
                   color: CueColors.inkPrimary
                       .withValues(alpha: CueAlpha.eyebrowText),
@@ -758,7 +765,7 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
           ),
           const SizedBox(height: CueGap.s12),
           CueAmberLink(
-            label: 'open chart',
+            label: 'continue →',
             onTap: () => _openClient(card.client),
           ),
         ],
