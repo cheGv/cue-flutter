@@ -618,6 +618,21 @@ class _ReportScreenState extends State<ReportScreen> {
   // ── Save SOAP + optional attestation ────────────────────────────────────────
 
   Future<void> _saveSoapNote() async {
+    // Phase 4.0.7.27d-defer-session-insert — defensive null-guard. The
+    // narrate path's INSERT-or-UPDATE always populates id before we
+    // mount, so this should never fire today; it prevents a silent
+    // .eq('id', null) no-op if a future routing change hands us a
+    // session map without an id.
+    if (widget.session['id'] == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(
+            'Session record missing — please re-open from the client profile.',
+          )),
+        );
+      }
+      return;
+    }
     setState(() => _savingNote = true);
     try {
       if (widget.session['clinician_attested'] == true) {
@@ -757,6 +772,10 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _saveParentUpdate() async {
     final text = _parentUpdateController.text.trim();
     if (text.isEmpty) return;
+    // Phase 4.0.7.27d-defer-session-insert — defensive null-guard, same
+    // rationale as _saveSoapNote above. Auto-save path stays silent
+    // (no snackbar) since the user didn't explicitly tap save.
+    if (widget.session['id'] == null) return;
     try {
       await _supabase.from('sessions').update({
         'parent_update': text,

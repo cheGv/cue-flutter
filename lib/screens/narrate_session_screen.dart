@@ -616,14 +616,41 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
     // the AI proxy returns a SOAP note. `status` intentionally omitted —
     // valid enum values for that column are not known to this layer; the
     // SOAP-save / attestation paths in report_screen own status writes.
-    if (widget.sessionId != null) {
+    //
+    // Phase 4.0.7.27d-defer-session-insert — when sessionId is null the
+    // SLP arrived from AddSessionScreen via the deferred-insert path:
+    // create the row here on first save instead of accumulating empty
+    // drafts in AddSessionScreen. The INSERT mirrors what the deleted
+    // _createSession used to write (client_id / date / user_id) and
+    // adds the transcript columns we'd otherwise UPDATE. client_name is
+    // included to fix the 'Unknown Client' denormalization gap.
+    String? sessionId = widget.sessionId;
+
+    if (sessionId == null) {
+      final uid     = _supabase.auth.currentUser?.id;
+      final dateStr = widget.sessionDate ??
+          DateTime.now().toIso8601String().substring(0, 10);
+      final inserted = await _supabase
+          .from('sessions')
+          .insert({
+            'client_id':    widget.clientId,
+            'client_name':  widget.clientName,
+            'date':         dateStr,
+            'transcript':   _finalTranscript.trim(),
+            'ai_generated': false,
+            'user_id':      ?uid,
+          })
+          .select()
+          .single();
+      sessionId = inserted['id']?.toString();
+    } else {
       await _supabase
           .from('sessions')
           .update({
             'transcript':   _finalTranscript.trim(),
             'ai_generated': false,
           })
-          .eq('id', widget.sessionId!);
+          .eq('id', sessionId);
     }
 
     if (!mounted) return;
@@ -633,7 +660,7 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
       MaterialPageRoute(
         builder: (_) => ReportScreen(
           session: {
-            'id':         widget.sessionId,
+            'id':         sessionId,
             'transcript': _finalTranscript.trim(),
           },
           clientName: widget.clientName,

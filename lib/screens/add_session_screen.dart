@@ -29,7 +29,12 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   DateTime _selectedDate = DateTime.now();
   String?  _activeStg;
   bool     _stgLoading = true;
-  bool     _saving     = false;
+  // Phase 4.0.7.27d-defer-session-insert — _saving was the await guard
+  // for _createSession's INSERT. Both nav handlers (_startNarrator,
+  // _addManually) are now synchronous w.r.t. DB, so the gate is dead.
+  // Field kept to preserve onTap/spinner wiring and minimize diff;
+  // candidate for removal in a follow-up cleanup pass.
+  final bool _saving = false;
 
   // Phase 4.0.4 — population routing. Phase 4.0.7.27d-population-router
   // -removal: the developmental_stuttering routing edge was removed but
@@ -100,50 +105,20 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     }
   }
 
-  // Creates a session with date only, returns the inserted row (with id).
-  Future<Map<String, dynamic>?> _createSession() async {
-    final uid     = _supabase.auth.currentUser?.id;
-    final dateStr = _selectedDate.toIso8601String().substring(0, 10);
-    try {
-      final rows = await _supabase
-          .from('sessions')
-          .insert({
-            'client_id': widget.clientId,
-            'date':      dateStr,
-            'user_id':   ?uid,
-          })
-          .select();
-      return rows.isNotEmpty
-          ? Map<String, dynamic>.from(rows.first as Map)
-          : {'client_id': widget.clientId, 'date': dateStr};
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error creating session: $e')),
-        );
-      }
-      return null;
-    }
-  }
-
+  // Phase 4.0.7.27d-defer-session-insert — _createSession deleted.
+  // Empty draft rows used to accumulate when the SLP bailed out before
+  // recording or typing anything. Row creation is now owned by the
+  // downstream screens on first save: NarrateSessionScreen INSERTs in
+  // _generateAndNavigate, SessionNoteScreen INSERTs in _save.
   Future<void> _startNarrator() async {
-    setState(() => _saving = true);
-    final session = await _createSession();
-    if (!mounted) return;
-    setState(() => _saving = false);
-    if (session == null) return;
-
-    final sessionId   = session['id']?.toString();
-    final sessionDate = _selectedDate.toIso8601String().substring(0, 10);
-
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => NarrateSessionScreen(
           clientId:    widget.clientId,
           clientName:  widget.clientName,
-          sessionId:   sessionId,
-          sessionDate: sessionDate,
+          sessionId:   null,
+          sessionDate: _selectedDate.toIso8601String().substring(0, 10),
         ),
       ),
     );
