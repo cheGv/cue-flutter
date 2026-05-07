@@ -3472,27 +3472,38 @@ String? _formatAchievedDate(String? iso) {
 }
 
 String _extractSoapPreview(Map<String, dynamic> session) {
+  // Phase 4.0.7.27c-cleanup2 / 4.0.7.31c — three-tier fallback. Order:
+  // soap_note (clinical observation) → parent_summary (proxy-generated
+  // parent message) → notes (SLP's own prose from SessionCaptureScreen
+  // 4.0.7.28). Returns empty when nothing matches; the timeline card's
+  // subtitle render guard suppresses an empty subtitle row, and the
+  // footer pill carries the documentation-status signal alone.
+  String truncate(String s) =>
+      s.length > 100 ? '${s.substring(0, 100)}...' : s;
+
   final note = session['soap_note'];
-  // Phase 4.0.7.27c-cleanup2 — return empty when there's nothing to
-  // preview. The timeline card's subtitle render guard suppresses an
-  // empty subtitle row entirely; the footer pill ('Pending
-  // documentation' / 'View note →') carries the documentation-status
-  // signal alone, with no overlap.
-  if (note == null) return '';
-  try {
-    final map = note is String
-        ? jsonDecode(note) as Map<String, dynamic>
-        : note as Map<String, dynamic>;
-    final observation = (map['observation'] as String?) ??
-        (map['O'] as String?) ??
-        (map['o'] as String?) ??
-        '';
-    if (observation.trim().isNotEmpty) {
-      return observation.length > 100
-          ? '${observation.substring(0, 100)}...'
-          : observation;
-    }
-  } catch (_) {}
+  if (note != null) {
+    try {
+      final map = note is String
+          ? jsonDecode(note) as Map<String, dynamic>
+          : note as Map<String, dynamic>;
+      final observation = (map['observation'] as String?) ??
+          (map['O'] as String?) ??
+          (map['o'] as String?) ??
+          '';
+      if (observation.trim().isNotEmpty) {
+        return truncate(observation);
+      }
+    } catch (_) {}
+  }
+  final parentSummary = (session['parent_summary'] as String?)?.trim();
+  if (parentSummary != null && parentSummary.isNotEmpty) {
+    return truncate(parentSummary);
+  }
+  final notes = (session['notes'] as String?)?.trim();
+  if (notes != null && notes.isNotEmpty) {
+    return truncate(notes);
+  }
   return '';
 }
 

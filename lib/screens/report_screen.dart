@@ -13,6 +13,7 @@ import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/cue_study_icon.dart';
 import 'narrate_session_screen.dart';
+import 'session_capture_screen.dart';
 
 const _bg   = Color(0xFFF2EFE9);
 const _ink  = Color(0xFF0A0A0A);
@@ -1654,7 +1655,18 @@ class _ReportScreenState extends State<ReportScreen> {
 
   // Session context card — only renders trial data/goal/affect rows when
   // values are actually present. Minimal sessions (date only) show just the date.
+  //
+  // Phase 4.0.7.31c-report-screen-notes-display — when the session row
+  // carries `notes` (the prose-first capture surface from 4.0.7.28), the
+  // card now leads with a "SESSION NOTES" eyebrow + the readonly prose +
+  // a "Continue editing →" link that pushReplaces to SessionCaptureScreen
+  // with the existing session id. Hairline divider separates the notes
+  // section from the date/chips below. When notes is absent, the card
+  // stays single-section (date-then-chips), unchanged from prior visual.
   Widget _buildSummaryCard(Map<String, dynamic> session) {
+    final notes = (session['notes'] as String? ?? '').trim();
+    final hasNotes = notes.isNotEmpty;
+
     final targetBehaviour =
         (session['target_behaviour'] as String? ?? '').trim();
     final activityName =
@@ -1681,6 +1693,64 @@ class _ReportScreenState extends State<ReportScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (hasNotes) ...[
+            Text(
+              'SESSION NOTES',
+              style: const TextStyle(
+                fontSize:      11,
+                fontWeight:    FontWeight.w700,
+                color:         kCueEyebrowInk,
+                letterSpacing: 0.88, // ~0.08em at 11px
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Readonly prose. Honors \n line breaks naturally. Full text
+            // (no truncation) — the SLP's own writing should be visible
+            // verbatim per Phase 4.0.7.31c lock 4.
+            Text(
+              notes,
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                color:    _ink,
+                height:   1.6,
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () {
+                final sid = session['id'];
+                final sessionId = sid is int
+                    ? sid
+                    : int.tryParse(sid?.toString() ?? '');
+                if (sessionId == null) return;
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SessionCaptureScreen(
+                      clientId:          widget.clientId ?? '',
+                      clientName:        widget.clientName,
+                      existingSessionId: sessionId,
+                    ),
+                  ),
+                );
+              },
+              child: Text(
+                'Continue editing →',
+                style: GoogleFonts.dmSans(
+                  fontSize:   13,
+                  fontWeight: FontWeight.w500,
+                  color:      kCueAmberDeep,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Divider(
+              height:    kCueCardBorderW,
+              thickness: kCueCardBorderW,
+              color:     kCueBorder,
+            ),
+            const SizedBox(height: 12),
+          ],
           Text(
             session['date']?.toString() ?? 'Unknown date',
             style: GoogleFonts.dmSans(

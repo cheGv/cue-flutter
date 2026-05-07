@@ -49,12 +49,27 @@ class SessionCaptureScreen extends StatefulWidget {
   final String    clientId;
   final String    clientName;
   final DateTime? selectedDate;
+  /// Phase 4.0.7.31c — when non-null, the screen mounts in edit mode:
+  /// loads notes + population_payload + date from the existing row,
+  /// pre-populates the controllers, and sets `_draftSessionId` so the
+  /// auto-save tick takes the UPDATE branch from frame 1. Default null
+  /// preserves the create flow used by AddSessionScreen.
+  ///
+  /// Type rationale: `int?` (not `String?`) because this is the *target
+  /// row* of UPDATE statements, not a forward-passed reference. The
+  /// Supabase Dart client returns `bigint` PK as `int`, and `.eq('id',
+  /// existingSessionId!)` accepts it directly with no parse round-trip.
+  /// String? would force a `?.toString()` coercion at every save site.
+  /// ReportScreen's tap handler defensively coerces from any shape via
+  /// `int.tryParse(sid?.toString() ?? '')` before constructing the route.
+  final int? existingSessionId;
 
   const SessionCaptureScreen({
     super.key,
     required this.clientId,
     required this.clientName,
     this.selectedDate,
+    this.existingSessionId,
   });
 
   @override
@@ -199,6 +214,16 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
   // input event by _onAnyInputChanged so the annotation disappears the
   // moment the SLP starts typing.
   bool    _emptySaveAttempt = false;
+  // Phase 4.0.7.31c — edit-mode load failure recovery. When
+  // _loadExistingSession errors out (network/RLS/missing row),
+  // _loadFailed flips true AND _draftSessionId is nulled so subsequent
+  // saves take the INSERT branch (= a fresh session row), preventing
+  // accidental overwrite of a row we couldn't read first. The snackbar
+  // delivering this fact fires once via _onAnyInputChanged when the
+  // SLP types > 10 chars (gating noise from SLPs who navigate away
+  // without typing).
+  bool    _loadFailed = false;
+  bool    _loadFailedSnackbarShown = false;
 
   static const Duration _autoSavePeriod = Duration(seconds: 30);
 
@@ -210,11 +235,109 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
     _autosaveTimer = Timer.periodic(_autoSavePeriod, (_) => _autoSaveTick());
     // Empty-save annotation is dismissed by any input event.
     _proseCtrl.addListener(_onAnyInputChanged);
+
+    // Phase 4.0.7.31c — edit-mode hydration. CRITICAL INVARIANT:
+    // _draftSessionId MUST be set SYNCHRONOUSLY here, before any auto-
+    // save tick can fire. If a future refactor moves this into the
+    // async load callback, the first auto-save tick at second 30 will
+    // see _draftSessionId == null AND prose populated (from the load
+    // that already returned), take the INSERT branch, and duplicate
+    // the row. The auto-save guard `if (prose.isEmpty) return` covers
+    // the in-flight window cleanly because prose stays empty until
+    // _loadExistingSession's setState lands.
+    if (widget.existingSessionId != null) {
+      _draftSessionId = widget.existingSessionId;
+      _loadExistingSession();
+    }
+  }
+
+  Future<void> _loadExistingSession() async {
+    try {
+      final row = await _supabase
+          .from('sessions')
+          .select('date, notes, population_payload')
+          .eq('id', widget.existingSessionId!)
+          .isFilter('deleted_at', null)
+          .maybeSingle();
+      if (!mounted) return;
+      if (row == null) {
+        // Row not found (deleted between push and load, or RLS-blocked).
+        // Treat as load failure — see _handleLoadFailure().
+        _handleLoadFailure();
+        return;
+      }
+
+      final dateStr = row['date'] as String?;
+      final notes   = row['notes'] as String?;
+      final payload = row['population_payload'];
+
+      setState(() {
+        if (dateStr != null) {
+          try {
+            _selectedDate = DateTime.parse(dateStr);
+          } catch (_) { /* keep constructor default */ }
+        }
+        if (notes != null && notes.isNotEmpty) {
+          _proseCtrl.text = notes;
+        }
+        if (payload is Map) {
+          for (final entry in payload.entries) {
+            final v = entry.value;
+            if (v is String && v.trim().isNotEmpty) {
+              // _ctrlFor lazy-creates the controller and wires the
+              // empty-save listener; setting text here is consistent
+              // with the create-flow data path.
+              _ctrlFor(entry.key.toString()).text = v;
+            }
+          }
+          // If any field came in populated, the SLP almost certainly
+          // wants the panel expanded so they can see what they wrote.
+          if ((payload).isNotEmpty) _detailsExpanded = true;
+        }
+      });
+    } catch (_) {
+      _handleLoadFailure();
+    }
+  }
+
+  /// Phase 4.0.7.31c — silent failure recovery for edit-mode load.
+  /// Nulling _draftSessionId forces subsequent saves to take the INSERT
+  /// branch, preventing the SLP's typing from overwriting a row we
+  /// couldn't read first (which would risk corrupting state we don't
+  /// understand). Snackbar delivery is gated to fire once after the
+  /// SLP types meaningfully (>10 chars) so SLPs who navigated here and
+  /// then bounced don't see noise.
+  void _handleLoadFailure() {
+    if (!mounted) return;
+    setState(() {
+      _loadFailed     = true;
+      _draftSessionId = null;
+    });
   }
 
   void _onAnyInputChanged() {
     if (_emptySaveAttempt) {
       setState(() => _emptySaveAttempt = false);
+    }
+    // Phase 4.0.7.31c — gated snackbar for edit-mode load failure.
+    // Fires once when the SLP has typed >10 chars (signal of intent to
+    // continue working) so they're informed before they assume their
+    // edits will land in the original row. _draftSessionId was already
+    // nulled in _handleLoadFailure, so the subsequent save will INSERT
+    // a fresh row regardless.
+    if (_loadFailed &&
+        !_loadFailedSnackbarShown &&
+        _proseCtrl.text.trim().length > 10) {
+      _loadFailedSnackbarShown = true;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Couldn't load existing notes — your new typing will save "
+            'as a new session.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
     }
   }
 
@@ -585,8 +708,13 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
   @override
   Widget build(BuildContext context) {
     final fields = _fieldsFor(_clinicalArea);
+    // Phase 4.0.7.31c — prefix-swap based on edit vs create mode.
+    // Mirrors the prior 'Session — Vignesh' shape; only the lead verb
+    // changes. Sentence case (lowercase second word), em-dash separator.
+    final titlePrefix =
+        widget.existingSessionId != null ? 'Edit session' : 'New session';
     return AppLayout(
-      title: 'Session — ${widget.clientName}',
+      title: '$titlePrefix — ${widget.clientName}',
       activeRoute: 'roster',
       body: Column(
         children: [
