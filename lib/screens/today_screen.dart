@@ -1024,6 +1024,8 @@ class _TodayScreenState extends State<TodayScreen> {
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
+                        // Phase 4.0.7.39 — URL bar reflects /clients/:id.
+                        settings: RouteSettings(name: '/clients/${cl['id']}'),
                         builder: (_) => ClientProfileScreen(
                           client: Map<String, dynamic>.from(cl),
                         ),
@@ -1134,6 +1136,8 @@ class _TodayScreenState extends State<TodayScreen> {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
+          // Phase 4.0.7.39 — URL bar reflects /clients/:id.
+          settings: RouteSettings(name: '/clients/${cl['id']}'),
           builder: (_) => ClientProfileScreen(client: cl),
         ),
       ).then((_) => _load()),
@@ -1436,6 +1440,8 @@ class _TodayScreenState extends State<TodayScreen> {
             await Navigator.push(
               context,
               MaterialPageRoute(
+                // Phase 4.0.7.39 — URL bar reflects /clients/:id.
+                settings: RouteSettings(name: '/clients/${clientMap['id']}'),
                 builder: (_) => ClientProfileScreen(client: clientMap),
               ),
             );
@@ -1496,6 +1502,8 @@ class _TodayScreenState extends State<TodayScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
+        // Phase 4.0.7.39 — URL bar reflects /clients/:id.
+        settings: RouteSettings(name: '/clients/${client['id']}'),
         builder: (_) => ClientProfileScreen(client: client),
       ),
     );

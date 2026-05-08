@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../screens/today_screen.dart';
-import '../screens/client_roster_screen.dart';
-import '../screens/assessing_screen.dart';
-import '../screens/narrator_screen.dart';
-import '../screens/login_screen.dart';
-import '../screens/slp_profile_screen.dart';
+// Phase 4.0.7.39 — chrome navigation switched to pushNamedAndRemoveUntil
+// so the browser URL reflects the current screen and refresh lands the
+// SLP back where she was. Direct screen imports for chrome destinations
+// are no longer required at this layer.
 import '../theme/theme_notifier.dart';
 import '../theme/cue_theme.dart';
 import 'cue_cuttlefish.dart';
@@ -411,9 +409,9 @@ class _AppSidebar extends StatelessWidget {
       onTap: () async {
         await Supabase.instance.client.auth.signOut();
         if (context.mounted) {
-          Navigator.pushAndRemoveUntil(
+          Navigator.pushNamedAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            '/login',
             (_) => false,
           );
         }
@@ -456,38 +454,25 @@ class _AppSidebar extends StatelessWidget {
 
   void _navigate(BuildContext context, _NavItem item) {
     if (item.route == activeRoute) return;
-    if (item.route == 'today') {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const TodayScreen()),
-        (_) => false,
-      );
-    } else if (item.route == 'roster') {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const ClientRosterScreen()),
-        (_) => false,
-      );
-    } else if (item.route == 'assessing') {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const AssessingScreen()),
-        (_) => false,
-      );
-    } else if (item.route == 'narrator') {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const NarratorScreen()),
-        (_) => false,
-      );
-    } else if (item.route == 'settings') {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const SlpProfileScreen()),
-        (_) => false,
-      );
-    }
+    final path = _routePathFor(item.route);
+    if (path == null) return;
+    Navigator.pushNamedAndRemoveUntil(context, path, (_) => false);
   }
+}
+
+/// Maps the activeRoute key (used by AppLayout / bottom nav) to the
+/// named-route path defined in main.dart's onGenerateRoute. Phase
+/// 4.0.7.39 — single source of truth so sidebar + mobile nav stay in
+/// sync. Returns null for unknown keys.
+String? _routePathFor(String route) {
+  switch (route) {
+    case 'today':     return '/today';
+    case 'roster':    return '/clients';
+    case 'assessing': return '/assessing';
+    case 'narrator':  return '/narrator';
+    case 'settings':  return '/settings';
+  }
+  return null;
 }
 
 // ── Mobile bottom navigation bar ──────────────────────────────────────────────
@@ -543,22 +528,8 @@ class _MobileBottomNav extends StatelessWidget {
 
   void _navigate(BuildContext context, String route) {
     if (route == activeRoute) return;
-    switch (route) {
-      case 'today':
-        Navigator.pushAndRemoveUntil(context,
-            MaterialPageRoute(builder: (_) => const TodayScreen()), (_) => false);
-      case 'roster':
-        Navigator.pushAndRemoveUntil(context,
-            MaterialPageRoute(builder: (_) => const ClientRosterScreen()), (_) => false);
-      case 'assessing':
-        Navigator.pushAndRemoveUntil(context,
-            MaterialPageRoute(builder: (_) => const AssessingScreen()), (_) => false);
-      case 'narrator':
-        Navigator.pushAndRemoveUntil(context,
-            MaterialPageRoute(builder: (_) => const NarratorScreen()), (_) => false);
-      case 'settings':
-        Navigator.pushAndRemoveUntil(context,
-            MaterialPageRoute(builder: (_) => const SlpProfileScreen()), (_) => false);
-    }
+    final path = _routePathFor(route);
+    if (path == null) return;
+    Navigator.pushNamedAndRemoveUntil(context, path, (_) => false);
   }
 }

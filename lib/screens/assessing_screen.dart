@@ -15,13 +15,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../widgets/app_layout.dart';
 // 4.0.7.27c-split — assessment intake split out of AddClientScreen
-// (which is now therapy-only). New entry point lives in
-// NewAssessmentCaseScreen — slim 10-field intake routes directly into
-// the assessment capture surface.
-import 'new_assessment_case_screen.dart';
-// 4.0.7.24c — AssessmentCaseScreen no longer imported here; the
-// _openCase flow pushes via the named route '/assessing/:clientId'
-// resolved by main.dart's onGenerateRoute handler.
+// (which is now therapy-only). NewAssessmentCaseScreen is the slim
+// 10-field intake; control reaches it via the '/new-assessment' named
+// route (Phase 4.0.7.39). AssessmentCaseScreen is reached via
+// '/assessing/:clientId'. Neither is imported here — both resolve
+// through main.dart's onGenerateRoute.
 
 const Color _ink       = Color(0xFF0E1C36);
 const Color _inkGhost  = Color(0xFF6B7690);
@@ -81,12 +79,9 @@ class _AssessingScreenState extends State<AssessingScreen> {
     // 4.0.7.27c-split — slim assessment intake. Pushes the new screen,
     // which on submit replaces itself with the assessment capture
     // surface; control returns here only via the back button.
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const NewAssessmentCaseScreen(),
-      ),
-    );
+    // Phase 4.0.7.39 — pushNamed so the URL bar reflects
+    // /new-assessment instead of staying on /assessing.
+    await Navigator.pushNamed(context, '/new-assessment');
     if (mounted) await _load();
   }
 

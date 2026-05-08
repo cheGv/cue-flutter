@@ -5,7 +5,7 @@ in the codebase. When a theme is identified, every site where the
 assumption manifests gets logged here. Patches close sites one by
 one. The tracker survives across phases.
 
-Last updated: 8 May 2026
+Last updated: 8 May 2026 (Theme 6 closed 4.0.7.39; Theme 7 inventory updated 4.0.7.39)
 
 ---
 
@@ -99,22 +99,38 @@ warning OR localStorage write-through OR shorter intervals.
 
 ---
 
-## Theme 6: Deep-link coverage gap
+## Theme 6: Deep-link coverage gap — CLOSED
 
-**Pattern:** Browser refresh on most URLs bounces the SLP to
-Today; only 2 of 11 surfaces survive refresh.
+**Pattern:** Browser refresh on most URLs bounced the SLP to
+Today; only 2 of 11 surfaces survived refresh pre-39.
 
 | Surface | Status |
 |---|---|
-| `/new-assessment` | ✅ via `onGenerateRoute` |
-| `/assessing/:clientId` | ✅ via `_AssessmentCaseDeepLinkLoader` |
-| `/clients/:id` (chart) | ⏳ 4.0.7.39 |
-| `/sessions/:id` (report or capture) | ⏳ 4.0.7.39 |
-| Today, Roster, Settings, GoalAuthoring | ⏳ 4.0.7.39 partial scope (some intentional) |
+| `/new-assessment` | ✅ pre-39 via `onGenerateRoute` |
+| `/assessing/:clientId` | ✅ pre-39 via `_AssessmentCaseDeepLinkLoader` |
+| `/today` | ✅ 4.0.7.39 |
+| `/clients` | ✅ 4.0.7.39 |
+| `/assessing` | ✅ 4.0.7.39 |
+| `/narrator` | ✅ 4.0.7.39 |
+| `/settings` | ✅ 4.0.7.39 |
+| `/clients/:id` (chart) | ✅ 4.0.7.39 via `_ClientProfileDeepLinkLoader` |
+| `/clients/:id/study` | ✅ 4.0.7.39 via `_CueStudyDeepLinkLoader` |
+| `/sessions/:id` (report) | ✅ 4.0.7.39 via `_ReportDeepLinkLoader` (autoGenerate hardcoded false on deep-link path) |
+| `/sessions/:id/edit` (capture edit-mode) | ✅ 4.0.7.39 via `_SessionCaptureEditDeepLinkLoader` |
+| GoalAuthoring, Narrate, SessionCapture create-mode | 🚫 intentional Category 3 in 39 — refresh-during-flow loses unsaved input regardless of URL; exposure tracked under Theme 5 / 4.0.7.38 |
 
-2 / 11 sites covered. Pattern is established
-(`_AssessmentCaseDeepLinkLoader`); 4.0.7.39 replicates it for
-chart + sessions at minimum.
+11 / 11 live surfaces covered. Pattern: per-surface loader (4
+new in 39) with shared `_DeepLinkSpinner` + `_DeepLinkErrorCard`
+helpers. Signed-out loads redirect to
+`/login?return=<url>` instead of rendering an error card; the
+`return` query param is validated as a relative path before
+post-login navigation. Browser URL now reflects current screen
+across all push sites — chrome navigation uses
+`pushNamedAndRemoveUntil`, Cat 1 push sites use either
+`pushNamed` or pass `RouteSettings(name: ...)` to keep the URL
+accurate while preserving non-serializable constructor args
+(e.g. ReportScreen's `autoGenerate: true` from the Save & Generate
+flow, CueStudy's one-shot `initialMessage` seed). Theme closes.
 
 ---
 
@@ -132,12 +148,17 @@ importable. Cleanup deferred indefinitely.
 | `parent_interview_fluency_screen.dart` | 4.0.7.27d | dead, in repo |
 | `pre_therapy_planning_fluency_screen.dart` | 4.0.7.27d (caller `_openPlanInputs` is `// ignore: unused_element`) | dead, in repo |
 | `live_entry_fluency_screen.dart` | 4.0.7.27d (last referenced by orphaned SessionNoteScreen branch) | dead, in repo |
+| `session_mode_picker_screen.dart` | 4.0.7.27d-population-router-removal (`SessionModePickerView` referenced only by removed-comment in `add_session_screen.dart:8`) | dead, in repo (added 4.0.7.39 recon) |
+| `settings_screen.dart` | superseded by `slp_profile_screen.dart`; chrome routes `'settings'` → `SlpProfileScreen` (`app_layout.dart` `_routePathFor`). No external import of `SettingsScreen`. | dead, in repo (added 4.0.7.39 recon) |
+| `add_goal_screen.dart` | no external `Navigator.push` call site; goal authoring routes through `GoalAuthoringScreen` and `LtgEditScreen` exclusively. | dead, in repo (added 4.0.7.39 recon) |
 
-6 sites. Cleanup pass deferred to Phase 4.0.8 (or earlier if a
-sweep is wanted). Notable: the four fluency-related files were
-preserved by 4.0.7.27d's commit message — *"Fluency-specific
-screens kept in repo as dead code; Phase 2 multi-domain rebuild
-will adapt them."* Conscious orphans, not accidental.
+9 sites (6 prior + 3 surfaced during 4.0.7.39 recon). Cleanup
+pass deferred to Phase 4.0.8 (or earlier if a sweep is wanted).
+Notable: the four fluency-related files were preserved by
+4.0.7.27d's commit message — *"Fluency-specific screens kept in
+repo as dead code; Phase 2 multi-domain rebuild will adapt
+them."* Conscious orphans, not accidental. The three added in
+4.0.7.39 are inventory-discovery, not policy.
 
 ---
 

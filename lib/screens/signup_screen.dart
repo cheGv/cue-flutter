@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'client_roster_screen.dart';
 
 class SignupScreen extends StatefulWidget {
-  const SignupScreen({super.key});
+  /// Phase 4.0.7.39 — threaded through from `/signup?return=<url>`
+  /// (typically forwarded by LoginScreen). After successful sign-in
+  /// we land on `returnTo` instead of `/clients`. Validated the same
+  /// way LoginScreen does — relative paths only.
+  final String? returnTo;
+  const SignupScreen({super.key, this.returnTo});
 
   @override
   State<SignupScreen> createState() => _SignupScreenState();
@@ -43,10 +47,9 @@ class _SignupScreenState extends State<SignupScreen> {
       );
       if (mounted) {
         if (response.session != null) {
-          Navigator.pushAndRemoveUntil(
+          Navigator.pushNamedAndRemoveUntil(
             context,
-            MaterialPageRoute(
-                builder: (_) => const ClientRosterScreen()),
+            _safeReturnTarget(widget.returnTo),
             (_) => false,
           );
         } else {
@@ -241,6 +244,17 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
       ),
     );
+  }
+
+  /// Mirrors `LoginScreen._safeReturnTarget` — relative paths only.
+  static String _safeReturnTarget(String? returnTo) {
+    if (returnTo == null || returnTo.isEmpty) return '/clients';
+    if (!returnTo.startsWith('/')) return '/clients';
+    if (returnTo.startsWith('//')) return '/clients';
+    final parsed = Uri.tryParse(returnTo);
+    if (parsed == null) return '/clients';
+    if (parsed.hasScheme || parsed.hasAuthority) return '/clients';
+    return returnTo;
   }
 
   Widget _buildField({

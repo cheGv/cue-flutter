@@ -1,11 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'client_roster_screen.dart';
-import 'signup_screen.dart';
 
 // ── LoginScreen ────────────────────────────────────────────────────────────────
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  /// Phase 4.0.7.39 — when a deep-link loader hits a signed-out
+  /// session, it redirects to `/login?return=<deep-link>` and threads
+  /// the URL here. After successful sign-in we land on `returnTo`
+  /// instead of the default `/clients` so the SLP doesn't lose the
+  /// surface she was trying to reach.
+  ///
+  /// Validated as a relative path (must start with `/` and have no
+  /// scheme/host) before navigation; anything else is dropped and the
+  /// default lands.
+  final String? returnTo;
+  const LoginScreen({super.key, this.returnTo});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -42,9 +50,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await _supabase.auth
           .signInWithPassword(email: email, password: password);
       if (mounted) {
-        Navigator.pushAndRemoveUntil(
+        Navigator.pushNamedAndRemoveUntil(
           context,
-          MaterialPageRoute(builder: (_) => const ClientRosterScreen()),
+          _safeReturnTarget(widget.returnTo),
           (_) => false,
         );
       }
@@ -203,10 +211,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Create account link
                 TextButton(
-                  onPressed: () => Navigator.push(
+                  onPressed: () => Navigator.pushNamed(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => const SignupScreen()),
+                    widget.returnTo == null
+                        ? '/signup'
+                        : '/signup?return=${Uri.encodeQueryComponent(widget.returnTo!)}',
                   ),
                   child: RichText(
                     text: const TextSpan(
@@ -233,6 +242,20 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  /// Validates `returnTo` so that a malformed query parameter cannot
+  /// be used to push an external scheme/host. Accepts only relative
+  /// paths beginning with a single `/`. Anything else falls back to
+  /// the default landing route, `/clients`.
+  static String _safeReturnTarget(String? returnTo) {
+    if (returnTo == null || returnTo.isEmpty) return '/clients';
+    if (!returnTo.startsWith('/')) return '/clients';
+    if (returnTo.startsWith('//')) return '/clients';
+    final parsed = Uri.tryParse(returnTo);
+    if (parsed == null) return '/clients';
+    if (parsed.hasScheme || parsed.hasAuthority) return '/clients';
+    return returnTo;
   }
 
   Widget _buildField({

@@ -697,14 +697,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // legacy one-shot sheet (CueStudyFab.openSheet) is kept as dead code in
   // case we want to reference it; Phase 1 routes through CueStudyScreen.
   void _openCueStudySheet() {
-    Navigator.push(
+    // Phase 4.0.7.39 — named route so the URL bar reflects
+    // /clients/:id/study and refresh lands back here.
+    Navigator.pushNamed(
       context,
-      MaterialPageRoute(
-        builder: (_) => CueStudyScreen(
-          clientId:   _client['id'].toString(),
-          clientData: _client,
-        ),
-      ),
+      '/clients/${_client['id']}/study',
     );
   }
 
@@ -783,9 +780,16 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     final initial = goalText.isEmpty
         ? 'Help me think about this goal.'
         : 'Help me think about this goal: $goalText';
+    // Phase 4.0.7.39 — RouteSettings.name lets the URL show
+    // /clients/:id/study while the imperative push preserves the
+    // one-shot `initialMessage` seed (not deep-linkable on its own).
+    // Hard refresh of the URL re-enters via the deep-link loader, which
+    // drops initialMessage — the resumed thread carries any prior
+    // exchange via _threadId.
     Navigator.push(
       context,
       MaterialPageRoute(
+        settings: RouteSettings(name: '/clients/${_client['id']}/study'),
         builder: (_) => CueStudyScreen(
           clientId:       _client['id'].toString(),
           clientData:     _client,
@@ -2273,9 +2277,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             // 31c) reads stale until the SLP navigates away and back.
             onTap: hasNote && entry.rawData != null
                 ? () async {
+                    // Phase 4.0.7.39 — RouteSettings.name reflects
+                    // /sessions/:id in the URL bar; the imperative push
+                    // forwards the already-loaded session row so the
+                    // timeline → report transition stays one-frame.
+                    final sid = entry.rawData!['id'];
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
+                        settings: sid == null
+                            ? null
+                            : RouteSettings(name: '/sessions/$sid'),
                         builder: (_) => ReportScreen(
                           session:    entry.rawData!,
                           clientName: clientName,

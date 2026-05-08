@@ -519,9 +519,14 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
   }
 
   Future<void> _openClient(Map<String, dynamic> client) async {
+    // Phase 4.0.7.39 — RouteSettings.name reflects /clients/:id in the
+    // URL bar; the imperative push forwards the already-loaded client
+    // row so the roster → chart transition is single-frame. Hard
+    // refresh on /clients/:id re-resolves through the deep-link loader.
     await Navigator.push(
       context,
       MaterialPageRoute(
+        settings: RouteSettings(name: '/clients/${client['id']}'),
         builder: (_) => ClientProfileScreen(client: client),
       ),
     );

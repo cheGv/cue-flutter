@@ -655,9 +655,15 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
 
     if (!mounted) return;
 
+    // Phase 4.0.7.39 — RouteSettings.name reflects /sessions/:id in the
+    // browser URL. Imperative push retained (rather than
+    // pushReplacementNamed) so the just-finished transcript Map is
+    // forwarded directly without the deep-link loader doing a redundant
+    // re-fetch on this hop. Hard refresh re-resolves through the loader.
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
+        settings: RouteSettings(name: '/sessions/$sessionId'),
         builder: (_) => ReportScreen(
           session: {
             'id':         sessionId,

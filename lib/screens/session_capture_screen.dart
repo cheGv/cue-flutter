@@ -600,9 +600,17 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
     // pushReplacement so the back-button from ReportScreen returns to
     // the client profile (AddSessionScreen also pops on the result=true
     // path, which percolates upward), not to a stale capture screen.
+    //
+    // Phase 4.0.7.39 — RouteSettings.name lets the URL bar reflect
+    // /sessions/:id while the imperative push preserves
+    // `autoGenerate: true` (the Save & Generate one-shot trigger).
+    // Hard refresh of the same URL resolves through the deep-link
+    // loader, which hardcodes autoGenerate=false per the founder
+    // safety lock — preventing accidental LLM regen on refresh.
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
+        settings: RouteSettings(name: '/sessions/$sessionId'),
         builder: (_) => ReportScreen(
           session:      sessionMap,
           clientName:   widget.clientName,

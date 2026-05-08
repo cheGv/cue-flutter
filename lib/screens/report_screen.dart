@@ -13,7 +13,9 @@ import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/cue_study_icon.dart';
 import 'narrate_session_screen.dart';
-import 'session_capture_screen.dart';
+// Phase 4.0.7.39 — SessionCaptureScreen import removed; the
+// "Continue editing →" link now uses pushReplacementNamed to
+// /sessions/:id/edit, so no direct constructor reference remains.
 
 // Phase 4.0.7.31j — _bg (0xFFF2EFE9) replaced with kCuePaper from the
 // Phase 4.0 token set. _ink and _line retained as file-private legacy
@@ -1725,15 +1727,14 @@ class _ReportScreenState extends State<ReportScreen> {
                     ? sid
                     : int.tryParse(sid?.toString() ?? '');
                 if (sessionId == null) return;
-                Navigator.pushReplacement(
+                // Phase 4.0.7.39 — pushReplacementNamed updates the
+                // browser URL to /sessions/:id/edit. The deep-link
+                // loader fetches the session row + clientName so the
+                // edit-mode screen has everything `_loadExistingSession`
+                // needs after a hard refresh.
+                Navigator.pushReplacementNamed(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => SessionCaptureScreen(
-                      clientId:          widget.clientId ?? '',
-                      clientName:        widget.clientName,
-                      existingSessionId: sessionId,
-                    ),
-                  ),
+                  '/sessions/$sessionId/edit',
                 );
               },
               child: Text(
