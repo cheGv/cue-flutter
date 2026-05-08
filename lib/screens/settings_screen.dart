@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
-import 'today_brief_preview_screen.dart';
 
 // TODO(phase-4.0.7.x): Add "Restore archived clients/sessions" surface.
 //   Soft-delete shipped in 4.0.7.10 (clients.deleted_at, sessions.deleted_at
@@ -205,45 +204,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                         ),
                       ),
-
-                      // ── Phase 4.0.7.21 — temporary dev entry point ──
-                      // Removable in 4.0.7.21b once a variant is chosen.
-                      const SizedBox(height: 32),
-                      const Divider(height: 1, color: Color(0xFFE6DDCA)),
-                      const SizedBox(height: 16),
-                      Text(
-                        'DESIGN EXPLORATION',
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF6B7690),
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const Icon(Icons.science_outlined,
-                            size: 18, color: Color(0xFF2A8F84)),
-                        title: const Text(
-                          "Today's Brief — preview five variants",
-                          style: TextStyle(
-                              fontSize: 14, color: Color(0xFF0E1C36)),
-                        ),
-                        subtitle: const Text(
-                          'Throwaway preview · 4.0.7.21',
-                          style: TextStyle(
-                              fontSize: 11, color: Color(0xFF6B7690)),
-                        ),
-                        trailing: const Icon(Icons.chevron_right,
-                            size: 18, color: Color(0xFF6B7690)),
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                const TodayBriefPreviewScreen(),
-                          ),
-                        ),
-                      ),
+                      // Phase 4.0.7.31i — dev "Today brief preview" entry
+                      // point removed (the 4.0.7.21 throwaway never got
+                      // pruned). today_brief_preview_screen.dart stays
+                      // in repo as orphan; tracked under audit theme 7.
                     ],
                   ),
                 ),

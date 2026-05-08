@@ -15,7 +15,9 @@ import '../widgets/cue_study_icon.dart';
 import 'narrate_session_screen.dart';
 import 'session_capture_screen.dart';
 
-const _bg   = Color(0xFFF2EFE9);
+// Phase 4.0.7.31j — _bg (0xFFF2EFE9) replaced with kCuePaper from the
+// Phase 4.0 token set. _ink and _line retained as file-private legacy
+// constants; full register-sweep is 4.0.8 scope.
 const _ink  = Color(0xFF0A0A0A);
 const _line = Color(0xFFD8D5CE);
 
@@ -1134,7 +1136,7 @@ class _ReportScreenState extends State<ReportScreen> {
         builder: (context, constraints) {
           final hPad = constraints.maxWidth > 600 ? 48.0 : 20.0;
           return Container(
-            color: _bg,
+            color: kCuePaper,
             child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(
                   horizontal: hPad, vertical: 32),

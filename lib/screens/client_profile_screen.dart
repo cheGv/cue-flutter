@@ -431,6 +431,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   void _refreshSpine() {
     setState(() {
+      // Phase 4.0.7.36 — _sessionsFuture rebuild added so this method is
+      // the canonical "refresh everything mutation-relevant" entry. Prior
+      // to this, callers like _openAddSession had to inline a separate
+      // setState that re-created _sessionsFuture, and any call site that
+      // routed through _refreshSpine() alone (e.g. timeline View note
+      // edit) saw stale session lists. _readyFuture wraps both
+      // _spineFuture AND _sessionsFuture (see _makeReadyFuture); both
+      // must be re-created together for the chained future to refresh.
+      _sessionsFuture     = _fetchSessions();
       _spineFuture        = _fetchSpine();
       _readyFuture        = _makeReadyFuture();
       // Phase 3.3: chart_context feeds the /generate-brief proxy. Goal /
@@ -514,13 +523,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         ),
       ),
     );
-    if (added == true && mounted) {
-      setState(() {
-        _sessionsFuture = _fetchSessions();
-        _spineFuture    = _fetchSpine();
-        _readyFuture    = _makeReadyFuture();
-      });
-    }
+    // Phase 4.0.7.36 — single canonical refresh entry (was a 3-future
+    // inline setState that missed _chartContextFuture; the brief sliver
+    // could stay on stale "story starts here." copy after a session
+    // landed). _refreshSpine now covers sessions, spine, ready, chart
+    // context, and client row in one call.
+    if (added == true && mounted) _refreshSpine();
   }
 
   /// Phase 4.0.7.20j — deep-reasoning navigation from the inline editor.
@@ -2255,8 +2263,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ],
           const SizedBox(height: 8),
           GestureDetector(
+            // Phase 4.0.7.36 — await the ReportScreen pop and refresh
+            // the spine. ReportScreen may mutate soap_note /
+            // parent_summary / notes / clinician_attested via the
+            // SOAP form save, parent-update auto-save, or the
+            // "Continue editing →" → SessionCaptureScreen edit flow.
+            // Without the refresh, the timeline subtitle preview
+            // (now driven by _extractSoapPreview's 3-tier fallback,
+            // 31c) reads stale until the SLP navigates away and back.
             onTap: hasNote && entry.rawData != null
-                ? () => Navigator.push(
+                ? () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => ReportScreen(
@@ -2265,7 +2282,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                           clientId:   clientId,
                         ),
                       ),
-                    )
+                    );
+                    if (mounted) _refreshSpine();
+                  }
                 : null,
             child: hasNote
                 ? Text(

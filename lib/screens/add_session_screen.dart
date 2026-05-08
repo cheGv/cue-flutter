@@ -29,49 +29,18 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
   DateTime _selectedDate = DateTime.now();
   String?  _activeStg;
   bool     _stgLoading = true;
-  // Phase 4.0.7.27d-defer-session-insert — _saving was the await guard
-  // for _createSession's INSERT. Both nav handlers (_startNarrator,
-  // _addManually) are now synchronous w.r.t. DB, so the gate is dead.
-  // Field kept to preserve onTap/spinner wiring and minimize diff;
-  // candidate for removal in a follow-up cleanup pass.
-  final bool _saving = false;
-
-  // Phase 4.0.4 — population routing. Phase 4.0.7.27d-population-router
-  // -removal: the developmental_stuttering routing edge was removed but
-  // the fetch infrastructure stays in place for the Phase 2 multi-domain
-  // rebuild to resurrect. _populationType is currently unread; the
-  // loading flag still gates a quiet skeleton on first paint.
-  // ignore: unused_field
-  String? _populationType;
-  bool    _populationLoading = true;
 
   @override
   void initState() {
     super.initState();
+    // Phase 4.0.7.31h — population_type fetch + skeleton + _saving guard
+    // all removed. Origins: 4.0.7.27d-population-router-removal ripped
+    // out the fluency-vs-AAC routing fork; the fetch became dead-state,
+    // and the anti-flash skeleton it gated had no flip to anti-flash.
+    // _saving was the await guard for the ALSO-removed _createSession
+    // INSERT (deferred to downstream screens in 27d-defer-session-insert).
+    // Active goal lookup is the only remaining init concern.
     _loadActiveStg();
-    _loadPopulationType();
-  }
-
-  Future<void> _loadPopulationType() async {
-    try {
-      final row = await _supabase
-          .from('clients')
-          .select('population_type')
-          .eq('id', widget.clientId)
-          .isFilter('deleted_at', null)
-          .maybeSingle();
-      if (!mounted) return;
-      setState(() {
-        _populationType = (row?['population_type'] as String?) ?? 'asd_aac';
-        _populationLoading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _populationType = 'asd_aac'; // safe fallback — keeps legacy flow
-        _populationLoading = false;
-      });
-    }
   }
 
   Future<void> _loadActiveStg() async {
@@ -167,16 +136,6 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // While the population fetch is in flight, render a blank container
-    // so the legacy AAC body doesn't flash before swapping to the picker.
-    if (_populationLoading) {
-      return AppLayout(
-        title: 'New session — ${widget.clientName}',
-        activeRoute: 'roster',
-        body: const SizedBox.shrink(),
-      );
-    }
-
     // Phase 4.0.7.27d-population-router-removal — population_type no
     // longer gates the new-session surface. Every client hits the
     // unified Narrate / Type entry-mode row below regardless of clinical
@@ -313,13 +272,13 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
               _entryModeButton(
                 icon:  Icons.mic_rounded,
                 label: 'Narrate session',
-                onTap: _saving ? null : _startNarrator,
+                onTap: _startNarrator,
               ),
               const SizedBox(height: 12),
               _entryModeButton(
                 icon:  Icons.edit_outlined,
                 label: 'Type session notes',
-                onTap: _saving ? null : _addManually,
+                onTap: _addManually,
               ),
             ],
           );
@@ -330,7 +289,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
               child: _entryModeButton(
                 icon:  Icons.mic_rounded,
                 label: 'Narrate session',
-                onTap: _saving ? null : _startNarrator,
+                onTap: _startNarrator,
               ),
             ),
             const SizedBox(width: 12),
@@ -338,7 +297,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
               child: _entryModeButton(
                 icon:  Icons.edit_outlined,
                 label: 'Type session notes',
-                onTap: _saving ? null : _addManually,
+                onTap: _addManually,
               ),
             ),
           ],
@@ -352,7 +311,6 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
     required String label,
     required VoidCallback? onTap,
   }) {
-    final showSpinner = _saving;
     return SizedBox(
       height: 56,
       child: FilledButton(
@@ -366,31 +324,24 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
             borderRadius: BorderRadius.circular(kCueCardRadius),
           ),
         ),
-        child: showSpinner
-            ? const SizedBox(
-                width:  18,
-                height: 18,
-                child:  CircularProgressIndicator(
-                    color: Colors.white, strokeWidth: 2),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: 18, color: Colors.white),
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      label,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.dmSans(
-                        fontSize:   15,
-                        fontWeight: FontWeight.w500,
-                        color:      Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: Colors.white),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.dmSans(
+                  fontSize:   15,
+                  fontWeight: FontWeight.w500,
+                  color:      Colors.white,
+                ),
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
