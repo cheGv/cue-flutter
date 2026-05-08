@@ -183,6 +183,30 @@ class _ReportScreenState extends State<ReportScreen> {
     super.dispose();
   }
 
+  // Phase 4.0.7.40-flutter — _generateReport rewritten for the
+  // proxy-rebuild contract:
+  //
+  //   • Authorization: Bearer <Supabase JWT> required (proxy
+  //     enforces). Missing session is treated as a hard error.
+  //   • Request shape: session_id + client_id at top level,
+  //     transcript + notes promoted out of the nested session block,
+  //     structured data flattened into a top-level `structured` map,
+  //     `report_format` (snake-cased) replaces `reportFormat`.
+  //   • Response shape: {format, mode, soap_note:{s,o,a,p},
+  //     parent_summary, generation_id, warnings}. The proxy already
+  //     translates DAR/COAST/Narrative tool outputs into {s,o,a,p}
+  //     so persistence (which writes `sessions.soap_note` as JSON
+  //     with these keys) needs no change.
+  //   • HTTP 422 INSUFFICIENT_CONTENT → snackbar + early return.
+  //     No fabrication, no 29-character empty SOAP. Founder safety
+  //     gate documented in 4.0.7.40-proxy-rebuild commit message.
+  //   • generation_id stored on widget.session for future correlation
+  //     (PDF export, error reports, Phase 4.1 reconciliation).
+  //
+  // Legacy text/regex parsing path retired — tool use guarantees
+  // shape. _populateSoapFieldsLegacy + _splitClinicalAndParent
+  // intentionally left in place for the rollback window; sunset in
+  // a follow-up phase.
   Future<void> _generateReport() async {
     setState(() {
       _isLoading = true;
@@ -195,140 +219,176 @@ class _ReportScreenState extends State<ReportScreen> {
     _aCtrl.clear();
     _pCtrl.clear();
     try {
-      // Fetch active goals to enrich the report prompt
-      List<Map<String, dynamic>> goals = [];
-      if (widget.clientId != null) {
-        try {
-          final cid = widget.clientId!.toString();
-          print('[ReportScreen] Fetching goals for clientId: $cid');
-          final goalsResponse = await _supabase
-              .from('goals')
-              .select('goal_text, domain, target_accuracy')
-              .eq('client_id', cid)
-              .eq('status', 'active');
-          goals = List<Map<String, dynamic>>.from(goalsResponse);
-          print('[ReportScreen] Goals fetched: $goals');
-        } catch (e) {
-          // Non-blocking — report still generates without goals
-          print('[ReportScreen] Goals fetch failed: $e');
-        }
-      } else {
-        print('[ReportScreen] clientId is null — goals skipped');
+      // ── Auth + identity guards ──────────────────────────────
+      final token = _supabase.auth.currentSession?.accessToken;
+      if (token == null) {
+        setState(() => _error =
+            'Sign-in expired — please sign in again to generate a note.');
+        return;
+      }
+      final sessionId = widget.session['id'];
+      if (sessionId == null) {
+        setState(() => _error =
+            'This session has no id yet — save it first, then generate.');
+        return;
+      }
+      final clientId = widget.clientId;
+      if (clientId == null || clientId.isEmpty) {
+        setState(() => _error =
+            'Client id missing — cannot generate a note for this row.');
+        return;
       }
 
+      // ── Active goals (non-blocking) ─────────────────────────
+      List<Map<String, dynamic>> goals = [];
+      try {
+        final goalsResponse = await _supabase
+            .from('goals')
+            .select('goal_text, domain, target_accuracy')
+            .eq('client_id', clientId)
+            .eq('status', 'active');
+        goals = List<Map<String, dynamic>>.from(goalsResponse);
+      } catch (e) {
+        debugPrint('[ReportScreen] goals fetch failed (non-blocking): $e');
+      }
+
+      // ── Source content ──────────────────────────────────────
       final s = widget.session;
-      final date = '${s['date'] ?? ''}';
-      final goal = '${s['target_behaviour'] ?? ''}';
-      final activity = '${s['activity_name'] ?? ''}';
-      final attempts = '${s['attempts'] ?? 0}';
-      final independent = '${s['independent_responses'] ?? 0}';
-      final prompted = '${s['prompted_responses'] ?? 0}';
-      final goalMet = '${s['goal_met'] ?? ''}';
-      final affect = '${s['client_affect'] ?? ''}';
-      // Phase 4.0.7.31-unified-save-flow — prose now lives in
-      // `sessions.notes` (SessionCaptureScreen 4.0.7.28). Legacy wizard
-      // rows wrote `next_session_focus` instead. Read both, prefer the
-      // new column. Without this fix Save & Generate ships an empty
-      // observation slot and the AI degrades to Mode A/EMPTY.
-      final notes =
-          '${s['notes'] ?? s['next_session_focus'] ?? ''}';
-      final name = widget.clientName;
-
-      final goalsList = goals
-          .map((g) => {
-                'domain': g['domain'],
-                'goal': g['goal_text'],
-                'target': '${g['target_accuracy']}%',
-              })
-          .toList();
-
-      // Phase 4.0.7.9i-fix2: send transcript so the proxy can run
-      // narrator-mode (MODE A) when structured fields are empty.
-      // widget.session['transcript'] is the canonical source since
-      // 4.0.7.8a (narrate_session_screen persists it before navigation
-      // and on back-nav hydration).
       final transcript =
-          (widget.session['transcript'] as String?)?.trim() ?? '';
+          (s['transcript'] as String?)?.trim() ?? '';
+      // Prefer `notes` (4.0.7.31 unified-save-flow column);
+      // fall back to legacy `next_session_focus` from the old wizard
+      // shape so existing rows still generate cleanly.
+      final notes = ((s['notes'] as String?)?.trim().isNotEmpty == true
+              ? (s['notes'] as String).trim()
+              : (s['next_session_focus'] as String?)?.trim() ?? '');
 
-      final bodyMap = {
-        'clientName':   name,
-        'reportFormat': _reportFormat,
-        'transcript':   transcript,
-        'session': {
-          'date': date,
-          'goal': goal,
-          'activity': activity,
-          'totalTrials': attempts,
-          'independentTrials': independent,
-          'promptedTrials': prompted,
-          'goalMet': goalMet,
-          'affect': affect,
-          'notes': notes,
-        },
-        'goals': goalsList,
-        'noMarkdown': true,
+      // ── Structured block ────────────────────────────────────
+      // Only include populated fields. The proxy treats absence and
+      // empty/zero identically; sending fewer keys keeps the audit
+      // log's request_body clean and the prompt's STRUCTURED DATA
+      // section honest.
+      final structuredRaw = <String, dynamic>{
+        'date':                  s['date'],
+        'target_behaviour':      s['target_behaviour'],
+        'activity_name':         s['activity_name'],
+        'attempts':              s['attempts'],
+        'independent_responses': s['independent_responses'],
+        'prompted_responses':    s['prompted_responses'],
+        'goal_met':              s['goal_met'],
+        'client_affect':         s['client_affect'],
+      };
+      final structured = <String, dynamic>{};
+      structuredRaw.forEach((k, v) {
+        if (v == null) return;
+        if (v is String && v.trim().isEmpty) return;
+        if (v is num && v == 0) return;
+        structured[k] = v;
+      });
+
+      final body = <String, dynamic>{
+        'session_id':    sessionId,
+        'client_id':     clientId,
+        'client_name':   widget.clientName,
+        'report_format': _reportFormat,
+        'transcript':    transcript,
+        'notes':         notes,
+        'structured':    structured,
+        'goals': goals
+            .map((g) => {
+                  'domain':          g['domain'],
+                  'goal_text':       g['goal_text'],
+                  'target_accuracy': g['target_accuracy'],
+                })
+            .toList(),
       };
 
       final response = await http.post(
         Uri.parse(_proxyUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(bodyMap),
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
       );
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final text =
-            data['content']?[0]?['text'] ?? data['report'] ?? response.body;
-        final reportText = _cleanText(text.toString());
-
-        // Phase 4.0.7.9i-fix2: parent_summary is now a structured JSON
-        // field on the proxy response. Try the JSON path first; fall
-        // back to the legacy text-section split for any non-JSON
-        // responses (handles regressions and any in-flight callers).
-        String parentSummary;
-        String clinicalText;
-        final reportTrimmed = reportText.trim();
-        if (reportTrimmed.startsWith('{')) {
-          try {
-            final parsed = jsonDecode(reportTrimmed);
-            if (parsed is Map<String, dynamic>) {
-              parentSummary =
-                  (parsed['parent_summary'] as String?)?.trim() ?? '';
-              // The clinical text passed downstream is the full JSON —
-              // _populateSoapFields handles JSON-first extraction itself.
-              clinicalText = reportText;
-            } else {
-              final split = _splitClinicalAndParent(reportText);
-              parentSummary = split.parent;
-              clinicalText  = split.clinical;
-            }
-          } catch (_) {
-            final split = _splitClinicalAndParent(reportText);
-            parentSummary = split.parent;
-            clinicalText  = split.clinical;
+      // ── 422 INSUFFICIENT_CONTENT — proxy refused to fabricate
+      if (response.statusCode == 422) {
+        String msg =
+            'Not enough captured to generate a note — record more notes, a transcript, or trial data.';
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic> && decoded['error'] is String) {
+            msg = decoded['error'] as String;
           }
-        } else {
-          final split = _splitClinicalAndParent(reportText);
-          parentSummary = split.parent;
-          clinicalText  = split.clinical;
+        } catch (_) {}
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg)),
+          );
+          setState(() => _error = msg);
         }
+        return;
+      }
 
-        setState(() {
-          _report = reportText;
-          _showNoteFields = true;
-        });
-        _populateSoapFields(clinicalText);
+      // ── 401 — JWT invalid/expired (surface clearly)
+      if (response.statusCode == 401) {
+        setState(() => _error =
+            'Sign-in expired. Refresh the page and sign in again.');
+        return;
+      }
 
-        // Persist the AI output immediately so a tab close ≠ data loss.
-        // _persistGeneratedReport reads the SOAP form controllers (now
-        // populated above) plus the parent_summary we just extracted.
-        await _persistGeneratedReport(parentSummary: parentSummary);
-      } else {
+      // ── Other non-200 — generic upstream error
+      if (response.statusCode != 200) {
         setState(() {
           _error =
               'Server error ${response.statusCode}: ${response.body}';
         });
+        return;
       }
+
+      // ── 200 — parse new structured response
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final soap =
+          (data['soap_note'] as Map?)?.cast<String, dynamic>() ?? const {};
+      final sStr = (soap['s'] as String?)?.trim() ?? '';
+      final oStr = (soap['o'] as String?)?.trim() ?? '';
+      final aStr = (soap['a'] as String?)?.trim() ?? '';
+      final pStr = (soap['p'] as String?)?.trim() ?? '';
+      final parentSummary =
+          (data['parent_summary'] as String?)?.trim() ?? '';
+
+      // generation_id mirrored onto widget.session so PDF export and
+      // future correlation surfaces (Phase 4.1) can read it without
+      // a re-fetch.
+      final generationId = data['generation_id'] as String?;
+      if (generationId != null && generationId.isNotEmpty) {
+        widget.session['generation_id'] = generationId;
+      }
+
+      _sCtrl.text = sStr;
+      _oCtrl.text = oStr;
+      _aCtrl.text = aStr;
+      _pCtrl.text = pStr;
+
+      setState(() {
+        // Mirror the legacy `_report` field so existing UI checks
+        // (CTAs, attestation gates) that key off non-null `_report`
+        // continue working. The string shape is the proxy's
+        // /generate-report-legacy contract for back-compat with any
+        // downstream readers that haven't migrated.
+        _report = jsonEncode({
+          's':              sStr,
+          'o':              oStr,
+          'a':              aStr,
+          'p':              pStr,
+          'parent_summary': parentSummary,
+        });
+        _showNoteFields = true;
+      });
+
+      // Persist immediately — tab close ≠ data loss.
+      await _persistGeneratedReport(parentSummary: parentSummary);
     } catch (e) {
       setState(() {
         _error = 'Failed to connect to AI service: $e';
@@ -347,6 +407,11 @@ class _ReportScreenState extends State<ReportScreen> {
   /// fix this content was concatenated into the P field by the SOAP
   /// parser and the parent block only landed in the PDF by lucky regex
   /// match downstream.
+  // Phase 4.0.7.40-flutter — parked for the rollback window; the new
+  // /generate-report contract returns structured soap_note JSON so
+  // text-section splitting is no longer needed. Sunset with the
+  // legacy proxy endpoint.
+  // ignore: unused_element
   ({String clinical, String parent}) _splitClinicalAndParent(String text) {
     final headerPatterns = <RegExp>[
       RegExp(r'PARENT\s+COMMUNICATION\s+SUMMARY', caseSensitive: false),
@@ -456,6 +521,11 @@ class _ReportScreenState extends State<ReportScreen> {
   /// (MODE D) is detected and handled gracefully — all four fields
   /// blanked and a debug line logged so the SLP doesn't see hallucinated
   /// content for a session with no captured data.
+  // Phase 4.0.7.40-flutter — parked for the rollback window; the new
+  // /generate-report contract returns soap_note as a structured map,
+  // so _generateReport populates the controllers directly. Sunset
+  // with the legacy proxy endpoint.
+  // ignore: unused_element
   void _populateSoapFields(String text) {
     final trimmed = text.trim();
 
@@ -1094,6 +1164,10 @@ class _ReportScreenState extends State<ReportScreen> {
     return widgets;
   }
 
+  // Phase 4.0.7.40-flutter — parked for the rollback window; markdown
+  // stripping is unnecessary now that the proxy returns structured
+  // tool-use output. Sunset with the legacy proxy endpoint.
+  // ignore: unused_element
   String _cleanText(String text) {
     return text
         .replaceAllMapped(

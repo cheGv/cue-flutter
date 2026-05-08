@@ -91,6 +91,16 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
         ),
       ),
     );
+    // Phase 4.0.7.40-flutter — this branch is now functionally
+    // unreachable. NarrateSessionScreen never calls Navigator.pop
+    // with `true` (the only forward exit, _generateAndNavigate, now
+    // uses pushAndRemoveUntil that sweeps AddSessionScreen out of
+    // the stack — and even pre-fix, narrate's Cancel/back path
+    // resolved with null). The if's truth-value was always false in
+    // practice; post-fix the State is also disposed before the
+    // await resumes (mounted=false). Preserved per phase scope so
+    // git-blame can reach the original 4.0.7.28 wiring intent if a
+    // regression surfaces. Sunset alongside the legacy proxy endpoint.
     if (result == true && mounted) Navigator.pop(context, true);
   }
 
@@ -110,6 +120,27 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
         ),
       ),
     );
+    // Phase 4.0.7.40-flutter — this branch still fires for the
+    // regular Save flow (SessionCaptureScreen `_save` pops with
+    // result=true; that pop completes symmetrically — AddSession is
+    // on top when the await resumes — so this Navigator.pop targets
+    // AddSessionScreen as intended, returning the SLP to chart).
+    //
+    // It is NO LONGER reached from the Save & Generate flow.
+    // SessionCaptureScreen `_saveAndGenerate` now uses
+    // pushAndRemoveUntil that sweeps AddSessionScreen out of the
+    // stack, so this State is disposed before the awaited Future
+    // resolves; `mounted` is false on resume, the if short-circuits.
+    //
+    // Pre-fix bug (typed-notes Save & Generate): when
+    // SessionCaptureScreen used pushReplacement with `result: true`,
+    // this Navigator.pop ran AFTER ReportScreen had already been
+    // pushed, popping ReportScreen instead of AddSessionScreen —
+    // bouncing the SLP back to the picker. See commit message for
+    // the full mechanism. Branch preserved (not deleted) per phase
+    // scope so git-blame can reach the original 4.0.7.28 wiring
+    // intent if a regression surfaces. Sunset alongside the legacy
+    // proxy endpoint.
     if (result == true && mounted) Navigator.pop(context, true);
   }
 

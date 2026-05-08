@@ -20,6 +20,20 @@ import '../narrate_web_audio.dart';
 import '../widgets/app_layout.dart';
 import 'report_screen.dart';
 
+// Phase 4.0.7.40-flutter — predicate for the Generate Report
+// pushAndRemoveUntil call. Sweeps the AddSessionScreen interstitial
+// and this NarrateSessionScreen out of the stack so the SLP lands
+// on ReportScreen with the chart route directly underneath. Mirrors
+// the predicate in session_capture_screen.dart verbatim — see the
+// comment block there for full semantics.
+bool _keepRouteAboveSessionFlow(Route<dynamic> r) {
+  if (r.isFirst) return true;
+  final name = r.settings.name;
+  if (name == null) return false;
+  if (name.startsWith('/clients/') && !name.endsWith('/study')) return true;
+  return name == '/today' || name == '/clients' || name == '/assessing';
+}
+
 // Phase 4.0.7.6 — explicit narrator lifecycle.
 //   idle       → no active recording, no transcript yet.
 //   recording  → mic streaming bytes to the proxy.
@@ -655,12 +669,21 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
 
     if (!mounted) return;
 
-    // Phase 4.0.7.39 — RouteSettings.name reflects /sessions/:id in the
-    // browser URL. Imperative push retained (rather than
-    // pushReplacementNamed) so the just-finished transcript Map is
-    // forwarded directly without the deep-link loader doing a redundant
+    // Phase 4.0.7.40-flutter — pushAndRemoveUntil sweeps both this
+    // NarrateSessionScreen and the AddSessionScreen interstitial out
+    // in one call, landing the SLP on ReportScreen with the chart
+    // directly underneath. Pre-fix used pushReplacement, which left
+    // AddSessionScreen in the stack between Chart and ReportScreen —
+    // a latent UX issue (back-from-ReportScreen landed on a dead
+    // picker) but not a bounce since narrate never passed
+    // `result: true`. Bundled with the typed-notes fix for symmetry.
+    //
+    // Phase 4.0.7.39 — RouteSettings.name reflects /sessions/:id in
+    // the browser URL. Imperative push retained (rather than
+    // pushNamed) so the just-finished transcript Map is forwarded
+    // directly without the deep-link loader doing a redundant
     // re-fetch on this hop. Hard refresh re-resolves through the loader.
-    Navigator.pushReplacement(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         settings: RouteSettings(name: '/sessions/$sessionId'),
@@ -673,6 +696,7 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
           clientId:   widget.clientId,
         ),
       ),
+      _keepRouteAboveSessionFlow,
     );
   }
 

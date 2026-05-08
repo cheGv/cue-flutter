@@ -45,6 +45,37 @@ import '../widgets/app_layout.dart';
 import '../widgets/voice_note_sheet.dart';
 import 'report_screen.dart';
 
+// Phase 4.0.7.40-flutter — predicate for the Save & Generate
+// pushAndRemoveUntil call. Sweeps the AddSessionScreen interstitial
+// and this SessionCaptureScreen out of the stack so the SLP lands
+// on ReportScreen with the chart route directly underneath.
+//
+// Predicate semantics: `true` to keep, `false` to remove. Iterates
+// down from the top of the existing stack, removing each route until
+// one returns `true` (which is then kept and removal stops).
+//
+// Keep:
+//   • The first route (defensive fallback — never strand).
+//   • Chart pages: any `/clients/<id>` route, except `/clients/<id>/study`
+//     (Cue Study is a separate user destination; if someone reaches
+//     this flow from study, sweep through to chart anyway).
+//   • Top-level chrome destinations: /today, /clients, /assessing.
+//
+// Remove:
+//   • Routes with no settings.name — AddSessionScreen and
+//     SessionCaptureScreen are both pushed without RouteSettings.name.
+//
+// Mirrored verbatim in narrate_session_screen.dart for the narrate
+// path. Kept duplicated (vs. extracted to a util) because the two
+// call sites are the only consumers and the predicate is small.
+bool _keepRouteAboveSessionFlow(Route<dynamic> r) {
+  if (r.isFirst) return true;
+  final name = r.settings.name;
+  if (name == null) return false;
+  if (name.startsWith('/clients/') && !name.endsWith('/study')) return true;
+  return name == '/today' || name == '/clients' || name == '/assessing';
+}
+
 class SessionCaptureScreen extends StatefulWidget {
   final String    clientId;
   final String    clientName;
@@ -597,17 +628,30 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
       'status':      'complete',
     };
 
-    // pushReplacement so the back-button from ReportScreen returns to
-    // the client profile (AddSessionScreen also pops on the result=true
-    // path, which percolates upward), not to a stale capture screen.
+    // Phase 4.0.7.40-flutter — pushAndRemoveUntil sweeps both this
+    // SessionCaptureScreen and the AddSessionScreen interstitial out
+    // in one call, landing the SLP on ReportScreen with the chart
+    // directly underneath.
+    //
+    // Why not pushReplacement: the previous implementation passed
+    // `result: true` to pushReplacement, which resolved
+    // AddSessionScreen's awaiting Future. AddSessionScreen then ran
+    // `Navigator.pop(context, true)` — but Navigator.pop always pops
+    // the topmost route (BuildContext only locates the Navigator,
+    // not the source route), so the pop targeted the freshly-pushed
+    // ReportScreen, bouncing the SLP back to the picker.
+    //
+    // The predicate keeps named chrome destinations and the chart
+    // (`/clients/:id`) but excludes Cue Study (`/clients/:id/study`)
+    // and removes any unnamed routes (AddSessionScreen and
+    // SessionCaptureScreen are both pushed without RouteSettings.name).
     //
     // Phase 4.0.7.39 — RouteSettings.name lets the URL bar reflect
-    // /sessions/:id while the imperative push preserves
-    // `autoGenerate: true` (the Save & Generate one-shot trigger).
-    // Hard refresh of the same URL resolves through the deep-link
-    // loader, which hardcodes autoGenerate=false per the founder
-    // safety lock — preventing accidental LLM regen on refresh.
-    Navigator.pushReplacement(
+    // /sessions/:id; the deep-link loader for that URL hardcodes
+    // autoGenerate=false (founder safety lock) so a hard refresh
+    // does not accidentally re-trigger the LLM call. Imperative
+    // push retains autoGenerate=true for the one-shot Save & Generate.
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         settings: RouteSettings(name: '/sessions/$sessionId'),
@@ -618,7 +662,7 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
           autoGenerate: true,
         ),
       ),
-      result: true,
+      _keepRouteAboveSessionFlow,
     );
   }
 
