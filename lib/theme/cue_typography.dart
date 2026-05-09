@@ -9,8 +9,10 @@
 // directly to a CSS font-family declaration honoring the browser's system
 // font.
 //
-// All text should derive from CueType. Do NOT introduce Google Fonts in any
-// new code in this phase — system fonts only.
+// Phase 4.0.8: new code uses CueTypeV3 from cue_type_v3.dart (Inter +
+// JetBrains Mono + Iowan/Georgia per spine doc). CueType.* below remains
+// valid for surfaces 2-8 during per-surface migration; sunset target is
+// surface 8. Ground truth: docs/design-language-spine-2026-05-08.md.
 
 import 'package:flutter/material.dart';
 

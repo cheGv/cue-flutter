@@ -162,6 +162,16 @@ class _TopBar extends StatelessWidget {
     final hPad    = isMobile ? 8.0 : 32.0;
     final fontSize = isMobile ? 16.0 : 20.0;
 
+    // Phase 4.0.8-step-B-surface-1.2 — when a screen passes empty
+    // title AND there are no actions AND no back button, skip the
+    // bar entirely. Today screen uses this so the greeting H1 is the
+    // page identity (the spine's once-per-screen serif moment is the
+    // header). Other screens with title strings keep their bar
+    // unchanged.
+    if (title.isEmpty && !canPop && actions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Container(
       height: 56,
       decoration: BoxDecoration(
@@ -304,7 +314,19 @@ class _AppSidebar extends StatelessWidget {
   Widget _buildNavItem(
       BuildContext context, _NavItem item, bool isNight) {
     final isActive = activeRoute == item.route;
-    final activeColor   = CueColors.amber;
+
+    // Phase 4.0.8-step-B-surface-1.2 — sidebar active state shifts
+    // from amber to olive per the dual-accent semantic system. Amber
+    // is reserved for urgent surfaces (yesterday-reminder, "Up next"
+    // card stripe); navigation is calm/steady → olive.
+    //
+    // The saturated olive (#5C6E3B / kCueOlive) reads as muddy on
+    // the dark navy sidebar. A desaturated lift (#B8C572) is used
+    // here ONLY — sidebar-specific. NOT promoted to a token because
+    // it has only one consumer; if a second emerges, factor to
+    // kCueOliveSidebar at that point.
+    const Color sidebarActiveText = Color(0xFFB8C572);
+    final activeColor   = sidebarActiveText;
     final inactiveColor = isNight
         ? const Color(0xFFF0EBE1).withValues(alpha: 0.25)
         : Colors.white.withValues(alpha: 0.35);
@@ -318,8 +340,9 @@ class _AppSidebar extends StatelessWidget {
           vertical: 10,
         ),
         decoration: BoxDecoration(
+          // Olive ground at 0.22α — calm-register active indicator.
           color: isActive
-              ? activeColor.withValues(alpha: 0.10)
+              ? const Color(0xFF5C6E3B).withValues(alpha: 0.22)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),

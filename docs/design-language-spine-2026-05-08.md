@@ -194,3 +194,162 @@ was self-described "fresh" rather than tired. Spine locked
 tonight; implementation deferred to fresh-day work. This is
 the discipline of "decide when fresh, build when fresh —
 never rush either."
+
+---
+
+# Revision 2026-05-09 (post-friend-tester signal)
+
+After surface 1 (commit `15eceff`, since superseded) shipped
+locally, friend-tester signal landed: typography read coder-y
+in places, names didn't pop, single-amber-accent register felt
+shouty without restraint, big numerics in Inter weight 600
+read game-y / scoreboard-like. This revision incorporates the
+signal as a delta on top of the original spine. Surface 1.2
+(this commit) is the first implementation of the revised
+spine.
+
+The original spine above remains the lock for **roles and
+stack** (Sonoma surface + Logic Pro typography + Things 3
+warmth, Inter / JetBrains Mono / Iowan, surface implementation
+order). This revision **adds**: olive accent, eyebrow
+doctrine, numerics rule, cuttlefish placement learning,
+yesterday-reminder visual lock.
+
+## Olive accent — dual-accent semantic system
+
+The single-amber-accent register from the original spine is
+refined to **two accents**:
+
+- **Amber `#B45309`** — urgent register. Reserved for:
+  attention deadlines, primary actions, "Up next" indicators,
+  the yesterday-reminder bar, the Pending Notes widget count.
+- **Olive `#5C6E3B`** — calm/steady register. The default UI
+  accent. Used for: sidebar active state (desaturated to
+  `#B8C572` for contrast on the dark navy ground), brief-card
+  left stripe, "Today's move" clinical-label, inline trial
+  counts in card prose, non-urgent state pill grounds, the
+  Tomorrow widget count.
+
+Olive supporting tones:
+
+| Token | Hex | Used for |
+|---|---|---|
+| `kCueOlive` | `#5C6E3B` | calm/steady accent |
+| `kCueOliveSurface` | `#EDEBD8` | pill grounds, optional tint |
+| `kCueOliveDeep` | `#3F4A28` | text on olive surface |
+
+The semantic asymmetry is the point: amber is the exception,
+olive is the default. Friend-tester signal: this produces a
+patrician calm register that doesn't slip toward
+outdoor/military.
+
+## Eyebrow doctrine — typography rule split
+
+Original Rule 1 ("Monospace is the data language") sharpens.
+Three-way split:
+
+- **Mono uppercase tracked = data ONLY.** Dates ("FRI · 09 MAY
+  2026"), state pills ("UP NEXT"), section counts ("03"),
+  trial numbers ("7/10"), timestamps ("09:00"). Built via
+  `CueTypeV3.dataEyebrow()`.
+- **Sans sentence-case = ALL human content labels.** Clinical
+  card eyebrows ("Today's move", "Where we left off",
+  "Context"), section headers ("Today's sessions", "At a
+  glance"), widget titles ("This week", "Pending notes"),
+  widget internal labels ("Sessions", "Documented", day names
+  Mon/Tue/Wed). Built via `CueTypeV3.clinicalLabel()`,
+  `widgetTitle()`, `widgetLabel()`, `sectionTitle()`.
+- **Sans uppercase tracked is FORBIDDEN everywhere except
+  state pills.** This is what reads as "code-language" to
+  clinicians. The state-pill carve-out exists because state
+  pills *are* data tags — short, status-like, scanned-not-read.
+- **Iowan serif = editorial moments + big numerics** (see
+  Numerics rule below).
+
+## Numerics rule (Rule 4 — added 2026-05-09)
+
+Big plaque-style numerics in widgets — pending count (38px),
+tomorrow count (36px), pulse stats (22px), end-of-day stat
+pill (12px) — render in **Iowan Old Style 400** with
+`-0.025em` letter-spacing. Built via
+`CueTypeV3.numericDisplay(size: …)`.
+
+Inter weight 600 is **forbidden** for plaque-style numerics.
+The Inter weight 600 register read game-y / scoreboard-like in
+the friend-tester signal; Iowan numerics read like financial-
+report headlines — editorial register, calm, authoritative.
+
+Inline data numerics (trial counts "7/10", times "09:00", IDs)
+remain JetBrains Mono with tabular figures via
+`CueTypeV3.dataMono()`. The mono / Iowan split is by size and
+context: plaque-style → Iowan; inline-with-prose → mono.
+
+## Cuttlefish placement learning
+
+Five anchored sizes, locked: **96 / 64 / 32 / 22 / 14**.
+
+- 96px — end-of-day resting state, goal-achieved overlay
+  (hero treatment).
+- 64px — Today greeting block, in her own 80px column at the
+  left margin (parallel companion, not inline with greeting
+  text). New in 1.2.
+- 32px — Cue Noticed widget, inline-leading.
+- 22px — sidebar brand mark, Cue Study app-bar.
+- 14px — chart action pill (inline brand mark).
+
+The middle ground (24-60px) is the failure zone — explicitly
+avoided. A 32-60px cuttlefish reads ambiguous: not small
+enough to be a brand mark, not large enough to be a hero
+companion. Commit to one register or the other.
+
+## Yesterday-reminder visual lock
+
+The yesterday-reminder bar at the top of Today is **urgent
+register**, not paper register. Lock:
+
+- Background: `#FBE9D2` (light amber surface).
+- Border: `#E8DCB8` (amber-tinted hairline).
+- Text: `kCueAmberDeep` (`#854F0B`).
+
+Surface 1's "no amber fill, paper bg" choice is superseded by
+this lock — friend-tester signal said the urgent intent didn't
+read on a paper-on-paper bar. The dual-accent system applies:
+yesterday's missed sessions are urgent, so the bar gets the
+amber register.
+
+## State pill register
+
+State pills on session brief cards are **the one carve-out**
+from "sans uppercase tracked forbidden." State pills are data
+tags — short, status-like, mono uppercase tracked via
+`CueTypeV3.dataEyebrow()`.
+
+Pill backgrounds vary by state:
+
+- **Up next** — amber surface (`#FBE9D2`) + amber-deep text.
+  Synced with the amber left-stripe on the same card.
+- **Active** — `kCueOliveSurface` ground + `kCueOliveDeep` text.
+- **Baseline** — `kCuePaper` ground + `kCueInkTertiary` text
+  (subtle).
+- **Phase 1 / Follow-up** — reserved; map to olive ground in
+  v1.2.
+
+## Sidebar active state
+
+Sidebar active state (`app_layout.dart`'s `_AppSidebar`)
+shifts from amber (`CueColors.amber`) to olive. Dual-accent
+system applied: navigation is calm-register → olive. The
+saturated `kCueOlive #5C6E3B` reads muddy on the dark navy
+sidebar; a desaturated lift `#B8C572` is used inline at the
+single call site (sidebar-specific, not a token).
+
+Active item: ground `rgba(92, 110, 59, 0.22)`, text `#B8C572`.
+
+## Surface 1.2 reference
+
+This revision is implemented for the first time in Phase
+4.0.8-step-B-surface-1.2 (Today screen full refactor folding
+the original surface-1 commit `15eceff`). Surfaces 2-8 retain
+prior register; per-surface migration proceeds in spine-doc
+order, each surface incorporating the revised spine
+above.

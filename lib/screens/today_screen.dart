@@ -1,28 +1,33 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/day_state_service.dart';
 import '../services/name_formatter.dart';
+import '../services/today_widgets_service.dart';
+import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
+import '../theme/cue_type_v3.dart';
 import '../theme/cue_typography.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/cue_amber_link.dart';
 import '../widgets/cue_cuttlefish.dart';
 import '../widgets/today_brief_card.dart';
+import '../widgets/today_glance_widgets.dart';
 import 'client_profile_screen.dart';
 
-// ── Legacy local palette ─────────────────────────────────────────────────────
-// Pre-Phase-3.1 yesterday-reminder code (further down) still references
-// these. Phase 3.1 brief / pulse / greeting blocks all flow from CueColors
-// + CueAlpha + cue_tokens directly.
-const Color _paper  = Color(0xFFFAFAF7);
-const Color _ink    = Color(0xFF1B2B4B);
-const Color _ghost  = Color(0xFF6B7690);
-const Color _amber  = Color(0xFFB45309);
-const Color _border = Color(0xFFE8E4DC);
+// ── Phase 4.0.8-step-B-surface-1 ────────────────────────────────────────────
+// The pre-spine local palette (_paper / _ink / _ghost / _amber / _border) was
+// removed. Every color reference on the rendered Today surface now resolves
+// to a kCue* token from cue_phase4_tokens.dart. CueColors.* references in
+// dead-code paths (_buildSessionBriefCard, _buildWeekPulse) are left intact
+// per phase scope; those methods carry `// ignore: unused_element` and
+// sunset alongside the legacy proxy endpoint cleanup.
+//
+// Pre-spine `_paper` was #FAFAF7 (a near-spine drift); spine kCuePaper is
+// #FAF7F0. The handful of pixels of warmth shift is intentional: the spine
+// commits to the warmer paper tone across every surface, not just Today.
 
 // ── Proxy (§4 — plain http.post, never functions.invoke) ───────────────────────
 const String _proxyBase = 'https://cue-ai-proxy.onrender.com';
@@ -80,12 +85,45 @@ class _TodayScreenState extends State<TodayScreen> {
   // have never tapped Good night Cue.
   DayStateRecord _dayState = DayStateRecord.open;
 
+  // ── Phase 4.0.8-step-B-surface-1.2: At a glance widget data ─────────────
+  // Independent of the brief-card load path so the page renders fast and
+  // widgets fill in as queries return. Each defaulting to its empty/null
+  // state so the widgets render zero-state on first paint.
+  List<DailyPulse>     _weekPulse    = const [];
+  List<PendingSession> _pendingNotes = const [];
+  List<ActiveGoal>     _activeGoals  = const [];
+  TomorrowSummary      _tomorrow     = const TomorrowSummary(sessionCount: 0);
+  CueInsight?          _noticed;
+
   @override
   void initState() {
     super.initState();
     _slpFirstName = _resolveSlpFirstName();
     _load();
     _loadDayState();
+    _loadGlanceWidgets();
+  }
+
+  /// Fires the four widget queries in parallel. Defensive — service
+  /// methods return empty/null on failure rather than throwing, so a
+  /// network blip leaves widgets in zero-state instead of breaking
+  /// the page.
+  Future<void> _loadGlanceWidgets() async {
+    final results = await Future.wait([
+      TodayWidgetsService.getThisWeekPulse(),
+      TodayWidgetsService.getPendingNotes(),
+      TodayWidgetsService.getActiveGoals(),
+      TodayWidgetsService.getTomorrowSummary(),
+      TodayWidgetsService.getNoticedInsight(),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _weekPulse    = results[0] as List<DailyPulse>;
+      _pendingNotes = results[1] as List<PendingSession>;
+      _activeGoals  = results[2] as List<ActiveGoal>;
+      _tomorrow     = results[3] as TomorrowSummary;
+      _noticed      = results[4] as CueInsight?;
+    });
   }
 
   Future<void> _loadDayState() async {
@@ -601,9 +639,9 @@ class _TodayScreenState extends State<TodayScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: _paper,
+      backgroundColor: kCuePaper,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(kCueMediumRadius)),
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheet) => Padding(
@@ -618,20 +656,14 @@ class _TodayScreenState extends State<TodayScreen> {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: _border,
+                    color:        kCueBorder,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
-                'Who are you seeing today?',
-                style: CueType.serif(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: _ink,
-                ),
-              ),
+              // Picker title — H2 (sans), not the screen's H1 serif moment.
+              Text('Who are you seeing today?', style: CueTypeV3.h2()),
               const SizedBox(height: 16),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 380),
@@ -656,13 +688,8 @@ class _TodayScreenState extends State<TodayScreen> {
                               }),
                       title: Text(
                         cl['name'] ?? '',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 14,
-                          color:
-                              alreadyOn ? _ghost : _ink,
-                          fontWeight: alreadyOn
-                              ? FontWeight.normal
-                              : FontWeight.w500,
+                        style: CueTypeV3.h2(
+                          color: alreadyOn ? kCueInkTertiary : kCueInk,
                         ),
                       ),
                       subtitle: Text(
@@ -671,10 +698,10 @@ class _TodayScreenState extends State<TodayScreen> {
                           if ((cl['diagnosis'] as String?)?.isNotEmpty == true)
                             cl['diagnosis'] as String,
                         ].join(' · '),
-                        style: GoogleFonts.dmSans(fontSize: 12, color: _ghost),
+                        style: CueTypeV3.body(color: kCueInkTertiary),
                       ),
-                      activeColor:     _ink,
-                      checkColor:      Colors.white,
+                      activeColor:     kCueInk,
+                      checkColor:      kCueSurfaceWhite,
                       dense:           true,
                       controlAffinity: ListTileControlAffinity.leading,
                     );
@@ -689,17 +716,20 @@ class _TodayScreenState extends State<TodayScreen> {
                     onPressed: () => Navigator.pop(ctx),
                     child: Text(
                       'Cancel',
-                      style: GoogleFonts.dmSans(color: _ghost, fontSize: 14),
+                      style: CueTypeV3.body(color: kCueInkTertiary),
                     ),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _ink,
-                      foregroundColor: Colors.white,
+                      backgroundColor: kCueInk,
+                      foregroundColor: kCueSurfaceWhite,
                       elevation:       0,
+                      // Picker confirm pill — editorial register (matches
+                      // Good night Cue / reopen pills); radius 20 is
+                      // explicit per spine carve-out.
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(20),
                       ),
                       padding: const EdgeInsets.symmetric(
                           horizontal: 20, vertical: 12),
@@ -713,10 +743,7 @@ class _TodayScreenState extends State<TodayScreen> {
                     },
                     child: Text(
                       'Confirm',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: CueTypeV3.h2(color: kCueSurfaceWhite),
                     ),
                   ),
                 ],
@@ -733,7 +760,11 @@ class _TodayScreenState extends State<TodayScreen> {
   @override
   Widget build(BuildContext context) {
     return AppLayout(
-      title:       'Today',
+      // Phase 4.0.8-step-B-surface-1.2 — empty title suppresses the
+      // top bar entirely on Today. The greeting H1 is the page
+      // identity; the spine's "one serif moment per screen" rule is
+      // honored by that headline, not a duplicated page-title bar.
+      title:       '',
       activeRoute: 'today',
       body: _loading
           ? const Center(
@@ -751,22 +782,19 @@ class _TodayScreenState extends State<TodayScreen> {
                         Theme.of(context).brightness == Brightness.dark;
                     final pageBg = isNight
                         ? CueColors.backgroundDark
-                        : _paper;
+                        : kCuePaper;
+                    // Phase 4.0.8-step-B-surface-1.2 — page order
+                    // restructured: greeting block now leads the page;
+                    // yesterday-reminder and reopened-pill moved into
+                    // _buildTodayZone where they belong contextually
+                    // (yesterday-reminder appears below the greeting;
+                    // reopened-pill renders inline in the greeting
+                    // block at less prominent register).
                     return ColoredBox(
                       color: pageBg,
                       child: ListView(
                         padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 32),
                         children: [
-                          if (_dayState.state == CueDayState.reopened)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: _ReopenedPill(),
-                              ),
-                            ),
-                          if (_yesterdayMissed.isNotEmpty)
-                            _buildYesterdayReminder(),
                           _buildTodayZone(),
                           const SizedBox(height: 32),
                           _buildGoodNightFooter(isNight: isNight),
@@ -786,11 +814,8 @@ class _TodayScreenState extends State<TodayScreen> {
         : const Color(0x14000000);
     final borderColor = isNight
         ? const Color(0x2EFFFFFF) // rgba(255,255,255,0.18)
-        : const Color(0x2E000000); // rgba(0,0,0,0.18)
-    final textColor = isNight ? CueColors.inkDark : CueColors.inkPrimary;
-    final mutedColor = isNight
-        ? CueColors.inkTertiaryDark
-        : CueColors.inkPrimary.withValues(alpha: 0.5);
+        : kCueBorder;
+    final textColor = isNight ? CueColors.inkDark : kCueInk;
 
     final helperText = _dayState.state == CueDayState.reopened
         ? 'close again when you\'re really done'
@@ -801,35 +826,31 @@ class _TodayScreenState extends State<TodayScreen> {
       children: [
         Container(height: 0.5, color: dividerColor),
         const SizedBox(height: 18),
-        // Outline pill — transparent fill, 0.5px border.
+        // Good night Cue pill — editorial register (radius 20 per spine
+        // carve-out). Outline-only, transparent fill.
         InkWell(
-          onTap: _closeDay,
+          onTap:        _closeDay,
           borderRadius: BorderRadius.circular(20),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
             decoration: BoxDecoration(
               color:        Colors.transparent,
-              border:       Border.all(color: borderColor, width: 0.5),
+              border:       Border.all(color: borderColor, width: kCueCardBorderW),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               'Good night Cue',
-              style: CueType.custom(
-                fontSize: 11,
-                weight:   FontWeight.w500,
-                color:    textColor,
-              ),
+              style: CueTypeV3.body(color: textColor),
             ),
           ),
         ),
         const SizedBox(height: 8),
+        // Helper microcopy — italic editorial register, family-facing
+        // warmth (Rule 3 carve-out — this is end-of-day, not clinical
+        // action). Iowan italic via CueTypeV3.editorialItalic.
         Text(
           helperText,
-          style: CueType.custom(
-            fontSize: 9.5,
-            weight:   FontWeight.w400,
-            color:    mutedColor,
-          ).copyWith(fontStyle: FontStyle.italic),
+          style:     CueTypeV3.editorialItalic(),
           textAlign: TextAlign.center,
         ),
       ],
@@ -837,8 +858,16 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   // ── End-of-day resting moment (closed state) ───────────────────────────
-  // Theme-aware: day and night both render the same shape in their own
-  // palette. Stat row dimmed to 65%. Reopen pill below.
+  //
+  // Phase 4.0.8-step-B-surface-1 — state-conditional H1: this surface's
+  // serif moment lives here when the day is closed. Greeting block (default
+  // state) and end-of-day (closed state) never co-render, so Rule 2's
+  // "serif appears at most once per screen" is honored.
+  //
+  // The cuttlefish render at size 96 / state: CueState.resting is preserved
+  // unchanged per founder instinct call: end-of-day cuttlefish protects
+  // against typography fatigue at day-close. Will be re-evaluated with
+  // friend tester signal in 4.0.8.1 if needed.
   Widget _buildEndOfDayResting() {
     final isNight = Theme.of(context).brightness == Brightness.dark;
 
@@ -852,17 +881,10 @@ class _TodayScreenState extends State<TodayScreen> {
       if (next != null && next.isNotEmpty) pending++;
     }
 
-    final pageBg = isNight ? CueColors.backgroundDark : _paper;
-    final headlineColor = isNight ? CueColors.inkDark : CueColors.inkPrimary;
-    final mutedColor    = isNight
-        ? CueColors.inkSecondaryDark
-        : CueColors.inkPrimary.withValues(alpha: 0.55);
-    final tertiaryColor = isNight
-        ? CueColors.inkTertiaryDark
-        : CueColors.inkPrimary.withValues(alpha: 0.40);
-    final pillBorder = isNight
-        ? const Color(0x2EFFFFFF)
-        : const Color(0x2E000000);
+    final pageBg        = isNight ? CueColors.backgroundDark : kCuePaper;
+    final headlineColor = isNight ? CueColors.inkDark        : kCueInk;
+    final tertiaryColor = isNight ? CueColors.inkTertiaryDark : kCueInkTertiary;
+    final pillBorder    = isNight ? const Color(0x2EFFFFFF)  : kCueBorder;
 
     return Stack(
       children: [
@@ -876,8 +898,8 @@ class _TodayScreenState extends State<TodayScreen> {
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    CueColors.amber.withValues(alpha: 0.10),
-                    CueColors.amber.withValues(alpha: 0.0),
+                    kCueAmber.withValues(alpha: 0.08),
+                    kCueAmber.withValues(alpha: 0.0),
                   ],
                 ),
               ),
@@ -888,23 +910,20 @@ class _TodayScreenState extends State<TodayScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Cuttlefish PRESERVED — founder lock 4.0.8-step-B-surface-1.
+              // Literal `96` retained intentionally (matches CueSize
+              // .cuttlefishWelcome but the literal stays per founder
+              // direction "leave the inconsistency alone, founder's
+              // instruction is unchanged").
               const CueCuttlefish(size: 96, state: CueState.resting),
               const SizedBox(height: 24),
-              Text(
-                'Good work today.',
-                style: CueType.displayMedium.copyWith(
-                  fontSize: 22,
-                  color:    headlineColor,
-                ),
-              ),
+              // State-conditional H1 — Iowan serif, kCueInk. Greeting H1
+              // does not co-render in this state.
+              Text('Good work today.', style: CueTypeV3.h1(color: headlineColor)),
               const SizedBox(height: 6),
               Text(
                 'See you tomorrow.',
-                style: CueType.custom(
-                  fontSize: 12,
-                  weight:   FontWeight.w400,
-                  color:    mutedColor,
-                ),
+                style: CueTypeV3.body(color: tertiaryColor),
               ),
               const SizedBox(height: 28),
               Opacity(
@@ -917,32 +936,27 @@ class _TodayScreenState extends State<TodayScreen> {
                 ),
               ),
               const SizedBox(height: 14),
+              // Italic editorial close — Iowan italic per Rule 3 carve-out.
               Text(
                 'Cue will prepare tomorrow\'s briefs overnight.',
-                style: CueType.bodySmall.copyWith(
-                  color:     tertiaryColor,
-                  fontStyle: FontStyle.italic,
-                ),
+                style: CueTypeV3.editorialItalic(color: tertiaryColor),
               ),
               const SizedBox(height: 20),
               InkWell(
-                onTap: _reopenDay,
+                onTap:        _reopenDay,
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: 14, vertical: 7),
                   decoration: BoxDecoration(
                     color:        Colors.transparent,
-                    border:       Border.all(color: pillBorder, width: 0.5),
+                    border:       Border.all(
+                        color: pillBorder, width: kCueCardBorderW),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     '↺ Reopen — there\'s more',
-                    style: CueType.custom(
-                      fontSize: 11,
-                      weight:   FontWeight.w500,
-                      color:    headlineColor,
-                    ),
+                    style: CueTypeV3.body(color: headlineColor),
                   ),
                 ),
               ),
@@ -955,123 +969,251 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ── Zone 1: Yesterday reminder ──────────────────────────────────────────────
 
+  // Phase 4.0.8-step-B-surface-1.2 — yesterday-reminder visual register
+  // shifted again. Surface 1's "no amber fill, paper bg" choice is
+  // superseded: friend-tester signal said the urgent intent didn't
+  // read at all on a paper-on-paper bar. 1.2 locks an amber-surface
+  // fill (#FBE9D2 / #E8DCB8 border / kCueAmberDeep text) per dual-
+  // accent system: amber = urgent register; this bar is "yesterday's
+  // sessions still need attention" → urgent.
+  //
+  // Inline #FBE9D2 / #E8DCB8 are amber-surface variants tighter than
+  // kCueAmberSurface (#FAEEDA). Inline kept here to preserve the
+  // exact spec; if these recur, factor to tokens in a later phase.
   Widget _buildYesterdayReminder() {
     final n     = _yesterdayMissed.length;
+    // Names piped through NameFormatter.displayName so lowercase data
+    // ("krish") renders title-cased ("Krish"). Project doesn't have a
+    // Client model class — clients flow as Map<String, dynamic> from
+    // Supabase; NameFormatter is the canonical title-case helper used
+    // across surfaces (greeting, roster, chart). Founder's "Client.
+    // displayName getter" intent is honored via this helper.
     final names = _yesterdayMissed.map((r) {
       final cl = r['clients'] as Map?;
-      return (cl != null ? cl['name']?.toString() : null) ?? 'Unknown';
-    }).join(', ');
+      return NameFormatter.displayName(
+          cl != null ? cl['name']?.toString() : null);
+    }).where((s) => s.isNotEmpty).join(', ');
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          onTap: () => setState(() => _expandYesterday = !_expandYesterday),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color:  _amber.withOpacity(0.07),
-              border: Border.all(color: _amber.withOpacity(0.22)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.history_rounded, size: 15, color: _amber),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '$n ${n == 1 ? 'session' : 'sessions'} from yesterday not documented — $names',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 13,
-                      color:      _amber,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines:  1,
-                    overflow:  TextOverflow.ellipsis,
+    // Phase 4.0.8-step-B-surface-1.2 hotfix #2 — visual restructure to
+    // give the widget two registers:
+    //
+    //   • Header (urgent / amber) — kCueAmberSurface ground, kCueAmberDeep
+    //     text, Inter 12.5px with the count portion bolded via Text.rich.
+    //     "2 sessions from yesterday not documented — Krish, Girish"
+    //   • Rows (clinical / olive) — white ground, olive stripe (2px ×
+    //     18px), kCueOliveDeep name in Inter 14/600, kCueAmberDeep
+    //     "Document →" with subtle underline.
+    //
+    // Two registers visible. Header carries urgency; rows carry the
+    // calm clinical work. Single rounded-card container clips both.
+    //
+    // Pre-fix the entire card was amber — read as a single shouty
+    // surface, no widget feel. The dual-register layout is the
+    // friend-tester signal applied: "olive greenish for rich visual."
+    return Material(
+      color:         kCueSurfaceWhite,
+      borderRadius:  BorderRadius.circular(kCueMediumRadius),
+      clipBehavior:  Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(kCueMediumRadius),
+          border:       Border.all(color: kCueBorder, width: kCueCardBorderW),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize:       MainAxisSize.min,
+          children: [
+            // ── Header (amber, urgent) ────────────────────────────────
+            InkWell(
+              onTap: () => setState(
+                  () => _expandYesterday = !_expandYesterday),
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 11),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFBE9D2),
+                  border: Border(
+                    bottom: BorderSide(
+                        color: Color(0xFFE8DCB8), width: 0.5),
                   ),
                 ),
-                Icon(
-                  _expandYesterday
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
-                  size:  16,
-                  color: _amber,
+                child: Row(
+                  children: [
+                    const Icon(Icons.history_rounded,
+                        size: 14, color: kCueAmberDeep),
+                    const SizedBox(width: 8),
+                    Expanded(child: _yesterdayHeadline(n, names)),
+                    Icon(
+                      _expandYesterday
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
+                      size:  16,
+                      color: kCueAmberDeep,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
+            // ── Rows (white, clinical, olive accent) ──────────────────
+            if (_expandYesterday)
+              for (var i = 0; i < _yesterdayMissed.length; i++)
+                _yesterdayRow(
+                  _yesterdayMissed[i],
+                  isLast: i == _yesterdayMissed.length - 1,
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Headline of the yesterday-reminder header. The leading count
+  /// ("2 sessions") gets weight 600 to anchor the eye; the rest of
+  /// the sentence stays at 500. Inter 12.5 / kCueAmberDeep throughout.
+  Widget _yesterdayHeadline(int n, String names) {
+    final countLabel = '$n ${n == 1 ? 'session' : 'sessions'}';
+    return Text.rich(
+      TextSpan(
+        style: const TextStyle(
+          fontFamily:         'Inter',
+          fontFamilyFallback: ['system-ui', 'sans-serif'],
+          fontSize:           12.5,
+          fontWeight:         FontWeight.w500,
+          letterSpacing:      -0.0625,
+          color:              kCueAmberDeep,
+          height:             1.3,
+        ),
+        children: [
+          TextSpan(
+            text:  countLabel,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const TextSpan(text: ' from yesterday not documented'),
+          if (names.isNotEmpty) TextSpan(text: ' — $names'),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  /// One row in the expanded yesterday-reminder. White surface with
+  /// an olive stripe + olive-deep name + amber-deep "Document →"
+  /// action. The dual-register intent: header reads urgent (amber);
+  /// rows read calm-clinical (olive on white) so the SLP feels
+  /// invited to act, not nagged.
+  ///
+  /// Navigation: ClientProfileScreen for the row's client. The
+  /// chart's session-create flow is the canonical path to record
+  /// the missed session. (A direct session-capture deep-link would
+  /// need a session_id, which daily_roster rows don't carry.)
+  Widget _yesterdayRow(Map<String, dynamic> row, {required bool isLast}) {
+    final cl   = (row['clients'] as Map?) ?? const {};
+    // NameFormatter.displayName: "krish" → "Krish".
+    final name = NameFormatter.displayName(cl['name']?.toString());
+    final displayedName = name.isNotEmpty ? name : 'Unknown';
+
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          // Phase 4.0.7.39 — URL bar reflects /clients/:id.
+          settings: RouteSettings(name: '/clients/${cl['id']}'),
+          builder: (_) => ClientProfileScreen(
+            client: Map<String, dynamic>.from(cl),
           ),
         ),
-        if (_expandYesterday) ...[
-          const SizedBox(height: 8),
-          ..._yesterdayMissed.map((row) {
-            final cl = (row['clients'] as Map?) ?? {};
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
-              child: Row(
-                children: [
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      cl['name']?.toString() ?? 'Unknown',
-                      style: GoogleFonts.dmSans(
-                        fontSize:   13,
-                        color:      _ink,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        // Phase 4.0.7.39 — URL bar reflects /clients/:id.
-                        settings: RouteSettings(name: '/clients/${cl['id']}'),
-                        builder: (_) => ClientProfileScreen(
-                          client: Map<String, dynamic>.from(cl),
-                        ),
-                      ),
-                    ),
-                    style: TextButton.styleFrom(
-                      foregroundColor: _ink,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      minimumSize:   Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      'Document →',
-                      style: GoogleFonts.dmSans(
-                        fontSize: 12, fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: kCueSurfaceWhite,
+          // Hairline below every row except the last — keeps the
+          // bottom edge of the card clean.
+          border: isLast
+              ? null
+              : const Border(
+                  bottom: BorderSide(
+                      color: Color(0xFFF0EBE0), width: 0.5),
+                ),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Olive stripe — 2px wide × 18px tall pill. Reads as a
+            // calm clinical-state indicator inside the urgent-header
+            // card. Dual-accent system in miniature.
+            Container(
+              width:  2,
+              height: 18,
+              decoration: BoxDecoration(
+                color:        kCueOlive,
+                borderRadius: BorderRadius.circular(1),
               ),
-            );
-          }),
-        ],
-        const SizedBox(height: 28),
-      ],
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayedName,
+                // Inter 14 / 600 / kCueOliveDeep, -0.01em. Anchor eye
+                // weight on the row. Inline TextStyle — this size+weight
+                // combo doesn't map cleanly to a CueTypeV3 builder.
+                style: const TextStyle(
+                  fontFamily:         'Inter',
+                  fontFamilyFallback: ['system-ui', 'sans-serif'],
+                  fontSize:           14,
+                  fontWeight:         FontWeight.w600,
+                  letterSpacing:      -0.14, // -0.01em × 14
+                  color:              kCueOliveDeep,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Action link — Inter 12.5/500/kCueAmberDeep + underline
+            // at #BA7517 0.5px. Amber on the action keeps the urgent
+            // register's call-to-act paired with the row's calm name.
+            const Text(
+              'Document →',
+              style: TextStyle(
+                fontFamily:         'Inter',
+                fontFamilyFallback: ['system-ui', 'sans-serif'],
+                fontSize:           12.5,
+                fontWeight:         FontWeight.w500,
+                letterSpacing:      -0.0625,
+                color:              kCueAmberDeep,
+                decoration:          TextDecoration.underline,
+                decorationColor:     Color(0xFFBA7517),
+                decorationThickness: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
   // ── Phase 3.1: Today screen content blocks ──────────────────────────────
 
   Widget _buildTodayZone() {
-    // Phase 4.0.7.22a — body replaced with the Today's Brief card
-    // stack (production Variant B from 4.0.7.21 design exploration).
-    // Greeting block + eyebrow row + Add affordance retained — they
-    // anchor the screen contextually. The week pulse strip and the
-    // legacy session brief cards are removed (see MOBILE_AUDIT.md
-    // for the recoverable feature list).
+    // Phase 4.0.8-step-B-surface-1.2 — page order restructured.
+    // Greeting block leads. Yesterday-reminder follows greeting (the
+    // urgent-amber bar belongs after the orientation, not before
+    // it). Then "Today's sessions" header + brief stack + At-a-glance.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildGreetingBlock(),
         const SizedBox(height: CueGap.greetingToEyebrow),
 
+        // Yesterday-reminder rendered here, below the greeting. Only
+        // appears when there are undocumented sessions from yesterday.
+        if (_yesterdayMissed.isNotEmpty) ...[
+          _buildYesterdayReminder(),
+          const SizedBox(height: CueGap.s24),
+        ],
+
         _buildEyebrowRow(
-          label: "today's session",
+          label: "Today's sessions",
           trailing: _buildAddRosterButton(),
         ),
         const SizedBox(height: CueGap.eyebrowToCard),
@@ -1079,19 +1221,26 @@ class _TodayScreenState extends State<TodayScreen> {
           _buildEmptyTodayHint()
         else
           _buildTodayBriefStack(),
+
+        // ── At a glance section (Phase 4.0.8-step-B-surface-1.2) ───────
+        const SizedBox(height: CueGap.s32),
+        _buildEyebrowRow(label: 'At a glance'),
+        const SizedBox(height: CueGap.eyebrowToCard),
+        _buildAtAGlanceSection(),
       ],
     );
   }
 
   /// Phase 4.0.7.22a — vertical stack of TodayBriefCard, one per
-  /// roster client. Card data assembled in-memory from the existing
-  /// _rosterRows + _lastSessionByClient maps; no new Supabase calls.
+  /// roster client. The first card carries `isUpNext: true` so its
+  /// stripe goes amber (urgent register) per dual-accent system;
+  /// subsequent cards use olive (calm) by default.
   Widget _buildTodayBriefStack() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < _rosterRows.length; i++) ...[
-          _buildTodayBriefCardForRoster(_rosterRows[i]),
+          _buildTodayBriefCardForRoster(_rosterRows[i], isUpNext: i == 0),
           if (i != _rosterRows.length - 1)
             const SizedBox(height: CueGap.sessionCardGap),
         ],
@@ -1099,7 +1248,80 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
-  Widget _buildTodayBriefCardForRoster(Map<String, dynamic> row) {
+  /// Phase 4.0.8-step-B-surface-1.2 — 5-widget glance section.
+  /// On wide viewports (>700px content): two 2-up rows with CueNoticed
+  /// stretching full-width between them. On narrow: all five stack
+  /// single-column. CueNoticed hides itself entirely when no stagnant
+  /// goal exists (no empty state).
+  Widget _buildAtAGlanceSection() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow = constraints.maxWidth <= 700;
+        final pulse    = ThisWeekWidget(weekData: _weekPulse);
+        final pending  = PendingNotesWidget(pending: _pendingNotes);
+        final goals    = ActiveGoalsWidget(goals: _activeGoals);
+        final tomorrow = TomorrowWidget(tomorrow: _tomorrow);
+        final noticed  = _noticed != null
+            ? CueNoticedWidget(insight: _noticed!)
+            : null;
+
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              pulse,
+              const SizedBox(height: CueGap.s12),
+              pending,
+              if (noticed != null) ...[
+                const SizedBox(height: CueGap.s12),
+                noticed,
+              ],
+              const SizedBox(height: CueGap.s12),
+              goals,
+              const SizedBox(height: CueGap.s12),
+              tomorrow,
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: pulse),
+                  const SizedBox(width: CueGap.s12),
+                  Expanded(child: pending),
+                ],
+              ),
+            ),
+            if (noticed != null) ...[
+              const SizedBox(height: CueGap.s12),
+              noticed,
+            ],
+            const SizedBox(height: CueGap.s12),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: goals),
+                  const SizedBox(width: CueGap.s12),
+                  Expanded(child: tomorrow),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildTodayBriefCardForRoster(
+    Map<String, dynamic> row, {
+    bool isUpNext = false,
+  }) {
     final cl       = Map<String, dynamic>.from(row['clients'] as Map? ?? {});
     final clientId = cl['id']?.toString() ?? '';
     final clientName = _toTitleCase(
@@ -1132,7 +1354,8 @@ class _TodayScreenState extends State<TodayScreen> {
       todayTimeLabel: null,
     );
     return TodayBriefCard(
-      brief: brief,
+      brief:    brief,
+      isUpNext: isUpNext,
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
@@ -1200,6 +1423,24 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ── Greeting block ──────────────────────────────────────────────────────
 
+  // Phase 4.0.8-step-B-surface-1.2 — greeting block restored to a
+  // Row(cuttlefish-column + Expanded(content)). Surface 1's pure-
+  // typography variant lost the soul carrier; 1.2 brings the
+  // cuttlefish back at 64px softWave (down from 96px pre-1) anchored
+  // in her own 80px column.
+  //
+  // Founder direction: "left margin but leave it" — 80px column slot
+  // sits between the dark sidebar's right edge and the content
+  // padding. Cuttlefish reads as a parallel companion, not inline
+  // with the greeting text.
+  //
+  // Sizing lock per spine Revision 2026-05-09 (cuttlefish placement
+  // learning): 64px is in the small-anchored band; the 24-60 middle
+  // ground is the failure zone we explicitly avoid.
+  //
+  // Rule 2 amber once-per-surface lock holds: amber lives ONLY on
+  // the greeting subline ("3 sessions today — Aarav is your first.").
+  // Headline is kCueInk. Action links use kCueInk + subtle underline.
   Widget _buildGreetingBlock() {
     final hour = DateTime.now().hour;
     final greetingPrefix = hour < 12
@@ -1212,38 +1453,41 @@ class _TodayScreenState extends State<TodayScreen> {
     final subline = _greetingSubline();
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(
-          width:  CueSize.cuttlefishWelcome,
-          height: CueSize.cuttlefishWelcome,
-          child: CueCuttlefish(
-              size: CueSize.cuttlefishWelcome, state: CueState.softWave),
+          width: 80,
+          child: Center(
+            child: SizedBox(
+              width:  64,
+              height: 64,
+              child: CueCuttlefish(size: 64, state: CueState.softWave),
+            ),
+          ),
         ),
-        const SizedBox(width: CueGap.greetingFishToText),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize:       MainAxisSize.min,
             children: [
-              Text(
-                headline,
-                style: CueType.custom(
-                  fontSize:      20,
-                  weight:        FontWeight.w500,
-                  color:         CueColors.amber,
-                  letterSpacing: -0.3,
-                  height:        1.25,
-                ),
+              // H1 row — state-conditional Iowan serif. Reopened pill
+              // sits inline at the right edge when day state is
+              // reopened (Phase 4.0.8-step-B-surface-1.2: less
+              // prominent position than the pre-1.2 top-of-page slot
+              // — the pill is a hint, not a banner).
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: Text(headline, style: CueTypeV3.h1())),
+                  if (_dayState.state == CueDayState.reopened) ...[
+                    const SizedBox(width: 12),
+                    _ReopenedPill(),
+                  ],
+                ],
               ),
               const SizedBox(height: CueGap.s4),
-              Text(
-                subline,
-                style: CueType.bodyLarge.copyWith(
-                  color: CueColors.amber
-                      .withValues(alpha: CueAlpha.amberSubline),
-                ),
-              ),
+              // Greeting subline — single amber site on this surface state.
+              Text(subline, style: CueTypeV3.body(color: kCueAmber)),
             ],
           ),
         ),
@@ -1264,18 +1508,17 @@ class _TodayScreenState extends State<TodayScreen> {
 
   // ── Eyebrow row + add-roster button ─────────────────────────────────────
 
+  // Phase 4.0.8-step-B-surface-1.2 — section row uses sectionTitle
+  // (Inter 13/600 sentence-case), NOT mono uppercase tracked. Per
+  // the eyebrow doctrine, page-level section headers are human
+  // content labels, not data — they get the sans sentence-case
+  // treatment. The pre-1.2 toUpperCase() at the call site is dropped.
   Widget _buildEyebrowRow({required String label, Widget? trailing}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: Text(
-            label,
-            style: CueType.bodySmall.copyWith(
-              color: CueColors.inkPrimary
-                  .withValues(alpha: CueAlpha.eyebrowText),
-            ),
-          ),
+          child: Text(label, style: CueTypeV3.sectionTitle()),
         ),
         if (trailing != null) trailing,
       ],
@@ -1290,12 +1533,12 @@ class _TodayScreenState extends State<TodayScreen> {
         height: CueSize.sendButton,    // 36
         decoration: BoxDecoration(
           border:       Border.all(
-              color: CueColors.divider, width: CueSize.hairline),
-          borderRadius: BorderRadius.circular(CueRadius.s8),
-          color:        Colors.white,
+              color: kCueBorder, width: kCueCardBorderW),
+          borderRadius: BorderRadius.circular(kCueMediumRadius),
+          color:        kCueSurfaceWhite,
         ),
-        child: Icon(Icons.add_rounded,
-            size: CueGap.s18, color: CueColors.inkPrimary),
+        child: const Icon(Icons.add_rounded,
+            size: CueGap.s18, color: kCueInk),
       ),
     );
   }
@@ -1310,23 +1553,16 @@ class _TodayScreenState extends State<TodayScreen> {
             horizontal: CueGap.s16, vertical: CueGap.s12),
         decoration: BoxDecoration(
           border:       Border.all(
-              color: CueColors.divider, width: CueSize.hairline),
-          borderRadius: BorderRadius.circular(CueRadius.s8),
-          color:        Colors.white,
+              color: kCueBorder, width: kCueCardBorderW),
+          borderRadius: BorderRadius.circular(kCueMediumRadius),
+          color:        kCueSurfaceWhite,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add_rounded,
-                size: CueGap.s16, color: CueColors.inkPrimary),
+            const Icon(Icons.add_rounded, size: CueGap.s16, color: kCueInk),
             const SizedBox(width: CueGap.s8),
-            Text(
-              'Add clients to today',
-              style: CueType.bodyMedium.copyWith(
-                color:      CueColors.inkPrimary,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
+            Text('Add clients to today', style: CueTypeV3.h2()),
           ],
         ),
       ),
@@ -1426,6 +1662,7 @@ class _TodayScreenState extends State<TodayScreen> {
     );
   }
 
+  // ignore: unused_element
   Widget _buildSessionActionRow({
     required String rosterId,
     required Map<String, dynamic> clientMap,
@@ -1622,6 +1859,12 @@ class _TodayScreenState extends State<TodayScreen> {
 
 // ── End-of-day stat pill ─────────────────────────────────────────────────────
 
+// Phase 4.0.8-step-B-surface-1 — _StatPill stripped of amber fill +
+// border. Numbers in JetBrains Mono (data is mono per Rule 1); labels
+// in eyebrow register. The cuttlefish above carries the visual rest;
+// this row is pure quantitative scan-target. Founder direction:
+// "Cuttlefish carries visual rest" + "no new stats card in this commit"
+// — keeping the existing pill but quieting it to spine register.
 class _StatPill extends StatelessWidget {
   final int sessions, goalsHit, pending;
   final Color? inkColor;
@@ -1634,14 +1877,14 @@ class _StatPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final labelColor = inkColor ?? CueColors.inkTertiaryDark;
+    final labelColor = inkColor ?? kCueInkTertiary;
     return Container(
       decoration: BoxDecoration(
-        color: CueColors.amber.withValues(alpha: 0.08),
-        border: Border.all(
-            color: CueColors.amber.withValues(alpha: 0.20),
-            width: 0.5),
-        borderRadius: BorderRadius.circular(28),
+        color:        kCuePaper,
+        border:       Border.all(color: kCueBorder, width: kCueCardBorderW),
+        // Editorial register pill — radius 20 per spine carve-out
+        // (matches Good night Cue / reopen pills).
+        borderRadius: BorderRadius.circular(20),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       child: Row(
@@ -1663,11 +1906,14 @@ class _StatPill extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(n,
-              style: CueType.displaySmall.copyWith(color: CueColors.amber)),
+          // Number — mono with tabular figures (data is the data language).
+          Text(n, style: CueTypeV3.dataMono(color: kCueInk)),
           const SizedBox(height: 2),
-          Text(label.toUpperCase(),
-              style: CueType.labelSmall.copyWith(color: labelColor)),
+          // Stat-pill data label — mono uppercase tracked (data tag,
+          // the one carve-out where sans uppercase tracked would be
+          // forbidden but mono uppercase tracked is the correct
+          // eyebrow doctrine treatment).
+          Text(label.toUpperCase(), style: CueTypeV3.dataEyebrow(color: labelColor)),
         ],
       ),
     );
@@ -1676,44 +1922,48 @@ class _StatPill extends StatelessWidget {
   Widget _divider() => Container(
         width:  0.5,
         height: 24,
-        color:  CueColors.amber.withValues(alpha: 0.20),
+        color:  kCueBorder,
       );
 }
 
 // ── Phase 4.0.7.5 reopened indicator ────────────────────────────────────────
-// Small blue pill rendered top-right of the Today content when day state is
+// Small pill rendered top-right of the Today content when day state is
 // reopened. Visual weight is intentionally low — it's a hint, not a banner.
+//
+// Phase 4.0.8-step-B-surface-1 — pre-spine blue (#85B7EB) replaced with
+// kCueInkTertiary text on transparent paper, kCueBorder hairline. Single-
+// accent rule keeps amber off this pill; "reopened" is a state hint, not
+// a clinical action.
 class _ReopenedPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    const blue = Color(0xFF85B7EB);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color:        blue.withValues(alpha: 0.10),
+        color:        Colors.transparent,
+        border:       Border.all(color: kCueBorder, width: kCueCardBorderW),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(
-        'reopened',
-        style: CueType.custom(
-          fontSize:      9.5,
-          weight:        FontWeight.w500,
-          color:         blue,
-          letterSpacing: 0.4,
-        ),
-      ),
+      // State-pill data tag — mono uppercase tracked per eyebrow doctrine.
+      child: Text('REOPENED', style: CueTypeV3.dataEyebrow()),
     );
   }
 }
 
 // ── This-week pulse card ─────────────────────────────────────────────────────
+// Phase 4.0.7.22a removed week pulse from the Today body when Variant B
+// brief stack shipped. The classes below remain in repo for the recovery
+// path documented in MOBILE_AUDIT.md and are referenced only by the
+// dead-code _buildWeekPulse method. Both carry `unused_element` ignores.
 
+// ignore: unused_element
 class _PulseCardData {
   final int    number;
   final String label;
   const _PulseCardData({required this.number, required this.label});
 }
 
+// ignore: unused_element
 class _WeekPulseCard extends StatelessWidget {
   final _PulseCardData data;
   const _WeekPulseCard({required this.data});

@@ -1,28 +1,39 @@
 // lib/widgets/today_brief_card.dart
 //
-// Phase 4.0.7.22a — production Today's Brief card. Shipped Variant B
-// (CLINICAL HANDOFF) from the 4.0.7.21 design exploration. Rendered
-// once per client on today's roster as a vertical stack on the Today
-// screen.
+// Phase 4.0.8-step-B-surface-1.2 — Today's brief card refactored to
+// the dual-accent + eyebrow doctrine.
 //
-// Three labeled zones — WHAT HAPPENED / WHERE WE LEFT OFF / TODAY'S
-// MOVE — fed by the most recent session row joined client-side with
-// the daily roster row. The TODAY zone is teal-tinted to set off the
-// forward action from the historical context.
+// Card structure (locked 2026-05-09):
+//   Row 1 (header):  client name (Inter 20/600) + age/lens metadata
+//                    (mono) + state pill (top-right, mono uppercase
+//                    tracked — the one carve-out from "sans uppercase
+//                    forbidden" because state pills are data tags)
+//   Row 2:           "Today's move" — clinicalLabel(strong, olive) +
+//                    move-text body (Inter 14/500 / kCueInk)
+//   Row 3:           "Where we left off" (clinicalLabel strong) OR
+//                    "Context" (clinicalLabel light) — depends on
+//                    baselinePhase. Body text body() with inline
+//                    trial counts in dataMono(olive) via Text.rich.
 //
-// Empty state covers two distinct cases:
-//   - No previous session at all (baseline phase) → friendly hint.
-//   - Previous session exists but next_session_focus is blank → fall
-//     back to "Continue: <yesterday's STG>".
+// Card chrome:
+//   • Paper-white surface, kCueCardRadius (6) corners.
+//   • Hairline border (kCueBorder) on top/right/bottom.
+//   • LEFT STRIPE: kCueOlive at 2px (default) or kCueAmber at 3px
+//     (when `isUpNext: true`) — dual-accent system. Olive = calm
+//     clinical state; amber = urgent "this is the next session."
+//
+// State pill semantics:
+//   Active     → olive surface ground + olive deep text (default for
+//                ongoing engagements)
+//   Up next    → amber surface ground + amber deep text (urgent —
+//                synced with the amber left stripe)
+//   Baseline   → ink-on-paper subtle pill
+//   Phase 1 / Follow-up → reserved; mapped to olive ground for v1.2
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
-const Color _ink        = Color(0xFF0E1C36);
-const Color _inkGhost   = Color(0xFF6B7690);
-const Color _teal       = Color(0xFF2A8F84);
-const Color _tealSoft   = Color(0xFFD6E8E5);
-const Color _line       = Color(0xFFE6DDCA);
+import '../theme/cue_phase4_tokens.dart';
+import '../theme/cue_type_v3.dart';
 
 /// Pure-data shape derived from the daily_roster + sessions join. The
 /// TodayScreen state class assembles this from its existing loaders.
@@ -43,7 +54,7 @@ class TodayBrief {
   final String? todayTimeLabel;
 
   /// True when the SLP has no history with this client at all — ie
-  /// no prior session. Renders the baseline-phase empty state.
+  /// no prior session. Renders the baseline-phase Context body.
   final bool baselinePhase;
 
   const TodayBrief({
@@ -65,142 +76,267 @@ class TodayBriefCard extends StatelessWidget {
   final TodayBrief brief;
   final VoidCallback? onTap;
 
+  /// True when this card represents the next-up session for the SLP.
+  /// Drives the amber left-stripe + amber state pill. Caller decides
+  /// (TodayScreen sets it on the first card that hasn't been started).
+  final bool isUpNext;
+
+  /// Optional state label override. Falls through to a derived value
+  /// based on baselinePhase + isUpNext when null.
+  final String? stateLabel;
+
   const TodayBriefCard({
     super.key,
     required this.brief,
     this.onTap,
+    this.isUpNext = false,
+    this.stateLabel,
   });
+
+  String get _resolvedStateLabel {
+    if (stateLabel != null && stateLabel!.isNotEmpty) return stateLabel!;
+    if (isUpNext) return 'Up next';
+    if (brief.baselinePhase) return 'Baseline';
+    return 'Active';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final stripeColor = isUpNext ? kCueAmber : kCueOlive;
+    final stripeWidth = isUpNext ? 3.0 : 2.0;
+
+    // Phase 4.0.8-step-B-surface-1.2 hotfix — Flutter's BoxDecoration
+    // requires a UNIFORM Border when paired with borderRadius (all
+    // four sides same width AND color). The pre-hotfix shape passed
+    // a per-side Border (left: stripeWidth, others: kCueCardBorderW)
+    // which silently dropped paint in release builds and rendered
+    // cards as empty white shapes (the bug founder verification
+    // caught). Restructure: outer container has Border.all (uniform)
+    // + radius; left stripe lives inside a Row + IntrinsicHeight,
+    // clipped to the radius via ClipRRect so the stripe doesn't
+    // bleed past the rounded corner.
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        onTap:        onTap,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
           decoration: BoxDecoration(
-            color:        Colors.white,
-            borderRadius: BorderRadius.circular(14),
-            border:       Border.all(color: _line),
+            color:        kCueSurfaceWhite,
+            borderRadius: BorderRadius.circular(kCueCardRadius),
+            border:       Border.all(color: kCueBorder, width: kCueCardBorderW),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _header(),
-              const SizedBox(height: 16),
-              if (brief.baselinePhase) ...[
-                _section(
-                  'WHAT HAPPENED',
-                  'Baseline phase — no sessions on record.',
-                ),
-                const SizedBox(height: 14),
-                _section(
-                  "TODAY'S MOVE",
-                  'Begin baseline observation.',
-                  tinted: true,
-                ),
-              ] else ...[
-                _section(
-                  'WHAT HAPPENED',
-                  _whatHappenedBody(),
-                ),
-                const SizedBox(height: 14),
-                _section(
-                  'WHERE WE LEFT OFF',
-                  _whereWeLeftOffBody(),
-                ),
-                const SizedBox(height: 14),
-                _section(
-                  "TODAY'S MOVE",
-                  _todayMoveBody(),
-                  tinted: true,
-                ),
-              ],
-            ],
+          child: ClipRRect(
+            // Inner radius = outer radius minus border width so the
+            // stripe lands flush inside the perimeter.
+            borderRadius: BorderRadius.circular(
+                kCueCardRadius - kCueCardBorderW),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(width: stripeWidth, color: stripeColor),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize:       MainAxisSize.min,
+                        children: [
+                          _header(),
+                          const SizedBox(height: 14),
+                          _todayMoveRow(),
+                          const SizedBox(height: 12),
+                          brief.baselinePhase ? _contextRow() : _whereWeLeftOffRow(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ── Header row: client name + optional time ────────────────────────────
+  // ── Row 1: name + metadata + state pill ────────────────────────────────
   Widget _header() {
-    final subtitleParts = <String>[
+    final metadataParts = <String>[
       if (brief.todayTimeLabel != null) brief.todayTimeLabel!,
       if (brief.clientAge != null) 'age ${brief.clientAge}',
       if (brief.clientLensSubtitle != null) brief.clientLensSubtitle!,
     ];
-    final subtitle = subtitleParts.join(' · ');
+    final metadata = metadataParts.join(' · ');
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline:       TextBaseline.alphabetic,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Flexible(
-          child: Text(
-            brief.clientName,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.dmSans(
-              fontSize:    16,
-              fontWeight:  FontWeight.w600,
-              color:       _ink,
-              height:      1.2,
-            ),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                brief.clientName,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontFamily:         'Inter',
+                  fontFamilyFallback: const ['system-ui', 'sans-serif'],
+                  fontSize:           20,
+                  fontWeight:         FontWeight.w600,
+                  letterSpacing:      -0.2,
+                  color:              kCueInk,
+                  height:             1.1,
+                ),
+              ),
+              if (metadata.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  metadata,
+                  overflow: TextOverflow.ellipsis,
+                  style:    CueTypeV3.dataMono(color: kCueInkTertiary),
+                ),
+              ],
+            ],
           ),
         ),
-        if (subtitle.isNotEmpty) ...[
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              subtitle,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.dmSans(
-                fontSize: 11,
-                color:    _inkGhost,
-                letterSpacing: 0.3,
-              ),
-            ),
-          ),
-        ],
+        const SizedBox(width: 12),
+        _statePill(),
       ],
     );
   }
 
-  // ── Body content assemblers — all defensive against missing fields ────
-  String _whatHappenedBody() {
-    final date = brief.lastSessionDateLabel;
-    final activity = brief.lastActivity;
-    if ((date == null || date.isEmpty) && (activity == null || activity.isEmpty)) {
-      return 'Last session details not recorded.';
-    }
-    final parts = <String>[
-      if (date != null && date.isNotEmpty) date,
-      if (activity != null && activity.isNotEmpty) activity,
-    ];
-    return '${parts.join(' · ')}.';
+  Widget _statePill() {
+    final label = _resolvedStateLabel;
+    final isUrgent  = isUpNext;
+    final isBaseline = brief.baselinePhase && !isUpNext;
+
+    final bg = isUrgent
+        ? const Color(0xFFFBE9D2)
+        : (isBaseline ? kCuePaper : kCueOliveSurface);
+    final border = isUrgent
+        ? const Color(0xFFE8DCB8)
+        : (isBaseline ? kCueBorder : kCueOliveSurface);
+    final textColor = isUrgent
+        ? kCueAmberDeep
+        : (isBaseline ? kCueInkTertiary : kCueOliveDeep);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color:        bg,
+        border:       Border.all(color: border, width: kCueCardBorderW),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      // State pill — mono uppercase tracked. The ONE carve-out from
+      // "sans uppercase tracked forbidden" because state pills are
+      // data tags (per eyebrow doctrine).
+      child: Text(label.toUpperCase(), style: CueTypeV3.dataEyebrow(color: textColor)),
+    );
   }
 
-  String _whereWeLeftOffBody() {
+  // ── Row 2: Today's move (always renders) ───────────────────────────────
+  Widget _todayMoveRow() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Today's move",
+          style: CueTypeV3.clinicalLabel(emphasis: 'strong', color: kCueOlive),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _todayMoveBody(),
+          style: TextStyle(
+            fontFamily:         'Inter',
+            fontFamilyFallback: const ['system-ui', 'sans-serif'],
+            fontSize:           14,
+            fontWeight:         FontWeight.w500,
+            letterSpacing:      -0.07, // -0.005em × 14
+            color:              kCueInk,
+            height:             1.45,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Row 3a: Where we left off (when baselinePhase = false) ─────────────
+  Widget _whereWeLeftOffRow() {
     final narrative = brief.lastNarrative?.trim();
     final accuracy  = brief.lastAccuracy?.trim();
-    if ((narrative == null || narrative.isEmpty) &&
-        (accuracy == null || accuracy.isEmpty)) {
-      return brief.lastTargetBehavior?.trim().isNotEmpty == true
-          ? 'Target was: ${brief.lastTargetBehavior}.'
-          : 'Session not yet documented.';
-    }
-    final body = StringBuffer();
-    if (narrative != null && narrative.isNotEmpty) body.write(narrative);
-    if (accuracy != null && accuracy.isNotEmpty) {
-      if (body.isNotEmpty) body.write(' ');
-      body.write('Accuracy: $accuracy.');
-    }
-    return body.toString();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Where we left off',
+          style: CueTypeV3.clinicalLabel(emphasis: 'strong'),
+        ),
+        const SizedBox(height: 4),
+        _whereWeLeftOffBody(narrative, accuracy),
+      ],
+    );
   }
 
+  /// Body for "Where we left off" — Text.rich pattern. Prose in body();
+  /// trial-count spans in dataMono(olive) inline.
+  Widget _whereWeLeftOffBody(String? narrative, String? accuracy) {
+    final fallback = brief.lastTargetBehavior?.trim().isNotEmpty == true
+        ? 'Target was: ${brief.lastTargetBehavior}.'
+        : 'Session not yet documented.';
+
+    if ((narrative == null || narrative.isEmpty) &&
+        (accuracy == null || accuracy.isEmpty)) {
+      return Text(fallback, style: CueTypeV3.body(color: kCueInkSecondary));
+    }
+
+    final spans = <InlineSpan>[];
+    if (narrative != null && narrative.isNotEmpty) {
+      spans.add(TextSpan(text: narrative.trimRight()));
+    }
+    if (accuracy != null && accuracy.isNotEmpty) {
+      if (spans.isNotEmpty) {
+        spans.add(const TextSpan(text: ' · '));
+      }
+      spans.add(TextSpan(
+        text:  'Accuracy: ',
+        style: CueTypeV3.body(color: kCueInkSecondary),
+      ));
+      spans.add(TextSpan(
+        text:  accuracy,
+        style: CueTypeV3.dataMono(color: kCueOlive),
+      ));
+    }
+
+    return Text.rich(
+      TextSpan(
+        style:    CueTypeV3.body(color: kCueInkSecondary),
+        children: spans,
+      ),
+    );
+  }
+
+  // ── Row 3b: Context (when baselinePhase = true) ────────────────────────
+  Widget _contextRow() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Context', style: CueTypeV3.clinicalLabel(emphasis: 'light')),
+        const SizedBox(height: 4),
+        Text(
+          'Baseline phase — no sessions on record. '
+          'Begin baseline observation today.',
+          style: CueTypeV3.body(color: kCueInkSecondary),
+        ),
+      ],
+    );
+  }
+
+  // ── Body content assembler — Today's move ──────────────────────────────
   String _todayMoveBody() {
+    if (brief.baselinePhase) return 'Begin baseline observation.';
     final next = brief.nextSessionFocus?.trim();
     if (next != null && next.isNotEmpty) return next;
     final stg = brief.lastTargetBehavior?.trim();
@@ -208,45 +344,5 @@ class TodayBriefCard extends StatelessWidget {
       return 'Continue: $stg.';
     }
     return 'No move on file — set the next focus during today\'s session.';
-  }
-
-  // ── Section primitive ─────────────────────────────────────────────────
-  Widget _section(String label, String body, {bool tinted = false}) {
-    return Container(
-      width: double.infinity,
-      padding: tinted
-          ? const EdgeInsets.fromLTRB(12, 10, 12, 12)
-          : EdgeInsets.zero,
-      decoration: tinted
-          ? BoxDecoration(
-              color:        _tealSoft.withValues(alpha: 0.4),
-              borderRadius: BorderRadius.circular(8),
-              border:       Border.all(color: _tealSoft),
-            )
-          : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: GoogleFonts.syne(
-              fontSize:      10,
-              fontWeight:    FontWeight.w600,
-              color:         tinted ? _teal : _inkGhost,
-              letterSpacing: 1.6,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            body,
-            style: GoogleFonts.dmSans(
-              fontSize: 13.5,
-              color:    _ink,
-              height:   1.55,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
