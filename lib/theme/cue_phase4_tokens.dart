@@ -86,6 +86,14 @@ const Color kCueAmberDeeper  = kCueAmberDeep;
 const Color kCueAmberSurface = Color(0xFFFAEEDA); // amber surface fill
 const Color kCueAmberText    = Color(0xFF633806); // amber-on-surface text
 
+// ── Quiet gray surface ───────────────────────────────────────────────────────
+//
+// Phase 4.0.9-step-A — added for the Roster surface 2 design. Distinct
+// from kCueBorder (a hairline color, not a fill). Use for: discharged
+// pills, archived items, deactivated states — anywhere the register is
+// "present but recessed."
+const Color kCueGraySurface  = Color(0xFFF1EFE8); // quiet gray fill
+
 // ── Borders ──────────────────────────────────────────────────────────────────
 const Color kCueBorder       = Color(0xFFE8E4DC); // hairline border (spine)
 const Color kCueBorderStrong = Color(0x1F000000); // ~0.12α — disfluency tile border

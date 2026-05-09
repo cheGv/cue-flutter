@@ -353,3 +353,140 @@ the original surface-1 commit `15eceff`). Surfaces 2-8 retain
 prior register; per-surface migration proceeds in spine-doc
 order, each surface incorporating the revised spine
 above.
+
+---
+
+# Revision 2026-05-10 (post-Roster surface 2 design)
+
+This revision codifies typography corrections learned during
+the Clients Roster (surface 2) design exploration. The
+Revision 2026-05-09 doctrine holds; this revision narrows
+the rules where surface 2 surfaced ambiguity.
+
+## Inter tabular numerics for inline human-context counts
+
+Mono uppercase tracked is for **data tags**, not data
+numbers in human contexts. Inline counts that scan with
+prose ("3 sessions", "21 active goals", "age 5") use
+Inter weight 700 with `FontFeature.tabularFigures()` for
+column-aligned scanning when stacked.
+
+The friend-tester signal that flagged Inter weight 600 as
+"game-y" applies to **plaque-style numerics on widgets**
+(big standalone counts) — those still use Iowan via
+`numericDisplay()`. Inline counts inside row content are
+different: they're prose elements, not plaques. Inter 700
+tabular at 18px reads as a confident clinical number, not
+a scoreboard digit. This is the "numbers as game changers"
+register — bold weight makes the count the eye-anchor of
+its row, with the label trailing in lighter weight Inter.
+
+New role: `rosterDataNum` — Inter 18 / 700 / tabular figures.
+Default color `kCueInk`. The active-goals variant overrides
+to `kCueOlive` so the calm accent threads through clinical
+quantities the SLP reviews at a glance.
+
+## Mono uppercase tracked — data tags only
+
+`dataEyebrow` (JetBrains Mono 10.5 / 500 / +0.14em uppercase)
+is now strictly limited to:
+
+- State pills on **clinical-task** surfaces (Today brief
+  cards: "UP NEXT", "ACTIVE", "BASELINE", "REOPENED")
+- Date eyebrows ("FRI · 09 MAY 2026")
+- Version strings, debug tokens, code/build identifiers
+- Section counts when the count is a pure data tag
+  ("03" preceding a list)
+
+Forbidden: human-content labels, widget headers, focus
+strips, recency lines, prose numerics. Those use Inter
+sentence-case at the appropriate role.
+
+## State pill register split — clinical-task vs library-browse
+
+Surface 1.2 locked the brief-card state pills as mono
+uppercase tracked (data-tag carve-out). Surface 2 introduces
+a second register: **library-browse pills**.
+
+Library-browse pills (the Roster's "Active" / "Discharged"
+indicators) use **Inter 11 / 500 / sentence-case**, not mono
+uppercase. The clinician scanning a roster of 50 clients is
+in a browse posture, not a clinical-task posture — softer
+register reduces visual noise across many rows. Mono
+uppercase on every row would shout.
+
+Rule:
+- Clinical-task surface (Today, in-session screens) →
+  mono uppercase pill via `dataEyebrow`.
+- Library-browse surface (Roster, archive, list views) →
+  Inter sentence-case pill, hand-built with the appropriate
+  ground tint (`kCueOliveSurface` for active states,
+  `kCueGraySurface` for discharged/archived states).
+
+## Iowan italic — page identity moments only
+
+`editorialItalic` (Iowan italic 13.5 / 400) was already
+locked for editorial closes and parent summaries. Surface 2
+adds a separate role for **page identity**:
+
+`rosterPageTitle` — Iowan italic 44 / 500 / -0.005em. One
+per screen. Carries the page's editorial register: "Your
+case file." on Roster. Never used for numerics, never used
+for clinical labels. Future surfaces with their own page-
+identity moment add their own builder at the same scale.
+
+Iowan **non-italic** (`rosterClientName` — Iowan 26 / 500)
+is the row-level name treatment. Italic reads as voice;
+non-italic reads as identity. The Roster row name is
+identity (the client themselves), not voice (Cue speaking
+about them).
+
+## Recency labels — Inter sentence-case at varying weights
+
+The Roster row's right-rail recency stack uses two roles:
+
+- `rosterRecencyRelative` — Inter 13.5 / 600 / -0.005em.
+  Default color `kCueInk`. The relative-time anchor:
+  "Today", "Yesterday", "{N} days ago", "{DD MMM}".
+- `rosterRecencyContext` — Inter 11.5 / 400 / -0.005em.
+  Default color `kCueInkTertiary`. The trailing context:
+  "last session", "enrolled".
+
+The "Today" line gets a **single amber moment** —
+`kCueAmber` color override on the relative line only — when
+a session was logged today. This is the Roster's only amber
+register exception per Rule 2's dual-accent system.
+
+## Cuttlefish placement — left margin column lock
+
+Cuttlefish placement learned on Today carries across all
+primary surfaces: **64px `CueState.softWave` in an 80px
+left margin column**, anchored independently of content.
+The cuttlefish reads as a parallel companion, not inline
+with the text.
+
+Lock for primary surfaces:
+- Today greeting block — 80px column, 64px softWave (1.2)
+- Roster page header — 80px column, 64px softWave (2)
+- Future Profile page header — same pattern (deferred)
+
+The 24-60px middle ground remains forbidden. 96px softWave
+is the empty-state anchor (e.g. "Your case file is empty").
+
+## Token additions
+
+`kCueGraySurface` — `#F1EFE8`. Quiet gray fill for
+discharged pills, archived items, deactivated states.
+**Distinct from `kCueBorder`** which is hairline color
+only (never a fill). Lives at
+`lib/theme/cue_phase4_tokens.dart`. Available to any
+surface that needs a "present but recessed" register.
+
+## Surface 2 reference
+
+This revision is implemented for the first time in Phase
+4.0.9-step-B-roster-surface-2 (full replacement of the
+Phase 3.2 ClientRosterScreen). The seven new
+`CueTypeV3.roster*` builders land alongside. Surfaces 3-8
+incorporate this revision as they migrate per the
+spine-doc order.
