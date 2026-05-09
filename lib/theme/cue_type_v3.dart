@@ -279,4 +279,127 @@ class CueTypeV3 {
       color:              color ?? kCueInkTertiary,
     );
   }
+
+  // ── Phase 4.0.9 Roster (surface 2) builders ──────────────────────────────
+  //
+  // Surface 2 introduces a row-dense library-browse register. The seven
+  // builders below are spine-locked per Revision 2026-05-10 (post-Roster
+  // design); see docs/design-language-spine-2026-05-08.md for the
+  // rationale on each role.
+
+  /// Roster page title — Iowan italic 52 / 500 / -0.01em.
+  /// Page-identity moment; one per Roster screen ("Everyone in your
+  /// care."). Bumped 44→52 in 4.0.9-step-B amend #4 — with the
+  /// cuttlefish removed in amend #3, the H1 carries page voice by
+  /// itself and needs the size to dominate the viewport top.
+  /// Tracking deepened from -0.005em → -0.01em to keep the italic
+  /// serif tight at the larger size.
+  static TextStyle rosterPageTitle({Color? color}) {
+    return TextStyle(
+      fontFamily:         _serifFamily,
+      fontFamilyFallback: _serifFallback,
+      fontSize:           52,
+      fontWeight:         FontWeight.w500,
+      fontStyle:          FontStyle.italic,
+      letterSpacing:      -0.52, // -0.01em × 52
+      height:             1.05,
+      color:              color ?? kCueInk,
+    );
+  }
+
+  /// Roster client name — Iowan 26 / 500 / -0.018em (NOT italic).
+  /// Row-level client identity; non-italic so it reads as identity,
+  /// not voice. Italic Iowan stays reserved for page-identity + voice.
+  static TextStyle rosterClientName({Color? color}) {
+    return TextStyle(
+      fontFamily:         _serifFamily,
+      fontFamilyFallback: _serifFallback,
+      fontSize:           26,
+      fontWeight:         FontWeight.w500,
+      letterSpacing:      -0.468, // -0.018em × 26
+      height:             1.1,
+      color:              color ?? kCueInk,
+    );
+  }
+
+  /// Roster page tagline — Inter 16 / 400 / -0.005em / kCueOlive default.
+  /// The calm-register subtitle below the page title
+  /// ("Every person, every story, in one place."). Bumped from 14→16
+  /// in the 4.0.9-step-B amend #2 so the tagline carries page voice
+  /// instead of recessing.
+  static TextStyle rosterPageTagline({Color? color}) {
+    return TextStyle(
+      fontFamily:         _interFamily,
+      fontFamilyFallback: _interFallback,
+      fontSize:           16,
+      fontWeight:         FontWeight.w400,
+      letterSpacing:      -0.08, // -0.005em × 16
+      color:              color ?? kCueOlive,
+    );
+  }
+
+  /// Roster data num — Inter / 700 / tabular figures. LOAD-BEARING.
+  /// Inline clinical counts ("3 sessions", "21 active goals"). Default
+  /// size 18; default color kCueInk. Active-goals variant overrides
+  /// color to kCueOlive so the calm accent threads through.
+  static TextStyle rosterDataNum({double size = 18, Color? color}) {
+    return TextStyle(
+      fontFamily:         _interFamily,
+      fontFamilyFallback: _interFallback,
+      fontSize:           size,
+      fontWeight:         FontWeight.w700,
+      letterSpacing:      size * -0.005,
+      fontFeatures:       const <FontFeature>[FontFeature.tabularFigures()],
+      color:              color ?? kCueInk,
+    );
+  }
+
+  /// Roster data label — Inter 14 / 400 / -0.005em.
+  /// Trailing label after a data num ("sessions", "active goals").
+  /// Default color kCueInkSecondary. Bumped from 13→14 in the
+  /// 4.0.9-step-B founder-verification amend (Chrome real-render
+  /// felt cramped against the bold 18px tabular numerals).
+  static TextStyle rosterDataLabel({Color? color}) {
+    return TextStyle(
+      fontFamily:         _interFamily,
+      fontFamilyFallback: _interFallback,
+      fontSize:           14,
+      fontWeight:         FontWeight.w400,
+      letterSpacing:      -0.07, // -0.005em × 14
+      color:              color ?? kCueInkSecondary,
+    );
+  }
+
+  /// Roster recency relative — Inter 13.5 / 600 / -0.005em.
+  /// Right-rail anchor line: "Today", "Yesterday", "{N} days ago",
+  /// "{DD MMM}". "Today" override → kCueAmber (the only amber moment
+  /// on the Roster surface).
+  static TextStyle rosterRecencyRelative({Color? color}) {
+    return TextStyle(
+      fontFamily:         _interFamily,
+      fontFamilyFallback: _interFallback,
+      fontSize:           13.5,
+      fontWeight:         FontWeight.w600,
+      letterSpacing:      -0.0675, // -0.005em × 13.5
+      color:              color ?? kCueInk,
+    );
+  }
+
+  /// Roster recency context — Inter 13 / 500 / -0.005em.
+  /// Trailing context line: "last session", "enrolled". Bumped from
+  /// 11.5/400/InkTertiary → 13/500/InkSecondary in the 4.0.9-step-B
+  /// founder-verification amend — at 11.5 the line strained the eye
+  /// and recessed too far. 13/500 keeps it a supporting line under
+  /// the 13.5/600 relative-time anchor without flattening the
+  /// hierarchy.
+  static TextStyle rosterRecencyContext({Color? color}) {
+    return TextStyle(
+      fontFamily:         _interFamily,
+      fontFamilyFallback: _interFallback,
+      fontSize:           13,
+      fontWeight:         FontWeight.w500,
+      letterSpacing:      -0.065, // -0.005em × 13
+      color:              color ?? kCueInkSecondary,
+    );
+  }
 }
