@@ -195,7 +195,9 @@ class TodayBriefCard extends StatelessWidget {
                 Text(
                   metadata,
                   overflow: TextOverflow.ellipsis,
-                  style:    CueTypeV3.dataMono(color: kCueInkTertiary),
+                  style:    CueTypeV3.dataMono(color: kCueInkSecondary).copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ],
