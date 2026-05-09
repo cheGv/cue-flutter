@@ -91,6 +91,8 @@ Corollaries:
 
 **"Apple-clinical minimal."** Information density under cognitive load is the north star, not aesthetic flourish.
 
+> **Phase 4.0.8 spine (locked 8 May 2026):** typography and palette decisions are governed by [docs/design-language-spine-2026-05-08.md](docs/design-language-spine-2026-05-08.md). Sonoma surface + Logic Pro typography (Inter sans, JetBrains Mono mono, Iowan Old Style serif with Georgia fallback) + Things 3 warmth in editorial moments only. Three locked rules: monospace for data, serif once per screen, italic for family-only. Single accent: amber `#B45309`. **Teal is removed**; pre-4.0.8 teal sites migrate per-surface in the order specified in the spine doc. The font/palette bullets below are pre-spine and read as historical context only — defer to the spine for any new code.
+
 - **Fonts:** Playfair Display (display), Syne (accent), DM Sans (body)
 - **Palette:** Off-white `#FAFAF7` background, navy `#1B2B4B` accent, hairline borders (no shadows)
 - **Layout:** Persistent sidebar on desktop (use `LayoutBuilder`, never `MediaQuery`)
