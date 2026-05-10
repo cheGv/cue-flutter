@@ -679,3 +679,140 @@ call sites + painter rotate + shouldRepaint),
 (StatelessWidget → StatefulWidget + MouseRegion + hover
 state), `clients_roster_row.dart` (hover lift + stripe
 color augment, duration alignment).
+
+---
+
+# Revision 2026-05-11 (Ask Cue + Profile two-column)
+
+This revision codifies the Phase 5.1+5.2 unification of
+Cue's chat surfaces. Cue Study (the navy-dark per-client
+chat) is retired; the prior Reasoning panel (the goal-
+scoped citation surface) is preserved as a transitional
+layer. A new **Ask Cue** panel becomes the unified target,
+invoked from Profile (client-scoped) today and from Edit
+Goal (goal-scoped) in a follow-up.
+
+## Profile becomes a two-column workspace
+
+At desktop viewport (≥ 1024px), the client Profile renders
+**chart-data left, AI co-pilot right**. The Ask Cue panel
+sits flush against the chart's right edge with a 460px
+fixed width and a hairline left border. The chart's
+single-column reading-width cap (680px) is **dropped on
+the wide path** — the chart breathes into the available
+space, and the panel anchors the SLP's clinical thinking
+without the SLP having to navigate elsewhere.
+
+Below 1024px, Profile collapses to single-column and the
+Ask Cue panel is reachable via a topbar "Ask Cue" button
+that opens a right-side drawer (480px wide, slide-in
+220ms `easeOutCubic`). Above 1024 the button is suppressed
+since the panel is already visible.
+
+Breakpoints align with the app-wide `kDesktopBreak` (1024)
+and `kMobileBreak` (768) defined in `app_layout.dart` — no
+new arbitrary thresholds. Three-column with a separate
+thread-list sidebar was explored and dropped at recon time:
+the math didn't fit at 1280px (sidebar alone consumed
+220px, leaving the thread-list column at ~190px — too
+narrow to be useful). Threads instead live as an inline
+hairline-separated list at the bottom of the Ask Cue
+panel itself, scope-dot-prefixed for visual distinction.
+
+## Ask Cue panel — design language
+
+Tokens (Phase 4.0.8 spine):
+- Background:    `kCueSurfaceWhite` / `kCuePaper` (warm
+  paper, NOT the pre-spine navy-dark Cue Study register —
+  that would clash with the rest of the surface)
+- Body text:     Inter 13.5 / 1.7 line-height / `kCueInk`
+- Eyebrow:       Mono 9.5 / `kCueAmber` / 0.18em tracked
+  (the HUD strip's "Ready" / "Thinking" status)
+- HUD strip:     `kCueSurfaceWhite` ground, single soft
+  green pulse dot on the left, mono eyebrow + truncated
+  scope detail line. NOT a dark sidebar — the warm-paper
+  HUD register reads as part of the Profile, not a
+  separate console.
+- Input dock:    rounded-pill (24px radius), white,
+  hairline `kCueBorder`. Amber send-button when the
+  stream is idle; tertiary-ink when streaming.
+
+Briefing on empty new threads: italic Iowan 22px / `kCueInk`
+greeting ("What's on your mind about [client]?") plus an
+Inter 13.5 supporting line. No suggested-prompt chips in
+v1 — the briefing copy is the prompt.
+
+Earlier-threads list at the bottom of the conversation:
+hairline-separated rows, scope-dot prefix (`kCueOlive` for
+client-scoped, `kCueAmber` for goal-scoped), Inter 13/500
+title, Inter 11.5 short-date trailing. Selected thread
+gets a `kCuePaper` ground.
+
+## Streaming as `Stream<String>` with single-chunk emit
+
+The service exposes `AskCueStreamResult` with a
+`Stream<String>` for the assistant text + a `Future` for
+the completion (final message + citations). The stream
+contract supports incremental SSE chunks, but v1 emits the
+full assistant text in one chunk after the batch network
+call returns. Real SSE lands in Phase 5.3 alongside voice
+input — the Stream-based widget API is in place now so
+the swap is service-internal.
+
+Typing indicator: three pulse-dots in a paper bubble while
+the stream is open and no text has yet arrived. Once any
+chunk lands (even the single v1 chunk), the bubble fills
+in with selectable text.
+
+## Citation rendering — scope-conditional
+
+- **Goal-scoped threads** (`ltg_id` or `stg_id` non-null):
+  preserve the existing Reasoning behavior — action chips
+  ("Cite in rationale", "Show frameworks", "Apply
+  revision") fired from the assistant message bubble.
+  The Edit Goal screen still routes through
+  `cue_reasoning_panel.dart` in v1; the migration to
+  `AskCuePanel` happens in a follow-up commit.
+- **Client-scoped threads** (both anchors null): citations
+  render as inline footnote-style references — dotted
+  underlines on cited spans, click opens a popover with
+  framework details. Deferred to a follow-up; v1 renders
+  plain text.
+
+## Migrated 15 threads visible immediately
+
+The Phase 5.0 DB migration moved the 15 cue_study_threads
++ 44 messages into `reasoning_threads` /
+`reasoning_messages` with `ltg_id IS NULL AND stg_id IS
+NULL` (client-scoped). They appear in the Ask Cue panel's
+inline thread list on first render of the relevant
+client's Profile, scope-dotted olive (client-scoped). No
+special UI treatment — they're just threads.
+
+## Banked principles
+
+- **Ask Cue is the unified surface name.** Database tables
+  remain `reasoning_*` (no rename); the Dart class /
+  service / widget naming reflects the user-visible
+  vocabulary. Don't reintroduce "Cue Study" in code.
+- **Streaming Stream<String> from day 1.** All callers
+  consume the stream API even when v1 emits a single
+  chunk. Phase 5.3 SSE swap is internal.
+- **Profile theme migration deferred** to Phase 5.6
+  (Profile theme harmonization). The pre-spine `_C`
+  class still governs the chart-side; Phase 4.0.8 spine
+  tokens govern the Ask Cue panel. Visual seam accepted
+  for now.
+
+## Surface 5.1+5.2 reference
+
+Implemented in Phase 5.1+5.2. Three new files:
+`lib/services/ask_cue_service.dart`,
+`lib/widgets/ask_cue_panel.dart`,
+`lib/widgets/ask_cue_drawer.dart`. Phase 1 cleanup retired
+`cue_study_screen.dart`, `cue_study_fab.dart`,
+`cue_study_icon.dart`, the `_CueStudyBrief` widget on
+Profile, the `cueStudyFab` field on `AppLayout`, and the
+`/clients/:id/study` route. `cue_reasoning_panel.dart`
+preserved for goal-scoped Reasoning in Edit Goal pending
+the AskCuePanel migration.

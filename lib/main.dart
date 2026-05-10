@@ -10,7 +10,6 @@ import 'screens/narrator_screen.dart';
 import 'screens/slp_profile_screen.dart';
 import 'screens/assessment_case_screen.dart';
 import 'screens/new_assessment_case_screen.dart';
-import 'screens/cue_study_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/session_capture_screen.dart';
 import 'theme/cue_theme.dart';
@@ -191,64 +190,6 @@ class _ClientProfileDeepLinkLoaderState
     if (_error != null) return _DeepLinkErrorCard(message: _error!);
     if (_client == null) return const _DeepLinkSpinner();
     return ClientProfileScreen(client: _client!);
-  }
-}
-
-/// Resolves /clients/:clientId/study → CueStudyScreen. Category 1 per
-/// founder decision 2. `_threadId` resumes from server inside the
-/// screen's `_bootstrap`; the loader just supplies clientData.
-/// `initialMessage` is intentionally dropped — it's a one-shot
-/// composer seed, not a deep-linkable value.
-class _CueStudyDeepLinkLoader extends StatefulWidget {
-  final String clientId;
-  const _CueStudyDeepLinkLoader({required this.clientId});
-
-  @override
-  State<_CueStudyDeepLinkLoader> createState() =>
-      _CueStudyDeepLinkLoaderState();
-}
-
-class _CueStudyDeepLinkLoaderState extends State<_CueStudyDeepLinkLoader> {
-  Map<String, dynamic>? _client;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final session = Supabase.instance.client.auth.currentSession;
-    if (session == null) {
-      _redirectToLogin(context, '/clients/${widget.clientId}/study');
-      return;
-    }
-    try {
-      final row = await Supabase.instance.client
-          .from('clients')
-          .select()
-          .eq('id', widget.clientId)
-          .maybeSingle();
-      if (!mounted) return;
-      if (row == null) {
-        setState(() => _error = 'Client not found.');
-        return;
-      }
-      setState(() => _client = Map<String, dynamic>.from(row));
-    } catch (e) {
-      if (mounted) setState(() => _error = '$e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_error != null) return _DeepLinkErrorCard(message: _error!);
-    if (_client == null) return const _DeepLinkSpinner();
-    return CueStudyScreen(
-      clientId: widget.clientId,
-      clientData: _client!,
-    );
   }
 }
 
@@ -493,16 +434,10 @@ class CueApp extends StatelessWidget {
           }
 
           // ── Category 1 surfaces (added 4.0.7.39) ────────────────────
-          // /clients/:clientId/study  →  CueStudyScreen
-          if (uri.pathSegments.length == 3 &&
-              uri.pathSegments[0] == 'clients' &&
-              uri.pathSegments[2] == 'study') {
-            final clientId = uri.pathSegments[1];
-            return MaterialPageRoute(
-              settings: settings,
-              builder: (_) => _CueStudyDeepLinkLoader(clientId: clientId),
-            );
-          }
+          // Phase 5.1+5.2 — /clients/:clientId/study route REMOVED
+          // (Cue Study retired). Hard refresh on an old /study URL falls
+          // through to the catch-all return null below; the unknown-route
+          // path lands the SLP back on /today via main.dart's default.
           // /clients/:clientId  →  ClientProfileScreen
           if (uri.pathSegments.length == 2 &&
               uri.pathSegments[0] == 'clients') {

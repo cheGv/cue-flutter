@@ -11,7 +11,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/session_archive_service.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
-import '../widgets/cue_study_icon.dart';
 import 'narrate_session_screen.dart';
 // Phase 4.0.7.39 — SessionCaptureScreen import removed; the
 // "Continue editing →" link now uses pushReplacementNamed to
@@ -1679,7 +1678,10 @@ class _ReportScreenState extends State<ReportScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 32),
-            const CueStudyIcon(size: 24),
+            // Phase 5.1+5.2 — was CueStudyIcon(size: 24); replaced with
+            // a generic in-register icon now that Cue Study is retired.
+            const Icon(Icons.auto_awesome_rounded,
+                size: 24, color: Color(0xFFB45309)),
             const SizedBox(height: 16),
             Text(
               'Use Narrator to document this session first, then generate your report.',

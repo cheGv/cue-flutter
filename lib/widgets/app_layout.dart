@@ -7,11 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/theme_notifier.dart';
 import '../theme/cue_theme.dart';
 import 'cue_cuttlefish.dart';
-// Phase 4.0.7.27c-split-fix2 — CueStudyFab default removed; only
-// client-aware screens pass an explicit instance via cueStudyFab.
-// Import retained for the doc comment reference but unused at runtime.
-// ignore: unused_import
-import 'cue_study_fab.dart';
+// Phase 5.1+5.2 — Cue Study retired; cueStudyFab field removed from
+// AppLayout's API. Ask Cue lives inline on Profile (right panel /
+// drawer), not as a global FAB.
 const double _kSidebarFull      = 220;
 const double _kSidebarCollapsed = 56;
 const double _kDesktopBreak     = 1024;
@@ -31,18 +29,6 @@ class AppLayout extends StatelessWidget {
   final String activeRoute;
   final Widget? floatingActionButton;
   final List<Widget> actions;
-  /// Cue Study FAB override. Phase 1 product law: Cue Study is per-
-  /// client only — there is no global thread. So screens without
-  /// client context (Today, Clients, Assessing, Narrator, Settings)
-  /// don't render a FAB at all. Client-aware screens pass an
-  /// explicit CueStudyFab(...) instance with the chart payload
-  /// pre-bound. Phase 4.0.7.27c-split-fix2: previously the default
-  /// rendered an empty CueStudyFab() that, on tap, fired a
-  /// "Open a client's Chart..." snackbar — surfacing the empty-state
-  /// copy as a global toast on every non-Cue-Study screen. The
-  /// default is now SizedBox.shrink(); the empty-state copy moves
-  /// to whichever screen actually surfaces a Cue Study empty view.
-  final Widget? cueStudyFab;
 
   const AppLayout({
     super.key,
@@ -51,7 +37,6 @@ class AppLayout extends StatelessWidget {
     this.activeRoute = 'roster',
     this.floatingActionButton,
     this.actions = const [],
-    this.cueStudyFab,
   });
 
   @override
@@ -79,12 +64,6 @@ class AppLayout extends StatelessWidget {
                           right:  16,
                           child:  floatingActionButton!,
                         ),
-                      // Cue Study FAB — bottom-left, above bottom nav
-                      Positioned(
-                        bottom: 72,
-                        left:   16,
-                        child:  cueStudyFab ?? const SizedBox.shrink(),
-                      ),
                     ],
                   ),
                 ),
@@ -109,7 +88,7 @@ class AppLayout extends StatelessWidget {
                   activeRoute: activeRoute,
                 ),
               ),
-              // Content area — Stack overlays both FABs over the content
+              // Content area — Stack overlays the per-screen FAB over content.
               Expanded(
                 child: Stack(
                   children: [
@@ -127,12 +106,6 @@ class AppLayout extends StatelessWidget {
                         right:  16,
                         child:  floatingActionButton!,
                       ),
-                    // Cue Study FAB — bottom-left; context-aware override when provided
-                    Positioned(
-                      bottom: 32,
-                      left:   16,
-                      child:  cueStudyFab ?? const SizedBox.shrink(),
-                    ),
                   ],
                 ),
               ),

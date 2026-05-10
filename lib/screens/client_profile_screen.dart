@@ -11,15 +11,15 @@ import '../theme/cue_typography.dart';
 import '../utils/chart_context.dart';
 import '../utils/daily_chart_log.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/ask_cue_drawer.dart';
+import '../widgets/ask_cue_panel.dart';
 import '../widgets/brief_thought_view.dart';
 import '../widgets/cue_cuttlefish.dart';
-import '../widgets/cue_study_icon.dart';
 import '../widgets/goal_achieved_overlay.dart';
 import '../widgets/noticed_moment.dart';
 import 'report_screen.dart';
 import 'add_session_screen.dart';
 import 'add_client_screen.dart';
-import 'cue_study_screen.dart';
 import 'goal_authoring_screen.dart';
 import 'ltg_edit_screen.dart';
 import 'pre_therapy_planning_fluency_screen.dart';
@@ -142,13 +142,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   int  _todaySessionCount  = 0;
   bool _isFirstClientToday = false;
 
-  // Key for scrolling Zone 2 (Cue Study Brief) into view
-  final _cueStudyKey = GlobalKey();
-
-  // Context data for the legacy Cue Study FAB sheet — populated by
-  // _populateCsFabContext but no longer read in Phase 1, since the action bar
-  // pill now navigates directly to CueStudyScreen and chart_context.dart
-  // rebuilds context per turn. Preserved as dead code per spec.
+  // Phase 5.1+5.2 — `_cueStudyKey` removed. Was used for scrolling
+  // the Cue Study Brief widget into view; that widget is gone.
   // ignore: unused_field
   String? _csFabActiveLtgDomains;
   // ignore: unused_field
@@ -693,17 +688,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     Navigator.pop(context, true);
   }
 
-  // Navigates to the persistent Cue Study chat thread for this client. The
-  // legacy one-shot sheet (CueStudyFab.openSheet) is kept as dead code in
-  // case we want to reference it; Phase 1 routes through CueStudyScreen.
-  void _openCueStudySheet() {
-    // Phase 4.0.7.39 — named route so the URL bar reflects
-    // /clients/:id/study and refresh lands back here.
-    Navigator.pushNamed(
-      context,
-      '/clients/${_client['id']}/study',
-    );
-  }
+  // Phase 5.1+5.2 — _openCueStudySheet removed. Cue Study is retired;
+  // Ask Cue lives inline on this surface (right panel on desktop /
+  // drawer on narrow viewports). The brief-thought card's
+  // "think with Cue" button now resolves to null (button hides) since
+  // the chat is already open in the right panel.
 
   // ── Mark goal achieved (Phase 2) ────────────────────────────────────────
   // Confirm → UPDATE long_term_goals.status='achieved' → fire the 3s
@@ -774,30 +763,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     if (mounted) _refreshSpine();
   }
 
-  void _openCueStudyForGoal(Map<String, dynamic> ltg) {
-    final goalText = ((ltg['goal_text']     as String?) ??
-                      (ltg['original_text'] as String?) ?? '').trim();
-    final initial = goalText.isEmpty
-        ? 'Help me think about this goal.'
-        : 'Help me think about this goal: $goalText';
-    // Phase 4.0.7.39 — RouteSettings.name lets the URL show
-    // /clients/:id/study while the imperative push preserves the
-    // one-shot `initialMessage` seed (not deep-linkable on its own).
-    // Hard refresh of the URL re-enters via the deep-link loader, which
-    // drops initialMessage — the resumed thread carries any prior
-    // exchange via _threadId.
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        settings: RouteSettings(name: '/clients/${_client['id']}/study'),
-        builder: (_) => CueStudyScreen(
-          clientId:       _client['id'].toString(),
-          clientData:     _client,
-          initialMessage: initial,
-        ),
-      ),
-    );
-  }
+  // Phase 5.1+5.2 — _openCueStudyForGoal removed. Goal-scoped Ask Cue
+  // is reachable through the Edit Goal screen's embedded AskCuePanel
+  // (scope='ltg'). The "Open with Cue →" link in the LTG card is gone;
+  // the SLP opens the goal and finds the chat panel inside.
 
   // Placeholder Ask sheet — Phase 3.3 removed the magnifying-glass
   // affordance from the action bar. Per CLAUDE.md §14.3 natural-language
@@ -970,15 +939,53 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return AppLayout(
       title:       clientName,
       activeRoute: 'roster',
-      // The floating action bar covers Cue Study on this screen — suppress
-      // the global FAB so we don't render two surfaces for the same action.
-      cueStudyFab: const SizedBox.shrink(),
+      // Phase 5.1+5.2 — narrow viewport (< 1024) gets an "Ask Cue"
+      // button in the topbar that opens the drawer. At desktop the
+      // panel is persistent on the right; the button is suppressed.
+      actions: [
+        Builder(
+          builder: (ctx) {
+            final isWide = MediaQuery.sizeOf(ctx).width >= 1024;
+            if (isWide) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: () => showAskCueDrawer(
+                  context:    context,
+                  clientId:   clientId,
+                  clientName: clientName,
+                ),
+                icon: const Icon(Icons.auto_awesome_rounded,
+                    size: 16, color: Color(0xFFB45309)),
+                label: const Text('Ask Cue',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF1B2B4B),
+                        fontWeight: FontWeight.w500)),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(0, 36),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                ),
+              ),
+            );
+          },
+        ),
+      ],
       body: LayoutBuilder(
         builder: (ctx, constraints) {
           final hPad     = constraints.maxWidth > 500 ? 24.0 : 16.0;
           final isMobile = constraints.maxWidth < 600;
+          // Phase 5.1+5.2 — at viewport ≥ 1024, the chart-side
+          // content shares horizontal space with the persistent
+          // AskCuePanel on the right. The maxWidth: 680 cap is
+          // dropped on the wide path so the chart breathes; the
+          // narrow path keeps the cap as the single-column reading
+          // width. Below 1024, AskCuePanel is invoked through the
+          // header drawer button instead.
+          final isWide   = constraints.maxWidth >= 1024;
           final lc       = _C.of(ctx);
-          return Stack(
+          final mainContent = Stack(
             fit: StackFit.expand,
             children: [
               // Scroll view fills the body via Positioned.fill — guarantees
@@ -990,7 +997,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 680),
+                      constraints: BoxConstraints(
+                          maxWidth: isWide ? double.infinity : 680),
                       child: CustomScrollView(
                         slivers: [
                           // ── Zone 1: Identity ────────────────────────────
@@ -1030,8 +1038,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                           // a chart it has no data for. Charts with data go
                           // through BriefThoughtView's proxy fetch path.
                           SliverToBoxAdapter(
+                            // Phase 5.1+5.2 — `key: _cueStudyKey`
+                            // removed; the scroll target it served
+                            // (the Cue Study Brief widget) is gone.
                             child: SizedBox(
-                              key: _cueStudyKey,
                               child: FutureBuilder<_ReadyData>(
                                 future: _readyFuture,
                                 builder: (ctx, readySnap) {
@@ -1124,7 +1134,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                           ' Have a look when you can.',
                                       highlight:
                                           'Have a look when you can',
-                                      onThinkWithCue: _openCueStudySheet,
+                                      // Phase 5.1+5.2 — Ask Cue lives
+                                      // in the persistent right panel
+                                      // (or drawer on narrow viewports);
+                                      // the redundant "think with Cue"
+                                      // button on the brief card is
+                                      // suppressed by passing null.
+                                      onThinkWithCue: null,
                                       padding: EdgeInsets.fromLTRB(
                                           hPad,
                                           CueGap.s24,
@@ -1149,7 +1165,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                     return BriefThoughtCard(
                                       thought:        emptyThought,
                                       highlight:      'story starts here',
-                                      onThinkWithCue: _openCueStudySheet,
+                                      // Phase 5.1+5.2 — Ask Cue lives
+                                      // in the persistent right panel
+                                      // (or drawer on narrow viewports);
+                                      // the redundant "think with Cue"
+                                      // button on the brief card is
+                                      // suppressed by passing null.
+                                      onThinkWithCue: null,
                                       padding: EdgeInsets.fromLTRB(
                                           hPad,
                                           CueGap.s24,
@@ -1172,7 +1194,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                       }
                                       return BriefThoughtView(
                                         chartContext:   ctxSnap.data!,
-                                        onThinkWithCue: _openCueStudySheet,
+                                        // Phase 5.1+5.2 — Ask Cue lives
+                                      // in the persistent right panel
+                                      // (or drawer on narrow viewports);
+                                      // the redundant "think with Cue"
+                                      // button on the brief card is
+                                      // suppressed by passing null.
+                                      onThinkWithCue: null,
                                         padding: EdgeInsets.fromLTRB(
                                             hPad,
                                             CueGap.s24,
@@ -1253,6 +1281,26 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     ),
                   ),
                 ),
+            ],
+          );
+          // Phase 5.1+5.2 — at desktop viewport (≥ 1024), the chart
+          // content (Stack above) lives on the LEFT and the persistent
+          // AskCuePanel sits on the RIGHT. Fixed-width 460px panel —
+          // wide enough for comfortable chat reading, narrow enough
+          // that the chart side still breathes. Below 1024, the panel
+          // is reachable via the header "Ask Cue" button (drawer).
+          if (!isWide) return mainContent;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: mainContent),
+              SizedBox(
+                width: 460,
+                child: AskCuePanel(
+                  clientId:   clientId,
+                  clientName: clientName,
+                ),
+              ),
             ],
           );
         },
@@ -1427,22 +1475,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           onTap:     _openAddSession,
         ),
         divider,
+        // Phase 5.1+5.2 — "Cue Study" pill REMOVED. Ask Cue lives in
+        // the persistent right panel (or drawer on narrow viewports)
+        // on this surface, so a duplicate floating-bar entry would be
+        // noise. Build plan with Cue stays — it's a separate flow
+        // (goal authoring wizard).
         _FabBarItem(
-          // Cue Study — the conversational clinical reasoning surface.
-          // Phase 3.3: renamed from "Ask Cue" for codebase-vocabulary
-          // consistency.
-          icon:      const CueCuttlefish(
-              size:  CueSize.cuttlefishActionPill,
-              state: CueState.idle),
-          label:     'Cue Study',
-          labelColor: c.amber,
-          onTap:     _openCueStudySheet,
-        ),
-        divider,
-        _FabBarItem(
-          // Phase 3.3: primary chart-scoped clinical action. Per §14.3
-          // natural-language retrieval moves to the Phase 4 Practice
-          // sidebar entry — this is not "Ask".
           icon:      const CueCuttlefish(
               size:  CueSize.cuttlefishActionPill,
               state: CueState.idle),
@@ -1827,15 +1865,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                     fontSize: 12, color: c.ghost),
                               ),
                             ),
-                            const SizedBox(width: CueGap.s14),
-                            GestureDetector(
-                              onTap: () => _openCueStudyForGoal(ltg),
-                              child: Text(
-                                'Open with Cue →',
-                                style: GoogleFonts.dmSans(
-                                    fontSize: 12, color: c.teal),
-                              ),
-                            ),
+                            // Phase 5.1+5.2 — "Open with Cue →" link
+                            // removed. Goal-scoped Ask Cue is reachable
+                            // through the embedded AskCuePanel inside
+                            // Edit Goal (scope='ltg'); no separate
+                            // entry point needed here.
                           ],
                         ),
                         const SizedBox(height: CueGap.s10),
@@ -2861,369 +2895,6 @@ class _StgInlineEditor extends StatelessWidget {
   }
 }
 
-// ── _CueStudyBrief ────────────────────────────────────────────────────────────
-
-class _CueStudyBrief extends StatefulWidget {
-  final Map<String, dynamic> client;
-  final Future<_ReadyData>   readyFuture;
-  final double               hPad;
-
-  const _CueStudyBrief({
-    required this.client,
-    required this.readyFuture,
-    required this.hPad,
-  });
-
-  @override
-  State<_CueStudyBrief> createState() => _CueStudyBriefState();
-}
-
-class _CueStudyBriefState extends State<_CueStudyBrief>
-    with TickerProviderStateMixin {
-  static const _proxyBase  = 'https://cue-ai-proxy.onrender.com';
-  static const _system =
-      'You are Cue, a clinical co-pilot for Speech-Language Pathologists. '
-      'Generate a concise pre-session brief using only the data provided — '
-      'never invent observations, scores, or recommendations not grounded in the data. '
-      'Respond in plain text only, no markdown, no bullet points, maximum 8 lines.';
-
-  static const _csAmber     = Color(0xFFF59E0B);
-  static const _csAmberDark = Color(0xFFD97706);
-
-  late final AnimationController _orbitController;
-  late final AnimationController _pulseController;
-  late final Animation<double>   _pulseAnim;
-
-  bool    _loading = true;
-  String? _text;
-  double  _opacity = 0.0;
-
-  @override
-  void initState() {
-    super.initState();
-    _orbitController = AnimationController(
-      vsync:    this,
-      duration: const Duration(milliseconds: 3000),
-    )..repeat();
-    _pulseController = AnimationController(
-      vsync:    this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
-    _pulseAnim =
-        Tween<double>(begin: 0.4, end: 1.0).animate(_pulseController);
-
-    widget.readyFuture.then(_generateBrief).catchError((_) {
-      if (mounted) setState(() => _loading = false);
-    });
-  }
-
-  @override
-  void dispose() {
-    _orbitController.dispose();
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _generateBrief(_ReadyData data) async {
-    try {
-      final text = await _callProxy(data);
-      if (mounted) {
-        setState(() {
-          _text    = text;
-          _loading = false;
-        });
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _opacity = 1.0);
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
-
-  Future<String> _callProxy(_ReadyData data) async {
-    // Legacy _CueStudyBrief has its own `client` field; the chart-screen
-    // bulk-rename to `_client` (Phase 3.3.4) doesn't apply here.
-    final cl = widget.client;
-    final sb = StringBuffer();
-
-    sb.writeln('CLIENT: ${cl['name'] ?? 'not documented'}'
-        ', Age ${cl['age'] ?? 'not documented'}');
-    sb.writeln('Diagnosis: ${cl['diagnosis'] ?? 'not documented'}');
-    sb.writeln();
-
-    final ltgs = data.spine.ltgs;
-    if (ltgs.isNotEmpty) {
-      sb.writeln('LONG-TERM GOALS:');
-      for (final ltg in ltgs) {
-        final domain =
-            ltg['domain'] != null ? ' (${ltg['domain']})' : '';
-        sb.writeln('- ${ltg['goal_text'] ?? 'not documented'}$domain');
-      }
-      sb.writeln();
-    }
-
-    final activeStgs = data.spine.stgs
-        .where((s) => (s['status'] as String?) == 'active')
-        .toList();
-    if (activeStgs.isNotEmpty) {
-      sb.writeln('ACTIVE SHORT-TERM GOALS:');
-      for (final stg in activeStgs) {
-        final goalText = stg['specific'] ??
-            stg['goal_text'] ??
-            stg['target_behavior'] ??
-            'not documented';
-        final level = stg['current_cue_level'];
-        sb.writeln('- $goalText');
-        if (level != null) sb.writeln('  Support level: $level');
-      }
-      sb.writeln();
-    }
-
-    final lastSession =
-        data.sessions.isNotEmpty ? data.sessions.first : null;
-    if (lastSession != null) {
-      sb.writeln(
-          'LAST SESSION DATE: ${lastSession['date'] ?? 'not documented'}');
-      final soap  = lastSession['soap_note'];
-      final notes = lastSession['notes'] as String?;
-      if (soap is Map && soap.isNotEmpty) {
-        if (soap['s'] != null) sb.writeln('S: ${soap['s']}');
-        if (soap['o'] != null) sb.writeln('O: ${soap['o']}');
-        if (soap['a'] != null) sb.writeln('A: ${soap['a']}');
-        if (soap['p'] != null) sb.writeln('P: ${soap['p']}');
-      } else if (notes != null && notes.isNotEmpty) {
-        sb.writeln('Notes: $notes');
-      } else {
-        sb.writeln('SOAP note: not documented');
-      }
-      sb.writeln();
-    }
-
-    sb.writeln('Generate a pre-session brief with these sections in order:');
-    sb.writeln(
-        'LAST SESSION: one-line snapshot of what was worked on and overall accuracy');
-    sb.writeln(
-        "TODAY'S FOCUS: active STGs, current support level, push vs consolidate recommendation based on accuracy trend");
-    sb.writeln(
-        'PATTERN FLAG: ONLY include this line if accuracy has dropped or plateaued across 3 or more consecutive evidence rows. If no pattern, omit entirely.');
-    sb.writeln(
-        'SUGGESTED MOVE: one sentence clinical recommendation for today');
-
-    final supabase = Supabase.instance.client;
-    final token    = supabase.auth.currentSession?.accessToken;
-
-    final response = await http
-        .post(
-          Uri.parse('$_proxyBase/pre-session-brief'),
-          headers: {
-            'Content-Type': 'application/json',
-            if (token != null) 'Authorization': 'Bearer $token',
-          },
-          body: jsonEncode({
-            'model':        'claude-sonnet-4-20250514',
-            'system':       _system,
-            'user_message': sb.toString(),
-            'client_id':    widget.client['id'].toString(),
-          }),
-        )
-        .timeout(const Duration(seconds: 30));
-
-    if (response.statusCode != 200) {
-      throw Exception('proxy ${response.statusCode}');
-    }
-
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final text = body['content']?[0]?['text'] ??
-        body['brief'] ??
-        body['text'] ??
-        response.body;
-    return text.toString().trim();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = _C.of(context);
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(widget.hPad, 20, widget.hPad, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: c.isDark
-                  ? null
-                  : const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end:   Alignment.bottomRight,
-                      colors: [
-                        Color(0xFFFEF5DF),
-                        Color(0xFFF9E9B8),
-                        Color(0xFFF5E0A0),
-                      ],
-                    ),
-              color:        c.isDark ? const Color(0x0FD97706) : null,
-              borderRadius: BorderRadius.circular(18),
-              border: c.isDark
-                  ? Border.all(
-                      color: const Color(0x20D97706), width: 0.5)
-                  : null,
-              boxShadow: c.isDark
-                  ? null
-                  : const [
-                      BoxShadow(
-                        color:      Color(0x10000000),
-                        blurRadius: 16,
-                        offset:     Offset(0, 4),
-                      ),
-                    ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: Stack(
-                children: [
-                  if (!c.isDark)
-                    const Positioned(
-                      top: -30, right: -30,
-                      child: SizedBox(
-                        width: 100, height: 100,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: RadialGradient(
-                              colors: [
-                                Color(0x30D97706),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 18, height: 18,
-                              child: FittedBox(
-                                fit:   BoxFit.contain,
-                                child: CueStudyIcon(),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              "CUE STUDY · today's brief",
-                              style: GoogleFonts.dmSans(
-                                fontSize:    10,
-                                fontWeight:  FontWeight.w600,
-                                color:       _csAmberDark,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        if (_loading)
-                          _buildLoading()
-                        else if (_text == null || _text!.trim().isEmpty)
-                          _buildEmpty(c)
-                        else
-                          _buildLoaded(c),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            margin: const EdgeInsets.only(top: 20),
-            height: 0.5,
-            color:  c.line,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoading() {
-    return SizedBox(
-      height: 32,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          RotationTransition(
-            turns: _orbitController,
-            child: SizedBox(
-              width: 32, height: 32,
-              child: Align(
-                alignment: const Alignment(0.625, 0),
-                child: Container(
-                  width: 5, height: 5,
-                  decoration: const BoxDecoration(
-                    color: _csAmberDark, shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          AnimatedBuilder(
-            animation: _pulseAnim,
-            builder: (ctx, child) => Opacity(
-              opacity: _pulseAnim.value,
-              child: Container(
-                width: 7, height: 7,
-                decoration: const BoxDecoration(
-                  color: _csAmber, shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmpty(_C c) {
-    return Text(
-      'No session data yet. This will populate after the first documented session.',
-      style: GoogleFonts.dmSans(
-        fontSize:  13,
-        color:     c.ghost,
-        fontStyle: FontStyle.italic,
-        height:    1.5,
-      ),
-    );
-  }
-
-  Widget _buildLoaded(_C c) {
-    return AnimatedOpacity(
-      opacity:  _opacity,
-      duration: const Duration(milliseconds: 800),
-      child: c.isDark
-          ? Text(
-              _text!,
-              style: GoogleFonts.dmSans(
-                fontSize: 14, color: c.ink, height: 1.7,
-              ),
-            )
-          : Text(
-              _text!,
-              style: CueType.serif(
-                fontSize:   22,
-                fontWeight: FontWeight.w400,
-                color:      const Color(0xFF0D1B2A),
-                height:     1.6,
-              ),
-            ),
-    );
-  }
-}
 
 // ── _AchievementsArchive ──────────────────────────────────────────────────────
 //

@@ -10,7 +10,6 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/cue_reasoning_panel.dart';
-import '../widgets/cue_study_icon.dart';
 import '../widgets/goal_achieved_overlay.dart';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
@@ -1294,7 +1293,10 @@ class _LtgEditScreenState extends State<LtgEditScreen>
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const CueStudyIcon(),
+              // Phase 5.1+5.2 — was CueStudyIcon(); replaced with a
+              // generic in-register icon now that Cue Study is retired.
+              const Icon(Icons.auto_awesome_rounded,
+                  size: 22, color: Color(0xFFB45309)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1799,7 +1801,10 @@ class _StuckSheetState extends State<_StuckSheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const CueStudyIcon(),
+                // Phase 5.1+5.2 — was CueStudyIcon(); replaced with
+                // a generic in-register icon now that Cue Study is retired.
+                const Icon(Icons.auto_awesome_rounded,
+                    size: 22, color: Color(0xFFB45309)),
                 const SizedBox(width: 8),
                 Text(
                   'Cue Study',
