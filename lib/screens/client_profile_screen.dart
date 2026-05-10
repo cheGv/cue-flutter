@@ -11,8 +11,8 @@ import '../theme/cue_typography.dart';
 import '../utils/chart_context.dart';
 import '../utils/daily_chart_log.dart';
 import '../widgets/app_layout.dart';
-import '../widgets/ask_cue_drawer.dart';
-import '../widgets/ask_cue_panel.dart';
+// Phase 5.3 Round A.1 — ask_cue_drawer / ask_cue_panel imports retired
+// here. Round A.2 reconnects via the new popup architecture.
 import '../widgets/brief_thought_view.dart';
 import '../widgets/cue_cuttlefish.dart';
 import '../widgets/goal_achieved_overlay.dart';
@@ -939,51 +939,16 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return AppLayout(
       title:       clientName,
       activeRoute: 'roster',
-      // Phase 5.1+5.2 — narrow viewport (< 1024) gets an "Ask Cue"
-      // button in the topbar that opens the drawer. At desktop the
-      // panel is persistent on the right; the button is suppressed.
-      actions: [
-        Builder(
-          builder: (ctx) {
-            final isWide = MediaQuery.sizeOf(ctx).width >= 1024;
-            if (isWide) return const SizedBox.shrink();
-            return Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: TextButton.icon(
-                onPressed: () => showAskCueDrawer(
-                  context:    context,
-                  clientId:   clientId,
-                  clientName: clientName,
-                ),
-                icon: const Icon(Icons.auto_awesome_rounded,
-                    size: 16, color: Color(0xFFB45309)),
-                label: const Text('Ask Cue',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF1B2B4B),
-                        fontWeight: FontWeight.w500)),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 36),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                ),
-              ),
-            );
-          },
-        ),
-      ],
+      // Phase 5.3 Round A.1 — topbar "Ask Cue" button retired. Round A.2
+      // wires the new popup summon affordances (HUD strip pills, ⌘K).
       body: LayoutBuilder(
         builder: (ctx, constraints) {
           final hPad     = constraints.maxWidth > 500 ? 24.0 : 16.0;
           final isMobile = constraints.maxWidth < 600;
-          // Phase 5.1+5.2 — at viewport ≥ 1024, the chart-side
-          // content shares horizontal space with the persistent
-          // AskCuePanel on the right. The maxWidth: 680 cap is
-          // dropped on the wide path so the chart breathes; the
-          // narrow path keeps the cap as the single-column reading
-          // width. Below 1024, AskCuePanel is invoked through the
-          // header drawer button instead.
-          final isWide   = constraints.maxWidth >= 1024;
+          // Phase 5.3 Round A.1 — persistent right column retired; Profile
+          // renders single-column at every viewport. The 680px reading-
+          // width cap stays for the existing chart content; Round B's
+          // pillar rewrite will redesign for the full-width canvas.
           final lc       = _C.of(ctx);
           final mainContent = Stack(
             fit: StackFit.expand,
@@ -997,8 +962,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                          maxWidth: isWide ? double.infinity : 680),
+                      constraints: const BoxConstraints(maxWidth: 680),
                       child: CustomScrollView(
                         slivers: [
                           // ── Zone 1: Identity ────────────────────────────
@@ -1283,26 +1247,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 ),
             ],
           );
-          // Phase 5.1+5.2 — at desktop viewport (≥ 1024), the chart
-          // content (Stack above) lives on the LEFT and the persistent
-          // AskCuePanel sits on the RIGHT. Fixed-width 460px panel —
-          // wide enough for comfortable chat reading, narrow enough
-          // that the chart side still breathes. Below 1024, the panel
-          // is reachable via the header "Ask Cue" button (drawer).
-          if (!isWide) return mainContent;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: mainContent),
-              SizedBox(
-                width: 460,
-                child: AskCuePanel(
-                  clientId:   clientId,
-                  clientName: clientName,
-                ),
-              ),
-            ],
-          );
+          // Phase 5.3 Round A.1 — persistent right column retired. Cue is
+          // summoned via the popup architecture landing in Round A.2.
+          return mainContent;
         },
       ),
     );

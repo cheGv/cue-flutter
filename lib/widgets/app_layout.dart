@@ -42,7 +42,9 @@ class AppLayout extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      // Phase 5.3 Round A.1 — theme-aware so the dark default flip doesn't
+      // leak a hardcoded light-gray scaffold under every screen.
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < _kMobileBreak;
@@ -145,11 +147,21 @@ class _TopBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    // Phase 5.3 Round A.1 — chrome theme-aware so the dark default flip
+    // doesn't paint a white strip across the top of every screen.
+    final isDark        = Theme.of(context).brightness == Brightness.dark;
+    final barColor      = isDark ? CueColors.surfaceDark    : Colors.white;
+    final dividerColor  = isDark ? CueColors.dividerDark    : Colors.grey.shade200;
+    final iconColor     = isDark
+        ? CueColors.inkDark.withValues(alpha: 0.55)
+        : Colors.grey.shade700;
+    final titleColor    = isDark ? CueColors.inkDark        : const Color(0xFF1A1A2E);
+
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+        color: barColor,
+        border: Border(bottom: BorderSide(color: dividerColor)),
       ),
       padding: EdgeInsets.symmetric(horizontal: hPad),
       child: Row(
@@ -165,7 +177,7 @@ class _TopBar extends StatelessWidget {
                 child: Center(
                   child: Icon(
                     Icons.arrow_back_rounded,
-                    color: Colors.grey.shade700,
+                    color: iconColor,
                     size: 20,
                   ),
                 ),
@@ -180,7 +192,7 @@ class _TopBar extends StatelessWidget {
               style: TextStyle(
                 fontSize:   fontSize,
                 fontWeight: FontWeight.w600,
-                color:      const Color(0xFF1A1A2E),
+                color:      titleColor,
               ),
             ),
           ),

@@ -10,14 +10,18 @@ final themeNotifier = ThemeNotifier();
 class ThemeNotifier extends ValueNotifier<ThemeMode> {
   static const _key = 'theme_mode';
 
-  ThemeNotifier() : super(ThemeMode.light);
+  // Phase 5.3 — default register flipped from light to dark per the
+  // Profile rewrite + dark-default brief. Existing SLPs who explicitly
+  // toggled to 'day' keep their preference; everyone else (null pref +
+  // 'night') gets dark on next launch.
+  ThemeNotifier() : super(ThemeMode.dark);
 
   /// Call once at app startup (before runApp) to restore saved preference.
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    value = (prefs.getString(_key) == 'night')
-        ? ThemeMode.dark
-        : ThemeMode.light;
+    value = (prefs.getString(_key) == 'day')
+        ? ThemeMode.light
+        : ThemeMode.dark;
   }
 
   /// Toggle between day and night, persisting the choice.
