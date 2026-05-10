@@ -5,6 +5,7 @@
 // state (see CelebratingGoalCard). Phase 2.6: tokens centralised.
 
 import 'package:flutter/material.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
 import '../theme/cue_typography.dart';
@@ -96,17 +97,14 @@ class CelebratingGoalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isNight = Theme.of(context).brightness == Brightness.dark;
-    final tealBase = isNight ? CueColors.tealLight : CueColors.teal;
-    final surfaceBg = isNight
-        ? CueColors.tealLight
-            .withValues(alpha: CueAlpha.celebratingSurfaceNight)
-        : CueColors.teal
-            .withValues(alpha: CueAlpha.celebratingSurfaceDay);
+    final cue       = CueColorsResolved.of(context);
+    final tealBase  = cue.teal;
+    final surfaceBg = cue.isDark
+        ? cue.teal.withValues(alpha: CueAlpha.celebratingSurfaceNight)
+        : cue.teal.withValues(alpha: CueAlpha.celebratingSurfaceDay);
     final stripBg     = tealBase.withValues(alpha: CueAlpha.celebratingStrip);
     final borderColor = tealBase.withValues(alpha: CueAlpha.celebratingBorder);
-    final textColor   =
-        isNight ? CueColors.inkDark : CueColors.inkPrimary;
+    final textColor   = cue.textPrimary;
 
     final goalText = ((goal['goal_text']     as String?) ??
                       (goal['original_text'] as String?) ??
@@ -174,9 +172,7 @@ class CelebratingGoalCard extends StatelessWidget {
                   Text(
                     'Achieved ${achievedDate!}',
                     style: CueType.bodySmall.copyWith(
-                        color: isNight
-                            ? CueColors.inkSecondaryDark
-                            : CueColors.inkSecondary),
+                        color: cue.textBody),
                   ),
                 ],
               ],

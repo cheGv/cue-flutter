@@ -6,6 +6,7 @@ import '../animation/cue_motion.dart';
 import '../services/day_state_service.dart';
 import '../services/name_formatter.dart';
 import '../services/today_widgets_service.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
@@ -792,9 +793,8 @@ class _TodayScreenState extends State<TodayScreen> {
                     final hPad = constraints.maxWidth > 700 ? 48.0 : 24.0;
                     final isNight =
                         Theme.of(context).brightness == Brightness.dark;
-                    final pageBg = isNight
-                        ? CueColors.backgroundDark
-                        : kCuePaper;
+                    final cue = CueColorsResolved.of(context);
+                    final pageBg = cue.bgCanvas;
                     // Phase 4.0.8-step-B-surface-1.2 — page order
                     // restructured: greeting block now leads the page;
                     // yesterday-reminder and reopened-pill moved into
@@ -827,7 +827,7 @@ class _TodayScreenState extends State<TodayScreen> {
     final borderColor = isNight
         ? const Color(0x2EFFFFFF) // rgba(255,255,255,0.18)
         : kCueBorder;
-    final textColor = isNight ? CueColors.inkDark : kCueInk;
+    final textColor = CueColorsResolved.of(context).textPrimary;
 
     final helperText = _dayState.state == CueDayState.reopened
         ? 'close again when you\'re really done'
@@ -893,9 +893,10 @@ class _TodayScreenState extends State<TodayScreen> {
       if (next != null && next.isNotEmpty) pending++;
     }
 
-    final pageBg        = isNight ? CueColors.backgroundDark : kCuePaper;
-    final headlineColor = isNight ? CueColors.inkDark        : kCueInk;
-    final tertiaryColor = isNight ? CueColors.inkTertiaryDark : kCueInkTertiary;
+    final cue           = CueColorsResolved.of(context);
+    final pageBg        = cue.bgCanvas;
+    final headlineColor = cue.textPrimary;
+    final tertiaryColor = cue.textMuted;
     final pillBorder    = isNight ? const Color(0x2EFFFFFF)  : kCueBorder;
 
     return Stack(

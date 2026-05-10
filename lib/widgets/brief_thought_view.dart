@@ -17,6 +17,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
 import '../theme/cue_typography.dart';
@@ -126,10 +127,10 @@ class BriefThoughtCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isNight = Theme.of(context).brightness == Brightness.dark;
-    final ink     = isNight ? CueColors.inkDark        : CueColors.inkPrimary;
-    final amberLn = isNight ? CueColors.amber          : CueColors.amberDark;
-    final divider = isNight ? CueColors.dividerDark    : CueColors.divider;
+    final cue     = CueColorsResolved.of(context);
+    final ink     = cue.textPrimary;
+    final amberLn = cue.amber;
+    final divider = cue.border;
 
     return Container(
       decoration: BoxDecoration(

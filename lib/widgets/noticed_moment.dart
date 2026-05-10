@@ -33,7 +33,7 @@
 // =====================================================================
 
 import 'package:flutter/material.dart';
-import '../theme/cue_theme.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_tokens.dart';
 import '../theme/cue_typography.dart';
 import 'cue_cuttlefish.dart';
@@ -191,10 +191,10 @@ class NoticedMomentView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isNight = Theme.of(context).brightness == Brightness.dark;
-    final ink     = isNight ? CueColors.inkDark        : CueColors.inkPrimary;
-    final amberLn = isNight ? CueColors.amber          : CueColors.amberDark;
-    final divider = isNight ? CueColors.dividerDark    : CueColors.divider;
+    final cue     = CueColorsResolved.of(context);
+    final ink     = cue.textPrimary;
+    final amberLn = cue.amber;
+    final divider = cue.border;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, CueGap.s24, 0, CueGap.s32),
@@ -269,9 +269,9 @@ class _SoftButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isNight = Theme.of(context).brightness == Brightness.dark;
-    final amber   = CueColors.amber;
-    final ink     = isNight ? CueColors.inkDark : CueColors.inkPrimary;
+    final cue   = CueColorsResolved.of(context);
+    final amber = cue.amber;
+    final ink   = cue.textPrimary;
 
     return GestureDetector(
       onTap: onTap,

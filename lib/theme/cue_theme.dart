@@ -42,11 +42,11 @@ class CueColors {
 
   // ── Night mode ───────────────────────────────────────────────────────────
   /// Near-black with blue tint, darker than day-mode sidebar.
-  static const backgroundDark    = Color(0xFF060E1A);
+  static const backgroundDark    = Color(0xFF0A0A0B);
   /// Elevated cards in night mode.
-  static const surfaceDark       = Color(0xFF0F1F35);
+  static const surfaceDark       = Color(0xFF111112);
   /// Sidebar in night mode (even darker than night background).
-  static const sidebarDark       = Color(0xFF040A12);
+  static const sidebarDark       = Color(0xFF050505);
   static const inkDark           = Color(0xFFF0EBE1);
   static const inkSecondaryDark  = Color(0x80F0EBE1);
   static const inkTertiaryDark   = Color(0x4DF0EBE1);
@@ -275,8 +275,8 @@ class CueTheme {
         secondary:   CueColors.tealLight,
         surface:     CueColors.surfaceDark,
         error:       CueColors.coral,
-        onPrimary:   Color(0xFF060E1A),
-        onSecondary: Color(0xFF060E1A),
+        onPrimary:   Color(0xFF0A0A0B),
+        onSecondary: Color(0xFF0A0A0B),
         onSurface:   CueColors.inkDark,
       ),
       scaffoldBackgroundColor: CueColors.backgroundDark,
@@ -322,7 +322,7 @@ class CueTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: CueColors.amber,
-          foregroundColor: const Color(0xFF060E1A),
+          foregroundColor: const Color(0xFF0A0A0B),
           minimumSize: const Size(0, 52),
           textStyle: CueType.custom(
               fontSize: 15, weight: FontWeight.w600, letterSpacing: 0.1),
@@ -349,7 +349,7 @@ class CueTheme {
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: CueColors.amber,
-        foregroundColor: Color(0xFF060E1A),
+        foregroundColor: Color(0xFF0A0A0B),
         elevation: 0, focusElevation: 0, hoverElevation: 0, highlightElevation: 0,
       ),
       dividerTheme: const DividerThemeData(

@@ -57,6 +57,12 @@ class CueColorsResolved {
   final Color purple;
   final Color coral;
   final Color teal;
+  // Phase 5.3 Round A.1.2 — alpha-modulated teal derivatives. tealSurface:
+  // 12% alpha of cue.teal for active-STG card grounds. tealFaded: 30% alpha
+  // for dotted lines / gradients. Single source of truth so derivations
+  // don't drift across surfaces.
+  final Color tealSurface;
+  final Color tealFaded;
   final Color red;
 
   const CueColorsResolved._({
@@ -80,6 +86,8 @@ class CueColorsResolved {
     required this.purple,
     required this.coral,
     required this.teal,
+    required this.tealSurface,
+    required this.tealFaded,
     required this.red,
   });
 
@@ -104,6 +112,8 @@ class CueColorsResolved {
     purple:         t.kCueInkSecondary,
     coral:          CueColors.coral,
     teal:           CueColors.teal,
+    tealSurface:    Color(0x1F1F8870), // 12% alpha of CueColors.teal
+    tealFaded:      Color(0x4D1F8870), // 30% alpha of CueColors.teal
     red:            CueColors.coral,
   );
 
@@ -128,6 +138,8 @@ class CueColorsResolved {
     purple:         Color(0xFFAFA9EC),
     coral:          Color(0xFFF0997B),
     teal:           Color(0xFF5DCAA5),
+    tealSurface:    Color(0x1F5DCAA5), // 12% alpha of dark teal
+    tealFaded:      Color(0x4D5DCAA5), // 30% alpha of dark teal
     red:            Color(0xFFE24B4A),
   );
 

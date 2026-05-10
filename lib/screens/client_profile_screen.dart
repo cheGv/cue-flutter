@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/name_formatter.dart';
 import '../services/session_archive_service.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
 import '../theme/cue_typography.dart';
@@ -23,59 +24,6 @@ import 'add_client_screen.dart';
 import 'goal_authoring_screen.dart';
 import 'ltg_edit_screen.dart';
 import 'pre_therapy_planning_fluency_screen.dart';
-
-// ── Theme-aware colour swatch ─────────────────────────────────────────────────
-class _C {
-  final bool   isDark;
-  final Color  bg, surface, ink, ghost, muted, line, teal, tealBg, tealFaded, amber;
-
-  const _C({
-    required this.isDark,
-    required this.bg,
-    required this.surface,
-    required this.ink,
-    required this.ghost,
-    required this.muted,
-    required this.line,
-    required this.teal,
-    required this.tealBg,
-    required this.tealFaded,
-    required this.amber,
-  });
-
-  static _C of(BuildContext ctx) {
-    final dark = Theme.of(ctx).brightness == Brightness.dark;
-    return dark ? _night : _day;
-  }
-
-  static const _day = _C(
-    isDark:    false,
-    bg:        Color(0xFFFAF7F0),
-    surface:   Color(0xFFFFFFFF),
-    ink:       Color(0xFF0D1B2A),
-    ghost:     Color(0xFF6B7280),
-    muted:     Color(0xFF9CA3AF),
-    line:      Color(0xFFE5E1D8),
-    teal:      Color(0xFF2A8F72),
-    tealBg:    Color(0xFFE8F5F0),
-    tealFaded: Color(0x4D2A8F72),
-    amber:     Color(0xFFD97706),
-  );
-
-  static const _night = _C(
-    isDark:    true,
-    bg:        Color(0xFF0F1923),
-    surface:   Color(0xFF162230),
-    ink:       Color(0xFFF0EBE1),
-    ghost:     Color(0xFF8A9BB0),
-    muted:     Color(0xFF4A5A70),
-    line:      Color(0xFF243040),
-    teal:      Color(0xFF34D399),
-    tealBg:    Color(0xFF0A2A1A),
-    tealFaded: Color(0x4D34D399),
-    amber:     Color(0xFFF59E0B),
-  );
-}
 
 // ── Timeline data model ───────────────────────────────────────────────────────
 enum TimelineEntryType { session, goalSet, goalAchieved, assessment, upload, milestone }
@@ -578,10 +526,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   void _openMoreSheet() {
-    final c = _C.of(context);
+    final c = CueColorsResolved.of(context);
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: c.surface,
+      backgroundColor: c.bgCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -593,7 +541,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             Container(
               width: 36, height: 4,
               decoration: BoxDecoration(
-                color: c.line,
+                color: c.border,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -602,7 +550,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               leading: Icon(Icons.edit_outlined, color: c.teal, size: 20),
               title: Text(
                 'Edit client details',
-                style: GoogleFonts.dmSans(fontSize: 15, color: c.ink),
+                style: GoogleFonts.dmSans(fontSize: 15, color: c.textPrimary),
               ),
               onTap: () {
                 Navigator.pop(sheetCtx);
@@ -610,10 +558,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               },
             ),
             ListTile(
-              leading: Icon(Icons.download_outlined, color: c.ghost, size: 20),
+              leading: Icon(Icons.download_outlined, color: c.textBody, size: 20),
               title: Text(
                 'Export chart',
-                style: GoogleFonts.dmSans(fontSize: 15, color: c.ghost),
+                style: GoogleFonts.dmSans(fontSize: 15, color: c.textBody),
               ),
               onTap: () => Navigator.pop(sheetCtx),
             ),
@@ -775,11 +723,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // classifier prototype can be referenced when Practice is built.
   // ignore: unused_element
   void _openAskSheet() {
-    final c          = _C.of(context);
+    final c          = CueColorsResolved.of(context);
     final clientName = (_client['name'] as String?) ?? 'this child';
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: c.surface,
+      backgroundColor: c.bgCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -793,7 +741,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               Container(
                 width: 36, height: 4,
                 decoration: BoxDecoration(
-                  color:        c.line,
+                  color:        c.border,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -801,11 +749,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               TextField(
                 autofocus: true,
                 maxLines:  null,
-                style: GoogleFonts.dmSans(fontSize: 16, color: c.ink),
+                style: GoogleFonts.dmSans(fontSize: 16, color: c.textPrimary),
                 decoration: InputDecoration(
                   hintText: 'Ask about $clientName...',
                   hintStyle: GoogleFonts.dmSans(
-                      fontSize: 16, color: c.ghost),
+                      fontSize: 16, color: c.textBody),
                   border: InputBorder.none,
                 ),
                 // TODO: route to intent classifier — STG update,
@@ -949,7 +897,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           // renders single-column at every viewport. The 680px reading-
           // width cap stays for the existing chart content; Round B's
           // pillar rewrite will redesign for the full-width canvas.
-          final lc       = _C.of(ctx);
+          final lc       = CueColorsResolved.of(ctx);
           final mainContent = Stack(
             fit: StackFit.expand,
             children: [
@@ -958,7 +906,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               // bar is fixed to the viewport, not the scroll extent.
               Positioned.fill(
                 child: ColoredBox(
-                  color: lc.bg,
+                  color: lc.bgCanvas,
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
@@ -1189,7 +1137,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             child: FutureBuilder<_ReadyData>(
                               future: _readyFuture,
                               builder: (ctx2, snap) {
-                                final lc2 = _C.of(ctx2);
+                                final lc2 = CueColorsResolved.of(ctx2);
                                 if (snap.connectionState ==
                                     ConnectionState.waiting) {
                                   return _buildTimelineLoading(lc2, hPad);
@@ -1257,7 +1205,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   // ── Zone 1: Identity header ───────────────────────────────────────────────
 
-  Widget _buildClientHeader(_C c, double hPad) {
+  Widget _buildClientHeader(CueColorsResolved c, double hPad) {
     final client    = _client;
     final name      = client['name'] as String? ?? '';
     final age       = client['age'];
@@ -1270,7 +1218,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
     return Container(
       width:   double.infinity,
-      color:   c.bg,
+      color:   c.bgCanvas,
       padding: EdgeInsets.fromLTRB(hPad, 28, hPad, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1280,7 +1228,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             style: CueType.serif(
               fontSize:    38,
               fontWeight:  FontWeight.w700,
-              color:       c.ink,
+              color:       c.textPrimary,
               letterSpacing: -1.0,
               height:      1.1,
             ),
@@ -1289,7 +1237,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             const SizedBox(height: 5),
             Text(
               metaParts.join(' · '),
-              style: GoogleFonts.dmSans(fontSize: 14, color: c.ghost),
+              style: GoogleFonts.dmSans(fontSize: 14, color: c.textBody),
             ),
           ],
           const SizedBox(height: 12),
@@ -1307,7 +1255,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   child: Icon(
                     Icons.edit_outlined,
                     size:  16,
-                    color: c.ghost,
+                    color: c.textBody,
                   ),
                 ),
               ),
@@ -1318,7 +1266,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     );
   }
 
-  Widget _buildCadenceRow(_C c) {
+  Widget _buildCadenceRow(CueColorsResolved c) {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _sessionsFuture,
       builder: (ctx, snap) {
@@ -1326,7 +1274,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           return Container(
             width: 140, height: 10,
             decoration: BoxDecoration(
-              color:        c.line,
+              color:        c.border,
               borderRadius: BorderRadius.circular(4),
             ),
           );
@@ -1385,11 +1333,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             ),
             if (spanLabel.isNotEmpty) ...[
               const SizedBox(width: 10),
-              Container(width: 1, height: 12, color: c.line),
+              Container(width: 1, height: 12, color: c.border),
               const SizedBox(width: 10),
               Text(
                 spanLabel,
-                style: GoogleFonts.dmSans(fontSize: 12, color: c.muted),
+                style: GoogleFonts.dmSans(fontSize: 12, color: c.textMuted),
               ),
             ],
           ],
@@ -1400,7 +1348,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   // ── Floating action bar ───────────────────────────────────────────────────
 
-  Widget _buildFloatingActionBar(_C c, {required bool isMobile}) {
+  Widget _buildFloatingActionBar(CueColorsResolved c, {required bool isMobile}) {
     final divider = _FabBarDivider(c: c);
 
     // Phase 3.3.1: pills are variable-width (no Expanded wrappers).
@@ -1432,14 +1380,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               size:  CueSize.cuttlefishActionPill,
               state: CueState.idle),
           label:     'Build plan with Cue',
-          labelColor: c.ink,
+          labelColor: c.textPrimary,
           onTap:     _openGoalAuthoring,
         ),
         divider,
         _FabBarItem(
-          icon:      Icon(Icons.more_horiz, size: 16, color: c.ghost),
+          icon:      Icon(Icons.more_horiz, size: 16, color: c.textBody),
           label:     null,
-          labelColor: c.ghost,
+          labelColor: c.textBody,
           onTap:     _openMoreSheet,
         ),
       ],
@@ -1449,9 +1397,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       decoration: BoxDecoration(
         color: c.isDark
             ? const Color(0x0DFFFFFF)
-            : c.surface,
+            : c.bgCard,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: c.line, width: 0.5),
+        border: Border.all(color: c.border, width: 0.5),
         boxShadow: [
           BoxShadow(
             color: c.isDark
@@ -1478,7 +1426,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   // ── Zone 3: Goals ─────────────────────────────────────────────────────────
 
-  Widget _buildGoalsSection(_C c, double hPad, {bool isMobile = false}) {
+  Widget _buildGoalsSection(CueColorsResolved c, double hPad, {bool isMobile = false}) {
     final clientName = _client['name'] as String? ?? '';
 
     // Phase 4.0.7.27c-goals-archive — switched from _spineFuture to
@@ -1540,7 +1488,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 style: GoogleFonts.dmSans(
                   fontSize:    10,
                   fontWeight:  FontWeight.w600,
-                  color:       c.ghost,
+                  color:       c.textBody,
                   letterSpacing: 1.3,
                 ),
               ),
@@ -1562,7 +1510,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     'from the action bar below.',
                     style: GoogleFonts.dmSans(
                       fontSize:  14,
-                      color:     c.ghost,
+                      color:     c.textBody,
                       fontStyle: FontStyle.italic,
                       height:    1.6,
                     ),
@@ -1643,7 +1591,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   //
   // Returns a list of widgets (possibly empty) inserted into the LTG card
   // body between the goal_text and the short-term-goals section.
-  List<Widget> _buildConditionsBlock(_C c, Map<String, dynamic> ltg) {
+  List<Widget> _buildConditionsBlock(CueColorsResolved c, Map<String, dynamic> ltg) {
     final notes = ltg['notes'] as String?;
     if (notes == null || notes.isEmpty) return const [];
 
@@ -1684,7 +1632,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         style: GoogleFonts.dmSans(
           fontSize:   13,
           fontWeight: FontWeight.w400,
-          color:      c.ink.withValues(alpha: CueAlpha.subtitleText),
+          color:      c.textPrimary.withValues(alpha: CueAlpha.subtitleText),
           height:     1.6,
         ),
       ),
@@ -1696,7 +1644,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // discretion_close; both persist for Goal Authoring's plan-review surface
   // (Phase 3.3.1) and other future contexts. They do not surface here.
   // See CLAUDE.md §13.14 (reasoning-on-tap) and §13.13 (data contract).
-  Widget _buildStructuredConditions(_C c, Map<String, dynamic> data) {
+  Widget _buildStructuredConditions(CueColorsResolved c, Map<String, dynamic> data) {
     final activities = (data['queued_activities'] as List?)
             ?.whereType<String>()
             .where((s) => s.trim().isNotEmpty)
@@ -1708,7 +1656,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     final bodyStyle = GoogleFonts.dmSans(
       fontSize:   14,
       fontWeight: FontWeight.w400,
-      color:      c.ink.withValues(alpha: CueAlpha.bodyText),
+      color:      c.textPrimary.withValues(alpha: CueAlpha.bodyText),
       height:     1.55,
     );
 
@@ -1745,7 +1693,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   }
 
   Widget _buildLtgBlock(
-    _C c,
+    CueColorsResolved c,
     Map<String, dynamic> ltg,
     String ltgId,
     List<Map<String, dynamic>> ltgStgs, {
@@ -1761,13 +1709,23 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       padding: const EdgeInsets.only(bottom: 16),
       child: Container(
         decoration: BoxDecoration(
-          color:        c.surface,
+          color:        c.bgCard,
           borderRadius: BorderRadius.circular(16),
           border: c.isDark
-              ? Border.all(color: c.line, width: 0.5)
+              ? Border.all(color: c.border, width: 0.5)
               : null,
+          // Phase 5.3 Round A.1.2 — dark register gets a subtle outer
+          // elevation shadow where the light-mode card has none. Inset
+          // highlight + ring shadows defer to Round B's pillar widgets
+          // where the Stack-overlay pattern can be implemented natively.
           boxShadow: c.isDark
-              ? null
+              ? const [
+                  BoxShadow(
+                    color:      Color(0x40000000),
+                    blurRadius: 8,
+                    offset:     Offset(0, 2),
+                  ),
+                ]
               : const [
                   BoxShadow(
                     color:      Color(0x0A000000),
@@ -1809,7 +1767,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                               child: Text(
                                 'Mark achieved',
                                 style: GoogleFonts.dmSans(
-                                    fontSize: 12, color: c.ghost),
+                                    fontSize: 12, color: c.textBody),
                               ),
                             ),
                             // Phase 5.1+5.2 — "Open with Cue →" link
@@ -1846,13 +1804,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                   ? GoogleFonts.dmSans(
                                       fontSize:   15,
                                       fontWeight: FontWeight.w400,
-                                      color:      c.ink,
+                                      color:      c.textPrimary,
                                       height:     1.65,
                                     )
                                   : CueType.serif(
                                       fontSize:   16,
                                       fontWeight: FontWeight.w400,
-                                      color:      c.ink,
+                                      color:      c.textPrimary,
                                       height:     1.7,
                                     ),
                             ),
@@ -1871,7 +1829,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             'No short-term steps yet.',
                             style: GoogleFonts.dmSans(
                               fontSize:  13,
-                              color:     c.muted,
+                              color:     c.textMuted,
                               fontStyle: FontStyle.italic,
                             ),
                           )
@@ -1937,7 +1895,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                           Text(
                             'Target — ${_formatTargetDate(targetDate)}',
                             style: GoogleFonts.dmSans(
-                                fontSize: 11, color: c.ghost),
+                                fontSize: 11, color: c.textBody),
                           ),
                         ],
                       ],
@@ -1966,20 +1924,20 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   // ── Zone 4: Timeline ──────────────────────────────────────────────────────
 
-  Widget _buildTimelineLoading(_C c, double hPad) {
+  Widget _buildTimelineLoading(CueColorsResolved c, double hPad) {
     return Padding(
       padding: EdgeInsets.fromLTRB(hPad, 48, hPad, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(height: 0.5, color: c.line),
+          Container(height: 0.5, color: c.border),
           const SizedBox(height: 20),
           Text(
             'TIMELINE',
             style: GoogleFonts.dmSans(
               fontSize:    10,
               fontWeight:  FontWeight.w600,
-              color:       c.ghost,
+              color:       c.textBody,
               letterSpacing: 1.2,
             ),
           ),
@@ -1995,7 +1953,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   Widget _buildTimeline(
     List<TimelineEntry> entries,
-    _C c,
+    CueColorsResolved c,
     double hPad,
     String clientId,
     String clientName,
@@ -2005,14 +1963,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(height: 0.5, color: c.line),
+          Container(height: 0.5, color: c.border),
           const SizedBox(height: 20),
           Text(
             'TIMELINE',
             style: GoogleFonts.dmSans(
               fontSize:    10,
               fontWeight:  FontWeight.w600,
-              color:       c.ghost,
+              color:       c.textBody,
               letterSpacing: 1.2,
             ),
           ),
@@ -2025,7 +1983,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 'Sessions and goals will appear here as you document them.',
                 style: GoogleFonts.dmSans(
                   fontSize:  14,
-                  color:     c.ghost,
+                  color:     c.textBody,
                   fontStyle: FontStyle.italic,
                   height:    1.6,
                 ),
@@ -2057,7 +2015,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   Widget _buildTimelineEntry(
     TimelineEntry entry,
-    _C c,
+    CueColorsResolved c,
     String clientId,
     String clientName,
   ) {
@@ -2086,12 +2044,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     style: GoogleFonts.dmSans(
                       fontSize:   13,
                       fontWeight: FontWeight.w600,
-                      color:      c.ghost,
+                      color:      c.textBody,
                     ),
                   ),
                   Text(
                     monStr,
-                    style: GoogleFonts.dmSans(fontSize: 10, color: c.muted),
+                    style: GoogleFonts.dmSans(fontSize: 10, color: c.textMuted),
                   ),
                 ],
               ),
@@ -2108,7 +2066,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 margin: const EdgeInsets.only(top: 3),
                 decoration: BoxDecoration(
                   shape:  BoxShape.circle,
-                  color:  c.surface,
+                  color:  c.bgCard,
                   border: Border.all(color: c.teal, width: 2),
                 ),
               ),
@@ -2126,7 +2084,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   Widget _buildEntryCard(
     TimelineEntry entry,
-    _C c,
+    CueColorsResolved c,
     String clientId,
     String clientName,
   ) {
@@ -2144,7 +2102,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   Widget _buildSessionCard(
     TimelineEntry entry,
-    _C c,
+    CueColorsResolved c,
     String clientId,
     String clientName,
   ) {
@@ -2162,11 +2120,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color:        c.surface,
+        color:        c.bgCard,
         borderRadius: BorderRadius.circular(12),
-        border: c.isDark ? Border.all(color: c.line, width: 0.5) : null,
+        border: c.isDark ? Border.all(color: c.border, width: 0.5) : null,
         boxShadow: c.isDark
-            ? null
+            ? const [
+                BoxShadow(
+                  color:      Color(0x33000000),
+                  blurRadius: 6,
+                  offset:     Offset(0, 1),
+                ),
+              ]
             : const [
                 BoxShadow(
                   color:      Color(0x08000000),
@@ -2206,7 +2170,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   icon: Icon(
                     Icons.more_vert,
                     size: 16,
-                    color: c.ghost,
+                    color: c.textBody,
                   ),
                   onSelected: (value) async {
                     if (value != 'archive') return;
@@ -2238,7 +2202,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
               entry.subtitle!,
               style: GoogleFonts.dmSans(
                 fontSize:  13,
-                color:     c.ghost,
+                color:     c.textBody,
                 fontStyle: FontStyle.italic,
                 height:    1.5,
               ),
@@ -2302,14 +2266,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     );
   }
 
-  Widget _buildGoalSetCard(TimelineEntry entry, _C c) {
+  Widget _buildGoalSetCard(TimelineEntry entry, CueColorsResolved c) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color:        c.tealBg,
+            color:        c.tealSurface,
             borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
@@ -2326,7 +2290,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           Text(
             entry.subtitle!,
             style: GoogleFonts.dmSans(
-                fontSize: 13, color: c.ink, height: 1.5),
+                fontSize: 13, color: c.textPrimary, height: 1.5),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2336,7 +2300,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     );
   }
 
-  Widget _buildGoalAchievedCard(TimelineEntry entry, _C c) {
+  Widget _buildGoalAchievedCard(TimelineEntry entry, CueColorsResolved c) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2360,7 +2324,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           Text(
             entry.subtitle!,
             style: GoogleFonts.dmSans(
-                fontSize: 13, color: c.ink, height: 1.5),
+                fontSize: 13, color: c.textPrimary, height: 1.5),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -2372,20 +2336,20 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   // ── Zone 5: Documents ─────────────────────────────────────────────────────
 
-  Widget _buildDocumentsSection(_C c, double hPad) {
+  Widget _buildDocumentsSection(CueColorsResolved c, double hPad) {
     return Padding(
       padding: EdgeInsets.fromLTRB(hPad, 48, hPad, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(height: 0.5, color: c.line),
+          Container(height: 0.5, color: c.border),
           const SizedBox(height: 20),
           Text(
             'DOCUMENTS',
             style: GoogleFonts.dmSans(
               fontSize:    10,
               fontWeight:  FontWeight.w600,
-              color:       c.ghost,
+              color:       c.textBody,
               letterSpacing: 1.2,
             ),
           ),
@@ -2394,7 +2358,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
             'No documents uploaded yet.',
             style: GoogleFonts.dmSans(
               fontSize:  14,
-              color:     c.ghost,
+              color:     c.textBody,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -2477,14 +2441,14 @@ class _FabBarItem extends StatelessWidget {
 }
 
 class _FabBarDivider extends StatelessWidget {
-  final _C c;
+  final CueColorsResolved c;
   const _FabBarDivider({required this.c});
 
   @override
   Widget build(BuildContext context) => Container(
         width:  1,
         height: 24,
-        color:  c.line,
+        color:  c.border,
       );
 }
 
@@ -2512,10 +2476,10 @@ class _LtgInlineEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _C.of(context);
+    final c = CueColorsResolved.of(context);
     return Container(
       decoration: BoxDecoration(
-        color:        c.surface,
+        color:        c.bgCard,
         borderRadius: BorderRadius.circular(14),
         border:       Border.all(color: c.teal),
       ),
@@ -2540,7 +2504,7 @@ class _LtgInlineEditor extends StatelessWidget {
                 onTap: onCancel,
                 child: Text(
                   'Cancel',
-                  style: GoogleFonts.dmSans(fontSize: 13, color: c.ghost),
+                  style: GoogleFonts.dmSans(fontSize: 13, color: c.textBody),
                 ),
               ),
             ],
@@ -2553,7 +2517,7 @@ class _LtgInlineEditor extends StatelessWidget {
             style: GoogleFonts.dmSans(
               fontSize:    15,
               fontWeight:  FontWeight.w400,
-              color:       c.ink,
+              color:       c.textPrimary,
               letterSpacing: -0.2,
               height:      1.65,
             ),
@@ -2570,8 +2534,8 @@ class _LtgInlineEditor extends StatelessWidget {
               OutlinedButton(
                 onPressed: onCancel,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: c.ghost,
-                  side:            BorderSide(color: c.line),
+                  foregroundColor: c.textBody,
+                  side:            BorderSide(color: c.border),
                   padding:         const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 8),
                   minimumSize:    Size.zero,
@@ -2646,7 +2610,7 @@ class _StgRowState extends State<_StgRow> {
 
   @override
   Widget build(BuildContext context) {
-    final c = _C.of(context);
+    final c = CueColorsResolved.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: widget.isActive
@@ -2655,10 +2619,10 @@ class _StgRowState extends State<_StgRow> {
     );
   }
 
-  Widget _buildActiveRow(_C c) {
+  Widget _buildActiveRow(CueColorsResolved c) {
     return Container(
       decoration: BoxDecoration(
-        color:        c.tealBg,
+        color:        c.tealSurface,
         borderRadius: BorderRadius.circular(8),
       ),
       padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
@@ -2682,7 +2646,7 @@ class _StgRowState extends State<_StgRow> {
                 Text(
                   widget.text,
                   style: GoogleFonts.dmSans(
-                      fontSize: 13, color: c.ink, height: 1.5),
+                      fontSize: 13, color: c.textPrimary, height: 1.5),
                 ),
               ],
             ),
@@ -2693,7 +2657,7 @@ class _StgRowState extends State<_StgRow> {
     );
   }
 
-  Widget _buildInactiveRow(_C c) {
+  Widget _buildInactiveRow(CueColorsResolved c) {
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2707,7 +2671,7 @@ class _StgRowState extends State<_StgRow> {
             child: Text(
               widget.text,
               style: GoogleFonts.dmSans(
-                  fontSize: 13, color: c.ink, height: 1.5),
+                  fontSize: 13, color: c.textPrimary, height: 1.5),
             ),
           ),
           _editButton(c),
@@ -2716,7 +2680,7 @@ class _StgRowState extends State<_StgRow> {
     );
   }
 
-  Widget _editButton(_C c) {
+  Widget _editButton(CueColorsResolved c) {
     if (widget.isMobile) {
       return SizedBox(
         width: 44, height: 44,
@@ -2724,7 +2688,7 @@ class _StgRowState extends State<_StgRow> {
           onTap:         widget.onEditTap,
           borderRadius:  BorderRadius.circular(8),
           child: Center(
-            child: Icon(Icons.edit_outlined, size: 16, color: c.ghost),
+            child: Icon(Icons.edit_outlined, size: 16, color: c.textBody),
           ),
         ),
       );
@@ -2742,7 +2706,7 @@ class _StgRowState extends State<_StgRow> {
               'edit',
               style: GoogleFonts.dmSans(
                 fontSize: 11,
-                color:    _editHovered ? c.teal : c.line,
+                color:    _editHovered ? c.teal : c.border,
               ),
             ),
           ),
@@ -2771,7 +2735,7 @@ class _StgInlineEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = _C.of(context);
+    final c = CueColorsResolved.of(context);
     return Padding(
       padding: const EdgeInsets.only(left: 14, bottom: 8),
       child: Container(
@@ -2779,7 +2743,7 @@ class _StgInlineEditor extends StatelessWidget {
         // inside the LTG block's IntrinsicHeight Row when this card was open.
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
         decoration: BoxDecoration(
-          color:        c.surface,
+          color:        c.bgCard,
           borderRadius: BorderRadius.circular(8),
           border:       Border.all(color: c.teal, width: 0.5),
         ),
@@ -2792,11 +2756,11 @@ class _StgInlineEditor extends StatelessWidget {
               maxLines:   null,
               autofocus:  true,
               style: GoogleFonts.dmSans(
-                  fontSize: 13, color: c.ink, height: 1.5),
+                  fontSize: 13, color: c.textPrimary, height: 1.5),
               decoration: InputDecoration(
                 hintText:      placeholder,
                 hintStyle:
-                    GoogleFonts.dmSans(fontSize: 13, color: c.ghost),
+                    GoogleFonts.dmSans(fontSize: 13, color: c.textBody),
                 border:        InputBorder.none,
                 isDense:       true,
                 contentPadding: EdgeInsets.zero,
@@ -2808,7 +2772,7 @@ class _StgInlineEditor extends StatelessWidget {
                 TextButton(
                   onPressed: onCancel,
                   style: TextButton.styleFrom(
-                    foregroundColor: c.ghost,
+                    foregroundColor: c.textBody,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 8, vertical: 4),
                     minimumSize:   Size.zero,
@@ -2851,7 +2815,7 @@ class _StgInlineEditor extends StatelessWidget {
 // "Mastered · {date}" eyebrow + plain goal text. The section preserves
 // the dignity of past achievements without consuming pride-of-place.
 class _AchievementsArchive extends StatefulWidget {
-  final _C c;
+  final CueColorsResolved c;
   final List<Map<String, dynamic>> ltgs;
   final String clientName;
   final VoidCallback onChanged;
@@ -2875,8 +2839,8 @@ class _AchievementsArchiveState extends State<_AchievementsArchive> {
     final n = widget.ltgs.length;
     return Container(
       decoration: BoxDecoration(
-        color: c.surface,
-        border: Border.all(color: c.line, width: CueSize.hairline),
+        color: c.bgCard,
+        border: Border.all(color: c.border, width: CueSize.hairline),
         borderRadius: BorderRadius.circular(CueRadius.s16),
       ),
       child: Column(
@@ -2895,7 +2859,7 @@ class _AchievementsArchiveState extends State<_AchievementsArchive> {
                     'Achievements',
                     style: GoogleFonts.dmSans(
                       fontSize:   14,
-                      color:      c.ink,
+                      color:      c.textPrimary,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -2906,7 +2870,7 @@ class _AchievementsArchiveState extends State<_AchievementsArchive> {
                         : '$n ${n == 1 ? 'goal achieved' : 'goals achieved'}',
                     style: GoogleFonts.dmSans(
                       fontSize: 12,
-                      color:    c.ghost,
+                      color:    c.textBody,
                     ),
                   ),
                   const Spacer(),
@@ -2915,7 +2879,7 @@ class _AchievementsArchiveState extends State<_AchievementsArchive> {
                         ? Icons.keyboard_arrow_up_rounded
                         : Icons.keyboard_arrow_down_rounded,
                     size:  20,
-                    color: c.ghost,
+                    color: c.textBody,
                   ),
                 ],
               ),
@@ -2924,7 +2888,7 @@ class _AchievementsArchiveState extends State<_AchievementsArchive> {
 
           // Expanded list — smaller, dignified entries
           if (_expanded) ...[
-            Container(height: CueSize.hairline, color: c.line),
+            Container(height: CueSize.hairline, color: c.border),
             for (var i = 0; i < widget.ltgs.length; i++) ...[
               _ArchivedLtgRow(
                 c:          c,
@@ -2933,7 +2897,7 @@ class _AchievementsArchiveState extends State<_AchievementsArchive> {
                 onChanged:  widget.onChanged,
               ),
               if (i != widget.ltgs.length - 1)
-                Container(height: CueSize.hairline, color: c.line),
+                Container(height: CueSize.hairline, color: c.border),
             ],
           ],
         ],
@@ -2943,7 +2907,7 @@ class _AchievementsArchiveState extends State<_AchievementsArchive> {
 }
 
 class _ArchivedLtgRow extends StatelessWidget {
-  final _C c;
+  final CueColorsResolved c;
   final Map<String, dynamic> ltg;
   final String clientName;
   final VoidCallback onChanged;
@@ -3004,7 +2968,7 @@ class _ArchivedLtgRow extends StatelessWidget {
                 goalText,
                 style: GoogleFonts.dmSans(
                   fontSize: 13,
-                  color:    c.ink,
+                  color:    c.textPrimary,
                   height:   1.5,
                 ),
                 maxLines: 3,
@@ -3021,7 +2985,7 @@ class _ArchivedLtgRow extends StatelessWidget {
 // ── _GoalsSkeleton ────────────────────────────────────────────────────────────
 
 class _GoalsSkeleton extends StatelessWidget {
-  final _C c;
+  final CueColorsResolved c;
   const _GoalsSkeleton({required this.c});
 
   Widget _bar(double width) => Container(
@@ -3029,7 +2993,7 @@ class _GoalsSkeleton extends StatelessWidget {
         height: 11,
         margin: const EdgeInsets.only(bottom: 8),
         decoration: BoxDecoration(
-          color:        c.isDark ? c.line : const Color(0xFFE8E4DC),
+          color:        c.isDark ? c.border : const Color(0xFFE8E4DC),
           borderRadius: BorderRadius.circular(4),
         ),
       );
