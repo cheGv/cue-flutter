@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../animation/cue_motion.dart';
 import '../services/day_state_service.dart';
 import '../services/name_formatter.dart';
 import '../services/today_widgets_service.dart';
@@ -12,7 +13,9 @@ import '../theme/cue_type_v3.dart';
 import '../theme/cue_typography.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/cue_amber_link.dart';
+import '../widgets/cue_animated_entrance.dart';
 import '../widgets/cue_cuttlefish.dart';
+import '../widgets/cue_glance_target.dart';
 import '../widgets/today_brief_card.dart';
 import '../widgets/today_glance_widgets.dart';
 import 'client_profile_screen.dart';
@@ -84,6 +87,15 @@ class _TodayScreenState extends State<TodayScreen> {
   // is loaded so the screen never flashes the closed surface for SLPs who
   // have never tapped Good night Cue.
   DayStateRecord _dayState = DayStateRecord.open;
+
+  // ── Phase 4.2: cuttlefish glance target ─────────────────────────────────
+  // Set by CueGlanceTarget callbacks on yesterday rows + first brief card.
+  // Read by the TweenAnimationBuilder around the cuttlefish in the
+  // greeting block. Down-right convention (positive = look down-right).
+  double _glanceAngle = 0.0;
+  void _setGlance(double v) {
+    if (v != _glanceAngle && mounted) setState(() => _glanceAngle = v);
+  }
 
   // ── Phase 4.0.8-step-B-surface-1.2: At a glance widget data ─────────────
   // Independent of the brief-card load path so the page renders fast and
@@ -1055,11 +1067,19 @@ class _TodayScreenState extends State<TodayScreen> {
               ),
             ),
             // ── Rows (white, clinical, olive accent) ──────────────────
+            //
+            // Phase 4.2 — each row wrapped in CueGlanceTarget so the
+            // cuttlefish in the greeting block tilts toward the
+            // hovered row. Hover-out returns glance to neutral.
             if (_expandYesterday)
               for (var i = 0; i < _yesterdayMissed.length; i++)
-                _yesterdayRow(
-                  _yesterdayMissed[i],
-                  isLast: i == _yesterdayMissed.length - 1,
+                CueGlanceTarget(
+                  glanceAngle:    CueGlanceTargets.yesterdayRow,
+                  onGlanceChange: _setGlance,
+                  child: _yesterdayRow(
+                    _yesterdayMissed[i],
+                    isLast: i == _yesterdayMissed.length - 1,
+                  ),
                 ),
           ],
         ),
@@ -1199,34 +1219,67 @@ class _TodayScreenState extends State<TodayScreen> {
     // Greeting block leads. Yesterday-reminder follows greeting (the
     // urgent-amber bar belongs after the orientation, not before
     // it). Then "Today's sessions" header + brief stack + At-a-glance.
+    //
+    // Phase 4.2 page-entrance choreography (locked in cue_motion.dart):
+    //   • Greeting:                        0 ms
+    //   • Yesterday-reminder (if present):  80 ms
+    //   • "Today's sessions" eyebrow:      160 ms
+    //   • Brief cards (capped staggered):  from 240 ms (per
+    //     _wrapBriefCardEntrance — internal stagger 60 ms each,
+    //     capped at index 11 so a 30-session day doesn't pop in)
+    //   • "At a glance" section:           480 ms
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildGreetingBlock(),
+        CueAnimatedEntrance(
+          // delay defaults to Duration.zero — greeting is the first
+          // beat of the page-entrance choreography.
+          child: _buildGreetingBlock(),
+        ),
         const SizedBox(height: CueGap.greetingToEyebrow),
 
         // Yesterday-reminder rendered here, below the greeting. Only
         // appears when there are undocumented sessions from yesterday.
         if (_yesterdayMissed.isNotEmpty) ...[
-          _buildYesterdayReminder(),
+          CueAnimatedEntrance(
+            delay: const Duration(milliseconds: 80),
+            child: _buildYesterdayReminder(),
+          ),
           const SizedBox(height: CueGap.s24),
         ],
 
-        _buildEyebrowRow(
-          label: "Today's sessions",
-          trailing: _buildAddRosterButton(),
+        CueAnimatedEntrance(
+          delay: const Duration(milliseconds: 160),
+          child: _buildEyebrowRow(
+            label: "Today's sessions",
+            trailing: _buildAddRosterButton(),
+          ),
         ),
         const SizedBox(height: CueGap.eyebrowToCard),
         if (_rosterRows.isEmpty)
-          _buildEmptyTodayHint()
+          CueAnimatedEntrance(
+            delay: const Duration(milliseconds: 240),
+            child: _buildEmptyTodayHint(),
+          )
         else
+          // Brief cards carry their own per-card entrance via
+          // _wrapBriefCardEntrance — no outer wrapper here, otherwise
+          // the cards would double-fade.
           _buildTodayBriefStack(),
 
         // ── At a glance section (Phase 4.0.8-step-B-surface-1.2) ───────
         const SizedBox(height: CueGap.s32),
-        _buildEyebrowRow(label: 'At a glance'),
-        const SizedBox(height: CueGap.eyebrowToCard),
-        _buildAtAGlanceSection(),
+        CueAnimatedEntrance(
+          delay: const Duration(milliseconds: 480),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildEyebrowRow(label: 'At a glance'),
+              const SizedBox(height: CueGap.eyebrowToCard),
+              _buildAtAGlanceSection(),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1235,16 +1288,53 @@ class _TodayScreenState extends State<TodayScreen> {
   /// roster client. The first card carries `isUpNext: true` so its
   /// stripe goes amber (urgent register) per dual-accent system;
   /// subsequent cards use olive (calm) by default.
+  ///
+  /// Phase 4.2 — first card wrapped in CueGlanceTarget so the
+  /// cuttlefish glances toward it on hover. Subsequent cards do not
+  /// trigger glance (they sit further down the page, often below
+  /// fold; cuttlefish would be tilting at off-screen targets). Each
+  /// card wrapped in CueAnimatedEntrance, capped at 12 cards (per
+  /// kMotionStaggerMaxIndex) so an SLP with 30 sessions doesn't
+  /// watch every row pop in.
   Widget _buildTodayBriefStack() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < _rosterRows.length; i++) ...[
-          _buildTodayBriefCardForRoster(_rosterRows[i], isUpNext: i == 0),
+          _wrapBriefCardEntrance(
+            index: i,
+            child: i == 0
+                ? CueGlanceTarget(
+                    glanceAngle:    CueGlanceTargets.firstBriefCard,
+                    onGlanceChange: _setGlance,
+                    child: _buildTodayBriefCardForRoster(
+                        _rosterRows[i], isUpNext: true),
+                  )
+                : _buildTodayBriefCardForRoster(
+                    _rosterRows[i], isUpNext: false),
+          ),
           if (i != _rosterRows.length - 1)
             const SizedBox(height: CueGap.sessionCardGap),
         ],
       ],
+    );
+  }
+
+  /// Phase 4.2 — staggered entrance for brief cards, capped at index
+  /// 11 (kMotionStaggerMaxIndex). The cap stops the stagger; cards
+  /// beyond render via the same wrapper but with a delay clamped to
+  /// the cap's value, so they enter on the same frame as card #11.
+  Widget _wrapBriefCardEntrance({required int index, required Widget child}) {
+    // Brief stack starts entering at 240ms (greeting=0ms, yesterday=80ms,
+    // session-header=160ms, first card=240ms, subsequent cards stagger
+    // 60ms each from there). Per spec: stagger 60ms per card from 240.
+    final clamped = index <= kMotionStaggerMaxIndex
+        ? index
+        : kMotionStaggerMaxIndex;
+    final delayMs = 240 + clamped * 60;
+    return CueAnimatedEntrance(
+      delay: Duration(milliseconds: delayMs),
+      child: child,
     );
   }
 
@@ -1455,13 +1545,32 @@ class _TodayScreenState extends State<TodayScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(
+        // Phase 4.2 — cuttlefish wrapped in TweenAnimationBuilder so
+        // glanceAngle changes (driven by hover on yesterday rows +
+        // first brief card) interpolate smoothly toward the target
+        // value. CueCuttlefish itself reads the static value passed
+        // in each frame; the tween mechanism lives at this site.
+        SizedBox(
           width: 80,
           child: Center(
             child: SizedBox(
               width:  64,
               height: 64,
-              child: CueCuttlefish(size: 64, state: CueState.softWave),
+              child: TweenAnimationBuilder<double>(
+                // Begin starts neutral on first build; on subsequent
+                // builds where _glanceAngle changes, TweenAnimationBuilder
+                // replaces begin with the current animated value of
+                // the previous tween — so the cuttlefish smoothly
+                // interpolates from her current pose to the new target.
+                tween: Tween<double>(begin: 0.0, end: _glanceAngle),
+                duration: kMotionGlanceDuration,
+                curve:    kMotionGlanceCurve,
+                builder: (_, value, _) => CueCuttlefish(
+                  size:        64,
+                  state:       CueState.softWave,
+                  glanceAngle: value,
+                ),
+              ),
             ),
           ),
         ),

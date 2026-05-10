@@ -32,6 +32,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../animation/cue_motion.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_type_v3.dart';
 
@@ -72,7 +73,7 @@ class TodayBrief {
   });
 }
 
-class TodayBriefCard extends StatelessWidget {
+class TodayBriefCard extends StatefulWidget {
   final TodayBrief brief;
   final VoidCallback? onTap;
 
@@ -93,6 +94,25 @@ class TodayBriefCard extends StatelessWidget {
     this.stateLabel,
   });
 
+  @override
+  State<TodayBriefCard> createState() => _TodayBriefCardState();
+}
+
+class _TodayBriefCardState extends State<TodayBriefCard> {
+  // Phase 4.2 hover state — drives the lift + stripe darken/widen +
+  // background tint. Material's InkWell still handles tap ripple
+  // unchanged; MouseRegion is layered on top for desktop hover-only
+  // affordances. The two compose without conflict.
+  bool _hover = false;
+
+  // Getter shims so the helper methods below (preserved verbatim from
+  // pre-Phase-4.2 to keep the conversion surgical) read
+  // brief / isUpNext / stateLabel / onTap without `widget.` prefixes.
+  TodayBrief    get brief      => widget.brief;
+  bool          get isUpNext   => widget.isUpNext;
+  String?       get stateLabel => widget.stateLabel;
+  VoidCallback? get onTap      => widget.onTap;
+
   String get _resolvedStateLabel {
     if (stateLabel != null && stateLabel!.isNotEmpty) return stateLabel!;
     if (isUpNext) return 'Up next';
@@ -102,59 +122,105 @@ class TodayBriefCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stripeColor = isUpNext ? kCueAmber : kCueOlive;
-    final stripeWidth = isUpNext ? 3.0 : 2.0;
+    // Phase 4.2 hover composition (Material splash + MouseRegion lift):
+    //   • MouseRegion handles desktop hover state; flips _hover.
+    //   • AnimatedContainer + Transform.translate apply the 2px lift,
+    //     paper bg tint, stripe widen, stripe color darken (olive only;
+    //     amber stays amber), and border darken — 200ms with mild
+    //     overshoot via kMotionHoverCurve.
+    //   • Material + InkWell preserved INSIDE the hover wrapper so tap
+    //     ripple still fires unchanged. The two registers don't conflict.
+    //   • Reduced-motion: snap _hover effects to static colors with no
+    //     transform, no curve. Hover still shifts colors so the SLP
+    //     gets feedback; just nothing animated.
+    final reduceMotion  = kReduceMotion(context);
+    final stripeBase    = isUpNext ? kCueAmber : kCueOlive;
+    final stripeHoverColor = isUpNext ? kCueAmber : kCueOliveDeep;
+    final stripeColor   = _hover ? stripeHoverColor : stripeBase;
+    final stripeWidthBase  = isUpNext ? 3.0 : 2.0;
+    final stripeWidth   = _hover ? 4.0 : stripeWidthBase;
+    final bgColor       = _hover ? kCuePaper : kCueSurfaceWhite;
+    final borderColor   = _hover ? kCueInkTertiary : kCueBorder;
+
+    final card = AnimatedContainer(
+      duration: reduceMotion ? Duration.zero : kMotionHoverDuration,
+      curve:    kMotionHoverCurve,
+      decoration: BoxDecoration(
+        color:        bgColor,
+        borderRadius: BorderRadius.circular(kCueCardRadius),
+        border:       Border.all(color: borderColor, width: kCueCardBorderW),
+      ),
+      child: ClipRRect(
+        // Inner radius = outer radius minus border width so the
+        // stripe lands flush inside the perimeter.
+        borderRadius: BorderRadius.circular(
+            kCueCardRadius - kCueCardBorderW),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AnimatedContainer(
+                duration: reduceMotion ? Duration.zero : kMotionHoverDuration,
+                curve:    kMotionHoverCurve,
+                width:    stripeWidth,
+                color:    stripeColor,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize:       MainAxisSize.min,
+                    children: [
+                      _header(),
+                      const SizedBox(height: 14),
+                      _todayMoveRow(),
+                      const SizedBox(height: 12),
+                      brief.baselinePhase ? _contextRow() : _whereWeLeftOffRow(),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
 
     // Phase 4.0.8-step-B-surface-1.2 hotfix — Flutter's BoxDecoration
-    // requires a UNIFORM Border when paired with borderRadius (all
-    // four sides same width AND color). The pre-hotfix shape passed
-    // a per-side Border (left: stripeWidth, others: kCueCardBorderW)
-    // which silently dropped paint in release builds and rendered
-    // cards as empty white shapes (the bug founder verification
-    // caught). Restructure: outer container has Border.all (uniform)
-    // + radius; left stripe lives inside a Row + IntrinsicHeight,
-    // clipped to the radius via ClipRRect so the stripe doesn't
-    // bleed past the rounded corner.
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap:        onTap,
-        borderRadius: BorderRadius.circular(kCueCardRadius),
-        child: Container(
-          decoration: BoxDecoration(
-            color:        kCueSurfaceWhite,
+    // requires a UNIFORM Border when paired with borderRadius. The
+    // pre-hotfix shape passed a per-side Border (left: stripeWidth,
+    // others: kCueCardBorderW) which silently dropped paint in
+    // release builds and rendered cards as empty white shapes.
+    // Restructure: outer container has Border.all (uniform) + radius;
+    // left stripe lives inside a Row + IntrinsicHeight, clipped to
+    // the radius via ClipRRect so the stripe doesn't bleed past the
+    // rounded corner.
+    //
+    // Phase 4.2 — wrap the card in a TweenAnimationBuilder<double>
+    // that interpolates the lift offset between 0 and kMotionHoverLiftY
+    // when _hover toggles. AnimatedSlide is fraction-of-height; we
+    // want fixed pixels, so the cleaner pattern is a manual tween +
+    // Transform.translate inside the builder.
+    final liftTarget = _hover && !reduceMotion ? kMotionHoverLiftY : 0.0;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hover = true),
+      onExit:  (_) => setState(() => _hover = false),
+      child: TweenAnimationBuilder<double>(
+        tween:    Tween<double>(begin: 0.0, end: liftTarget),
+        duration: reduceMotion ? Duration.zero : kMotionHoverDuration,
+        curve:    kMotionHoverCurve,
+        builder: (_, dy, child) => Transform.translate(
+          offset: Offset(0, dy),
+          child:  child,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap:        onTap,
             borderRadius: BorderRadius.circular(kCueCardRadius),
-            border:       Border.all(color: kCueBorder, width: kCueCardBorderW),
-          ),
-          child: ClipRRect(
-            // Inner radius = outer radius minus border width so the
-            // stripe lands flush inside the perimeter.
-            borderRadius: BorderRadius.circular(
-                kCueCardRadius - kCueCardBorderW),
-            child: IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(width: stripeWidth, color: stripeColor),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize:       MainAxisSize.min,
-                        children: [
-                          _header(),
-                          const SizedBox(height: 14),
-                          _todayMoveRow(),
-                          const SizedBox(height: 12),
-                          brief.baselinePhase ? _contextRow() : _whereWeLeftOffRow(),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            child:        card,
           ),
         ),
       ),

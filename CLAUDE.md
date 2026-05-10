@@ -99,6 +99,8 @@ Corollaries:
 - **Mobile:** Responsive, landing page already rebuilt for mobile
 - **Principle:** STGs are the **spine** of the patient detail view. Everything else (notes, Narrator, AAC state) hangs off them. Critical clinical info should live in the same spatial location every time — like a chess engine's evaluation bar or a pilot's altimeter.
 
+> **Phase 4.2 motion (added 10 May 2026):** spine doc Revision 2026-05-10 (animation layer) governs page entrance choreography (80ms stagger, 350ms each, easeOutCubic, +12px translate up; capped at 12 staggered elements via `kMotionStaggerMaxIndex`), card hover rise (-2px lift + stripe widen/darken/lengthen, 200ms with mild-overshoot `Cubic(0.34, 1.1, 0.64, 1.0)`), and Today's cuttlefish glance toward the hovered yesterday row or first brief card (down-right convention; positive `glanceAngle` rotates body up to 12° clockwise + shifts eyes (+x, +y); 400ms with stronger-overshoot `Cubic(0.34, 1.56, 0.64, 1.0)`). All motion gates through `kReduceMotion(context)` in `lib/animation/cue_motion.dart` — `MediaQuery.disableAnimations = true` snaps entrances to final state, drops hover transforms (color shifts retained), forces `glanceAngle = 0`. Banked principle: motion lives where the user benefits, not on every interaction — click transitions stay default `MaterialPageRoute`; we don't paint custom theatre on navigation. Material splash + MouseRegion lift compose cleanly: `MouseRegion → TweenAnimationBuilder<double> (Transform.translate) → Material → InkWell → AnimatedContainer → content` — see `today_brief_card.dart` for the canonical pattern.
+
 ## 6. Clinical Definitions
 
 These definitions are load-bearing. Every schema field and AI prompt must respect this vocabulary.

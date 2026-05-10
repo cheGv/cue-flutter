@@ -37,11 +37,24 @@ class CueCuttlefish extends StatefulWidget {
   final CueState state;
   final SignatureVariant variant;
 
+  /// Phase 4.2 — head-tilt + eye-shift toward a hovered target.
+  /// Range -1.0..+1.0; positive = look down-right (the v1 convention,
+  /// since cuttlefish lives at top of page and hover targets sit below
+  /// her). Negative reserved for future above-cuttlefish targets.
+  /// Caller is responsible for tweening — wrap CueCuttlefish in a
+  /// `TweenAnimationBuilder<double>` to get smooth transitions when
+  /// the glance value changes. See lib/animation/cue_motion.dart for
+  /// calibrated angle constants and curve. When MediaQuery
+  /// disableAnimations is true the painter forces this to 0.0
+  /// regardless of caller value.
+  final double glanceAngle;
+
   const CueCuttlefish({
     super.key,
     this.size    = 32,
     this.state   = CueState.idle,
     this.variant = SignatureVariant.she,
+    this.glanceAngle = 0.0,
   });
 
   @override
@@ -89,6 +102,11 @@ class _CueCuttlefishState extends State<CueCuttlefish>
 
   @override
   Widget build(BuildContext context) {
+    // Phase 4.2 reduced-motion gate: snap glance to neutral so the
+    // cuttlefish never tilts for users who've opted out of motion.
+    final glance = MediaQuery.maybeDisableAnimationsOf(context) == true
+        ? 0.0
+        : widget.glanceAngle;
     return SizedBox(
       width:  widget.size,
       height: widget.size,
@@ -99,6 +117,7 @@ class _CueCuttlefishState extends State<CueCuttlefish>
             t:       _ctrl.value,
             state:   widget.state,
             variant: widget.variant,
+            glance:  glance,
           ),
         ),
       ),
@@ -112,15 +131,32 @@ class _CuttlefishPainter extends CustomPainter {
   final double           t;
   final CueState         state;
   final SignatureVariant variant;
+  /// Phase 4.2 head-tilt magnitude. Range -1..+1; positive = look
+  /// down-right. See cue_motion.dart for the convention.
+  final double           glance;
 
   // Most states share this viewBox; signature widens it for tools + halo.
   static const _vbX = -30.0, _vbY = -28.0, _vbW = 60.0, _vbH = 70.0;
+
+  // Phase 4.2 glance magnitudes — body rotates up to ±12° via the
+  // outer canvas.rotate; eyes shift up to (±2.0, ±1.5) within the
+  // rotated head. Both compound: head turns AND eyes look further
+  // in that direction within the new pose.
+  static const double _maxTiltDeg = 12.0;
+  static const double _maxEyeDx   = 2.0;
+  static const double _maxEyeDy   = 1.5;
 
   _CuttlefishPainter({
     required this.t,
     required this.state,
     required this.variant,
+    this.glance = 0.0,
   });
+
+  // Eye offsets derived from the glance magnitude. Positive glance
+  // shifts eyes down-right (canvas +x = right, +y = down).
+  double get _eyeDx => glance * _maxEyeDx;
+  double get _eyeDy => glance * _maxEyeDy;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -135,6 +171,16 @@ class _CuttlefishPainter extends CustomPainter {
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(scale);
     canvas.translate(-(vbX + vbW / 2), -(vbY + vbH / 2));
+
+    // Phase 4.2 — apply head-tilt to the entire scene before the
+    // per-state painters run. Positive glance = clockwise rotation =
+    // head leans down-right. Skipped for the signature state because
+    // its viewBox + composition assumes a non-rotated frame; glance
+    // is only meaningful on the small/anchored states (idle,
+    // softWave, etc.) where the cuttlefish reads as a "person."
+    if (glance != 0.0 && !useSignatureVB) {
+      canvas.rotate(glance * _maxTiltDeg * math.pi / 180);
+    }
 
     switch (state) {
       case CueState.idle:        _paintIdle(canvas);        break;
@@ -180,7 +226,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: driftDeg);
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: finLOpen, rightOpen: finROpen);
-    _drawEyes(canvas, _EyeMode.wOpen, blinking: blinking);
+    _drawEyes(canvas, _EyeMode.wOpen, blinking: blinking, dx: _eyeDx, dy: _eyeDy);
     canvas.restore();
   }
 
@@ -197,7 +243,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: 0);
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: false, rightOpen: false);
-    _drawEyes(canvas, _EyeMode.wOpen, blinking: false);
+    _drawEyes(canvas, _EyeMode.wOpen, blinking: false, dx: _eyeDx, dy: _eyeDy);
 
     // Reaching arm
     canvas.drawPath(
@@ -259,7 +305,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: 0);
     _drawBody(canvas, fillOverride: bodyColor);
     _drawSideFins(canvas, leftOpen: false, rightOpen: false);
-    _drawEyes(canvas, _EyeMode.wOpen, blinking: false);
+    _drawEyes(canvas, _EyeMode.wOpen, blinking: false, dx: _eyeDx, dy: _eyeDy);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -291,7 +337,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: false, rightOpen: false);
     _drawSignatureTools(canvas);
-    _drawEyes(canvas, _eyeModeForVariant(variant), blinking: false);
+    _drawEyes(canvas, _eyeModeForVariant(variant), blinking: false, dx: _eyeDx, dy: _eyeDy);
     _drawSpectacles(canvas);
 
     if (variant == SignatureVariant.she) _drawBlush(canvas);
@@ -316,7 +362,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: 0);
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: false, rightOpen: false);
-    _drawEyes(canvas, _EyeMode.happy, blinking: false);
+    _drawEyes(canvas, _EyeMode.happy, blinking: false, dx: _eyeDx, dy: _eyeDy);
 
     canvas.save();
     canvas.translate(5, 14);
@@ -353,7 +399,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: 0);
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: true, rightOpen: true);
-    _drawEyes(canvas, _EyeMode.happy, blinking: false);
+    _drawEyes(canvas, _EyeMode.happy, blinking: false, dx: _eyeDx, dy: _eyeDy);
 
     // Both top arms raised (left + right)
     final arm = _strokesPaint(width: 1.6);
@@ -406,7 +452,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: 0, streamlined: true);
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: false, rightOpen: false);
-    _drawEyes(canvas, _EyeMode.wOpen, blinking: false);
+    _drawEyes(canvas, _EyeMode.wOpen, blinking: false, dx: _eyeDx, dy: _eyeDy);
     canvas.restore();
 
     // Three rising bubbles with different periods + offsets
@@ -689,7 +735,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: 0.4);
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: false, rightOpen: false);
-    _drawEyes(canvas, _EyeMode.wOpen, blinking: blink);
+    _drawEyes(canvas, _EyeMode.wOpen, blinking: blink, dx: _eyeDx, dy: _eyeDy);
     canvas.restore();
   }
 
@@ -713,7 +759,7 @@ class _CuttlefishPainter extends CustomPainter {
     _drawTentacles(canvas, driftDeg: driftDeg);
     _drawBody(canvas);
     _drawSideFins(canvas, leftOpen: finLOpen, rightOpen: finROpen);
-    _drawEyes(canvas, _EyeMode.happy, blinking: blinking);
+    _drawEyes(canvas, _EyeMode.happy, blinking: blinking, dx: _eyeDx, dy: _eyeDy);
     canvas.restore();
   }
 
@@ -827,9 +873,22 @@ class _CuttlefishPainter extends CustomPainter {
     }
   }
 
-  void _drawEyes(Canvas canvas, _EyeMode mode, {required bool blinking}) {
+  void _drawEyes(
+    Canvas canvas,
+    _EyeMode mode, {
+    required bool blinking,
+    double dx = 0.0,
+    double dy = 0.0,
+  }) {
     final paint = _eyesPaint();
     canvas.save();
+    // Phase 4.2 glance-eye-shift — applied BEFORE the blink scale so
+    // the eyes shift in their natural frame, then squash for the
+    // blink. Order matters: blink-then-shift would warp the offset
+    // by the squash factor.
+    if (dx != 0.0 || dy != 0.0) {
+      canvas.translate(dx, dy);
+    }
     if (blinking) {
       canvas.translate(0, -8);
       canvas.scale(1, 0.08);
@@ -1007,7 +1066,8 @@ class _CuttlefishPainter extends CustomPainter {
   bool shouldRepaint(covariant _CuttlefishPainter old) =>
       old.t       != t ||
       old.state   != state ||
-      old.variant != variant;
+      old.variant != variant ||
+      old.glance  != glance;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

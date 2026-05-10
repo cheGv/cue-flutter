@@ -10,6 +10,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../animation/cue_motion.dart';
 import '../services/clients_roster_service.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_type_v3.dart';
@@ -34,60 +35,86 @@ class _ClientsRosterRowState extends State<ClientsRosterRow> {
   @override
   Widget build(BuildContext context) {
     final e = widget.entry;
-    final stripeColor = e.isDischarged ? kCueInkTertiary : kCueOlive;
-    // Hover amplify: stripe widens 3 → 4px and grows 48 → 56px tall.
+    // Phase 4.2 hover augment — duration bumped 120ms → 200ms and
+    // curve switched to kMotionHoverCurve (mild overshoot) so the
+    // row's hover feedback matches the page-wide hover register
+    // shared with TodayBriefCard. Existing behaviors preserved
+    // (stripe widens 3 → 4 / lengthens 48 → 56 / bg tints to paper);
+    // ADDED: stripe darkens kCueOlive → kCueOliveDeep on active rows
+    // (discharged stays kCueInkTertiary), and the whole row lifts
+    // kMotionHoverLiftY (-2px) on hover. Reduced-motion zeros the
+    // duration so colors snap without animating; the lift is also
+    // suppressed in that path.
+    final reduceMotion = kReduceMotion(context);
+    final stripeBase   = e.isDischarged ? kCueInkTertiary : kCueOlive;
+    final stripeHover  = e.isDischarged ? kCueInkTertiary : kCueOliveDeep;
+    final stripeColor  = _hover ? stripeHover : stripeBase;
     final stripeW = _hover ? 4.0 : 3.0;
     final stripeH = _hover ? 56.0 : 48.0;
+    final liftTarget = _hover && !reduceMotion ? kMotionHoverLiftY : 0.0;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit:  (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            color: _hover ? kCuePaper : kCueSurfaceWhite,
-            border: const Border(
-              top: BorderSide(color: kCueBorder, width: 0.5),
+      child: TweenAnimationBuilder<double>(
+        tween:    Tween<double>(begin: 0.0, end: liftTarget),
+        duration: reduceMotion ? Duration.zero : kMotionHoverDuration,
+        curve:    kMotionHoverCurve,
+        builder: (_, dy, child) => Transform.translate(
+          offset: Offset(0, dy),
+          child:  child,
+        ),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: reduceMotion
+                ? Duration.zero
+                : kMotionHoverDuration,
+            curve: kMotionHoverCurve,
+            decoration: BoxDecoration(
+              color: _hover ? kCuePaper : kCueSurfaceWhite,
+              border: const Border(
+                top: BorderSide(color: kCueBorder, width: 0.5),
+              ),
             ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-          // Min-height bumped 78 → 88 in the 4.0.9-step-B founder-
-          // verification amend — gives the bumped focus-strip and
-          // data-label sizes room to breathe.
-          constraints: const BoxConstraints(minHeight: 88),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              // Stripe column — 4px wide reserved, the actual stripe
-              // floats centered inside.
-              SizedBox(
-                width: 4,
-                height: stripeH,
-                child: Center(
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 120),
-                    curve: Curves.easeOut,
-                    width: stripeW,
-                    height: stripeH,
-                    decoration: BoxDecoration(
-                      color: stripeColor,
-                      borderRadius: BorderRadius.circular(1.5),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+            // Min-height bumped 78 → 88 in the 4.0.9-step-B founder-
+            // verification amend — gives the bumped focus-strip and
+            // data-label sizes room to breathe.
+            constraints: const BoxConstraints(minHeight: 88),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Stripe column — 4px wide reserved, the actual stripe
+                // floats centered inside.
+                SizedBox(
+                  width: 4,
+                  height: stripeH,
+                  child: Center(
+                    child: AnimatedContainer(
+                      duration: reduceMotion
+                          ? Duration.zero
+                          : kMotionHoverDuration,
+                      curve: kMotionHoverCurve,
+                      width: stripeW,
+                      height: stripeH,
+                      decoration: BoxDecoration(
+                        color: stripeColor,
+                        borderRadius: BorderRadius.circular(1.5),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 18),
-              Expanded(child: _mainColumn(e)),
-              const SizedBox(width: 18),
-              SizedBox(width: 130, child: _recencyStack(e)),
-              const SizedBox(width: 18),
-              SizedBox(width: 90, child: Center(child: _statePill(e))),
-            ],
+                const SizedBox(width: 18),
+                Expanded(child: _mainColumn(e)),
+                const SizedBox(width: 18),
+                SizedBox(width: 130, child: _recencyStack(e)),
+                const SizedBox(width: 18),
+                SizedBox(width: 90, child: Center(child: _statePill(e))),
+              ],
+            ),
           ),
         ),
       ),

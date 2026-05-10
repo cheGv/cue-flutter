@@ -490,3 +490,192 @@ Phase 3.2 ClientRosterScreen). The seven new
 `CueTypeV3.roster*` builders land alongside. Surfaces 3-8
 incorporate this revision as they migrate per the
 spine-doc order.
+
+---
+
+# Revision 2026-05-10 (animation layer)
+
+This revision adds Cue's voice in motion. Three behaviors
+codify Cue's posture toward the SLP: (1) the page entering
+in choreographed beats so the SLP's eye lands on the
+right element first, (2) hover feedback that lifts and
+darkens so the SLP knows what's clickable, (3) the
+cuttlefish glancing toward the hovered client so the
+identity mark feels alive instead of a static logo.
+
+## Banked principle — motion lives where it earns its keep
+
+Motion lives where the user benefits from it, not on every
+interaction. Click transitions stay default
+`MaterialPageRoute`; we don't paint custom theatre on
+navigation. Page entrance, hover rise, and cuttlefish
+glance are the v1 motion vocabulary. Everything else stays
+still on purpose.
+
+## Page entrance choreography
+
+Each major page section fades up + translates 12px on
+first build. Stagger 80ms between sections; 350ms per
+element; `Curves.easeOutCubic` (no overshoot — entrance
+is calm, not bouncy).
+
+Today sequence:
+- Greeting block:                       0 ms
+- Yesterday-reminder (if present):     80 ms
+- "Today's sessions" eyebrow:         160 ms
+- Brief cards (capped staggered):     from 240 ms
+- "At a glance" section:              480 ms
+
+Roster sequence:
+- Page header:                          0 ms
+- Summary plaque:                      80 ms
+- Search row:                         160 ms
+- Filter chips + sort:                240 ms
+- List rows (capped staggered):       from 320 ms
+
+Trigger semantics: fires once on the wrapper's first
+build, not on parent setState. Wrappers sit inside
+`if (!loading) ...content` so the choreography runs the
+first time data is present, not during the loading
+spinner.
+
+## 12-card stagger cap
+
+List rows beyond index 11 share the cap's delay rather
+than continuing the stagger. An SLP with 30 sessions in a
+day shouldn't watch each card pop in over 1800+ ms — the
+bottom of the list would still be animating after she's
+scrolled past it. Cap applies to:
+- Today's brief card stack
+  (`_buildTodayBriefStack` / `_wrapBriefCardEntrance`)
+- Roster list rows (`_buildList`)
+
+Constant: `kMotionStaggerMaxIndex = 11` in
+`lib/animation/cue_motion.dart`.
+
+## Hover rise
+
+Cards / rows lift `kMotionHoverLiftY` (-2px) on hover. The
+stripe widens, lengthens, and darkens; background tints to
+`kCuePaper`; border darkens to `kCueInkTertiary`. 200ms with
+mild overshoot via `kMotionHoverCurve = Cubic(0.34, 1.1,
+0.64, 1.0)` — responsive without crossing into "playful."
+
+Applied to:
+- `TodayBriefCard` (lib/widgets/today_brief_card.dart)
+- `ClientsRosterRow` (lib/widgets/clients_roster_row.dart)
+- Yesterday-reminder rows (would benefit; deferred — the
+  rows live inline in today_screen.dart and a stateless
+  rewrite is more invasive than v1 needs)
+
+Stripe color shift: `kCueOlive → kCueOliveDeep` for active
+clients; `kCueAmber` stays `kCueAmber` (the urgent register
+doesn't need a hover-darken; amber is already at maximum
+weight). Discharged stripes (`kCueInkTertiary`) stay
+unchanged on hover — those rows aren't active, so the
+hover signal there is the bg tint + lift only.
+
+## Material splash + MouseRegion lift composition
+
+Cards that need both tap ripple AND hover transform compose
+the two registers cleanly:
+
+```
+MouseRegion (handles desktop hover state)
+  └─ TweenAnimationBuilder<double> (lifts via Transform)
+      └─ Material (renders splash on tap)
+          └─ InkWell (handles tap event)
+              └─ AnimatedContainer (bg + border + stripe color)
+                  └─ ... card content ...
+```
+
+The two systems are orthogonal: Material's hover splash
+is a circular ripple bound to the InkWell's bounds; the
+MouseRegion + Transform.translate adds a vertical lift
+outside that bound. They don't conflict. This is the
+canonical "cards that lift on hover and ripple on tap"
+pattern.
+
+## Cuttlefish glance — Today only
+
+The cuttlefish in Today's greeting block tilts her body
+and shifts her eyes toward the hovered card. Down-right
+convention (geometric truth, not spec text):
+
+```
+        cuttlefish
+        ────●────►   glanceAngle = 0     (neutral)
+             ╲
+              ╲─►    glanceAngle = +1.0  (max down-right)
+               ╲
+              hovered yesterday row / first brief card
+```
+
+Why down-right: the cuttlefish lives at the top of the page
+in the greeting block; hover targets (yesterday rows + first
+brief card) sit BELOW her in actual page geometry. Negative
+glanceAngle is reserved for future above-cuttlefish targets
+(none in v1).
+
+Painter applies:
+- Body rotation: `canvas.rotate(glance * 12° * π/180)` —
+  positive = clockwise = head tilts right
+- Eye offset (within the rotated head):
+  - x: `+glance * 2.0`  (canvas +x = right)
+  - y: `+glance * 1.5`  (canvas +y = down)
+
+Both effects compound: head turns AND eyes look further in
+that direction within the new pose.
+
+400ms duration; `kMotionGlanceCurve = Cubic(0.34, 1.56,
+0.64, 1.0)` — stronger overshoot than hover (1.56 vs 1.1)
+because the glance is an expressive gesture, not a UI
+feedback signal. The cuttlefish "leans in" toward the
+target before settling — that's what makes her feel alive.
+
+Glance is Today only. The Roster surface dropped its
+cuttlefish in 4.0.9 amend #3; future surfaces decide
+independently whether the cuttlefish belongs (and only
+those that include her get the glance behavior).
+
+Calibrated angles in `CueGlanceTargets`:
+- Yesterday-reminder row: `0.85` (~10° tilt)
+- First brief card (`isUpNext`): `0.60` (~7° tilt — sits
+  further down the page, less head-tilt is needed because
+  the eye-track-down already does much of the work)
+- Hover-out / no target: `0.0` (neutral)
+
+Subsequent brief cards (i ≥ 1) do NOT trigger glance —
+they sit further down the page, often below fold, and
+having the cuttlefish tilt at off-screen targets would
+just look broken.
+
+## Reduced-motion (accessibility gate)
+
+`kReduceMotion(context)` reads `MediaQuery.disableAnimations`.
+Each animated widget reads it at build time and degrades:
+- Entrance:  snap to final state immediately (no fade,
+  no translate)
+- Hover:     static color shifts only (no transform,
+  duration zero)
+- Glance:    `glanceAngle` forced to 0.0 in CueCuttlefish's
+  build; the cuttlefish never tilts
+
+Plumbing: `lib/animation/cue_motion.dart` exports
+`kReduceMotion(BuildContext)` as the canonical gate.
+Always read at build time; don't cache.
+
+## Surface reference
+
+Implemented for the first time in Phase 4.2. Three new
+files: `lib/animation/cue_motion.dart` (tokens + helper),
+`lib/widgets/cue_animated_entrance.dart` (entrance
+wrapper), `lib/widgets/cue_glance_target.dart` (glance
+target wrapper). Five files modified:
+`cue_cuttlefish.dart` (+glanceAngle param + 9 _drawEyes
+call sites + painter rotate + shouldRepaint),
+`today_screen.dart` (entrance + glance threading),
+`client_roster_screen.dart` (entrance), `today_brief_card.dart`
+(StatelessWidget → StatefulWidget + MouseRegion + hover
+state), `clients_roster_row.dart` (hover lift + stripe
+color augment, duration alignment).

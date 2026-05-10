@@ -38,6 +38,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../animation/cue_motion.dart';
 import '../services/clients_roster_service.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_type_v3.dart';
@@ -47,6 +48,7 @@ import '../widgets/clients_roster_filter_chips.dart';
 import '../widgets/clients_roster_row.dart';
 import '../widgets/clients_roster_search_bar.dart';
 import '../widgets/clients_roster_summary_plaque.dart';
+import '../widgets/cue_animated_entrance.dart';
 import 'add_client_screen.dart';
 import 'client_profile_screen.dart';
 
@@ -215,27 +217,43 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
       // original layout.
       padding: const EdgeInsets.fromLTRB(80, 50, 56, 56),
       children: [
-        _pageHeader(),
+        // Phase 4.2 page-entrance choreography:
+        //   • Page header:     0 ms
+        //   • Summary plaque:  80 ms
+        //   • Search row:     160 ms
+        //   • Filter chips:   240 ms
+        //   • Row 0:          320 ms (then +60 ms each, capped at
+        //                     index 11 per kMotionStaggerMaxIndex)
+        CueAnimatedEntrance(child: _pageHeader()),
         const SizedBox(height: 32),
-        ClientsRosterSummaryPlaque(
-          totalClients:   _entries.length,
-          activeGoals:    _totalActiveGoals,
-          sessionsLogged: _totalSessions,
+        CueAnimatedEntrance(
+          delay: const Duration(milliseconds: 80),
+          child: ClientsRosterSummaryPlaque(
+            totalClients:   _entries.length,
+            activeGoals:    _totalActiveGoals,
+            sessionsLogged: _totalSessions,
+          ),
         ),
         const SizedBox(height: 24),
-        ClientsRosterSearchBar(
-          controller: _searchCtrl,
-          onNewClient: _openAddClient,
+        CueAnimatedEntrance(
+          delay: const Duration(milliseconds: 160),
+          child: ClientsRosterSearchBar(
+            controller: _searchCtrl,
+            onNewClient: _openAddClient,
+          ),
         ),
         const SizedBox(height: 16),
-        ClientsRosterFilterChips(
-          activeFilter:    _filter,
-          onFilter:        (v) => setState(() => _filter = v),
-          allCount:        _entries.length,
-          activeCount:     _activeCount,
-          dischargedCount: _dischargedCount,
-          sortBy:          _sortBy,
-          onSort:          (v) => setState(() => _sortBy = v),
+        CueAnimatedEntrance(
+          delay: const Duration(milliseconds: 240),
+          child: ClientsRosterFilterChips(
+            activeFilter:    _filter,
+            onFilter:        (v) => setState(() => _filter = v),
+            allCount:        _entries.length,
+            activeCount:     _activeCount,
+            dischargedCount: _dischargedCount,
+            sortBy:          _sortBy,
+            onSort:          (v) => setState(() => _sortBy = v),
+          ),
         ),
         const SizedBox(height: 12),
         ..._buildList(),
@@ -324,10 +342,24 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
         clipBehavior: Clip.antiAlias,
         child: Column(
           children: [
-            for (final e in rows)
-              ClientsRosterRow(
-                entry: e,
-                onTap: () => _openClient(e),
+            for (var i = 0; i < rows.length; i++)
+              CueAnimatedEntrance(
+                // List rows enter 60ms apart starting at 320ms,
+                // capped at index 11 (kMotionStaggerMaxIndex). Rows
+                // beyond #11 share the cap's delay so an SLP with
+                // 30 clients doesn't watch each row pop in over
+                // 1.8s+ of choreography.
+                delay: Duration(
+                  milliseconds: 320 +
+                      (i <= kMotionStaggerMaxIndex
+                          ? i
+                          : kMotionStaggerMaxIndex) *
+                          60,
+                ),
+                child: ClientsRosterRow(
+                  entry: rows[i],
+                  onTap: () => _openClient(rows[i]),
+                ),
               ),
           ],
         ),
