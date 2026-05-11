@@ -28,8 +28,10 @@ import '../widgets/brief_thought_view.dart';
 import '../widgets/cue_hud_strip.dart';
 import '../widgets/cue_popup.dart';
 // Phase 5.3 Round B — hero pillar widgets replacing the goal-card section.
+// Phase 5.3 Round B.1 — LtgStrip quiet horizontal band above the pillars.
 import '../widgets/profile/active_stgs_pillar.dart';
 import '../widgets/profile/last_session_pillar.dart';
+import '../widgets/profile/ltg_strip.dart';
 import '../widgets/profile/next_session_pillar.dart';
 import '../widgets/cue_cuttlefish.dart';
 import '../widgets/goal_achieved_overlay.dart';
@@ -344,17 +346,33 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return 'Reading $name — ${sessions.length} sessions, last seen $seen';
   }
 
-  /// "Fresh signal" check for the HUD strip's amber pill. A.2 v1: trigger
-  /// on time-since-last-session > 7d (and on the no-sessions-yet branch so
-  /// Cue's first-read register has a visible cue to engage). Round B may
-  /// widen this to drift signals, parent comms, etc.
+  /// "Fresh signal" check for the HUD strip's amber pill. Round B.1
+  /// tightening: fresh-signal requires sessionCount > 0 (the previous
+  /// no-sessions-yet → true branch produced a chronically-on pill on
+  /// first-read charts; that signal is now carried by the LTG strip's
+  /// "build a plan" empty state instead). Trigger when sessionCount > 0
+  /// AND time-since-last-session > 7d.
   bool _computeHasFreshSignal(_ReadyData? data) {
     if (data == null) return false;
-    if (data.sessions.isEmpty) return true;
+    if (data.sessions.isEmpty) return false;
     final lastStr = data.sessions.first['date'] as String?;
     final last = lastStr != null ? DateTime.tryParse(lastStr) : null;
     if (last == null) return false;
     return DateTime.now().difference(last).inDays > 7;
+  }
+
+  /// Phase 5.3 Round B.1 — per-sliver width cap. Profile body's outer
+  /// ConstrainedBox stretches to 1024 (was 680) so the hero pillars row
+  /// can breathe; text-content slivers (identity, brief, timeline,
+  /// documents, LTG strip) wrap their child in `_capped(child, 680)` to
+  /// hold the readable column width.
+  Widget _capped(Widget child, double maxWidth) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
   }
 
   // ── Data fetchers ─────────────────────────────────────────────────────────
@@ -1012,19 +1030,50 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   child: Align(
                     alignment: Alignment.topCenter,
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 680),
+                      // Phase 5.3 Round B.1 — outer cap lifted 680 → 1024
+                      // so the hero pillars row can breach the reading-
+                      // width cap. Text-content slivers below wrap their
+                      // child in _capped(680) to hold the readable column.
+                      constraints: const BoxConstraints(maxWidth: 1024),
                       child: CustomScrollView(
                         slivers: [
                           // ── Zone 1: Identity ────────────────────────────
                           SliverToBoxAdapter(
-                            child: _buildClientHeader(lc, hPad),
+                            child: _capped(_buildClientHeader(lc, hPad), 680),
+                          ),
+
+                          // ── Phase 5.3 Round B.1 — LTG strip ───────────────
+                          // Quiet horizontal band of active LTGs (or empty-
+                          // state CTA) below identity, above Cue Noticed.
+                          SliverToBoxAdapter(
+                            child: _capped(
+                              FutureBuilder<_ReadyData>(
+                                future: _readyFuture,
+                                builder: (ctx, snap) {
+                                  final ltgs = (snap.data?.spine.ltgs ??
+                                          const <Map<String, dynamic>>[])
+                                      .where(_isLtgActive)
+                                      .toList();
+                                  return Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                        hPad, 14, hPad, 0),
+                                    child: LtgStrip(
+                                      activeLtgs: ltgs,
+                                      clientName: clientName,
+                                      onAskCue:   _toggleCuePopup,
+                                    ),
+                                  );
+                                },
+                              ),
+                              680,
+                            ),
                           ),
 
                           // ── Cue noticed (Phase 2) ───────────────────────
                           // Detection runs over the loaded chart data;
                           // shows nothing if no special moment matches.
                           SliverToBoxAdapter(
-                            child: FutureBuilder<_ReadyData>(
+                            child: _capped(FutureBuilder<_ReadyData>(
                               future: _readyFuture,
                               builder: (ctx, snap) {
                                 if (!snap.hasData) return const SizedBox.shrink();
@@ -1041,7 +1090,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                   child: NoticedMomentView(moment: moment),
                                 );
                               },
-                            ),
+                            ), 680),
                           ),
 
                           // ── Zone 2: Brief thought (Phase 2 + 3.2.2) ─────
@@ -1055,7 +1104,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             // Phase 5.1+5.2 — `key: _cueStudyKey`
                             // removed; the scroll target it served
                             // (the Cue Study Brief widget) is gone.
-                            child: SizedBox(
+                            child: _capped(SizedBox(
                               child: FutureBuilder<_ReadyData>(
                                 future: _readyFuture,
                                 builder: (ctx, readySnap) {
@@ -1225,7 +1274,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                   );
                                 },
                               ),
-                            ),
+                            ), 680),
                           ),
 
                           // ── Phase 5.3 Round B — three hero pillars ────────
@@ -1234,21 +1283,29 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                           // section. Wrapped in FutureBuilder<_ReadyData> so
                           // the pillars get the resolved data they need
                           // without re-querying.
+                          // Phase 5.3 Round B.1 — pillars breach the 680 cap
+                          // to 1024 max so each pillar gets ≈333 px at full
+                          // desktop viewport (vs ≈213 px under the old cap).
+                          // Text-content slivers retain their 680 cap via
+                          // _capped(child, 680).
                           SliverToBoxAdapter(
-                            child: FutureBuilder<_ReadyData>(
-                              future: _readyFuture,
-                              builder: (ctx, snap) =>
-                                  _buildHeroPillarsRow(
-                                snap.data,
-                                hPad,
-                                isMobile: isMobile,
+                            child: _capped(
+                              FutureBuilder<_ReadyData>(
+                                future: _readyFuture,
+                                builder: (ctx, snap) =>
+                                    _buildHeroPillarsRow(
+                                  snap.data,
+                                  hPad,
+                                  isMobile: isMobile,
+                                ),
                               ),
+                              1024,
                             ),
                           ),
 
                           // ── Zone 4: Timeline ────────────────────────────
                           SliverToBoxAdapter(
-                            child: FutureBuilder<_ReadyData>(
+                            child: _capped(FutureBuilder<_ReadyData>(
                               future: _readyFuture,
                               builder: (ctx2, snap) {
                                 final lc2 = CueColorsResolved.of(ctx2);
@@ -1262,12 +1319,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                   clientId, clientName,
                                 );
                               },
-                            ),
+                            ), 680),
                           ),
 
                           // ── Zone 5: Documents ───────────────────────────
                           SliverToBoxAdapter(
-                            child: _buildDocumentsSection(lc, hPad),
+                            child: _capped(_buildDocumentsSection(lc, hPad), 680),
                           ),
 
                           // Bottom padding so the floating bar never
