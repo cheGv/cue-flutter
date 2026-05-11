@@ -705,6 +705,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
     return AppLayout(
       title: _isEditMode ? 'Edit client' : 'Add client',
       activeRoute: 'roster',
+      showCueStudyFab: false,
       body: Container(
         color: kCuePaper,
         child: Center(
@@ -1466,13 +1467,14 @@ class _BrainDumpSheet extends StatefulWidget {
 class _BrainDumpSheetState extends State<_BrainDumpSheet> {
   final _speech = SpeechToText();
 
-  bool   _speechAvailable = false;
-  bool   _isListening     = false;  // mic is actively recording right now
-  bool   _wantListening   = false;  // SLP intends to record (drives auto-restart)
-  bool   _isExtracting    = false;
-  String _accumulated     = '';     // full text built across all mic sessions
-  String _previousText    = '';     // snapshot of _accumulated when mic starts
+  bool    _speechAvailable = false;
+  bool    _isListening     = false;  // mic is actively recording right now
+  bool    _wantListening   = false;  // SLP intends to record (drives auto-restart)
+  bool    _isExtracting    = false;
+  String  _accumulated     = '';     // full text built across all mic sessions
+  String  _previousText    = '';     // snapshot of _accumulated when mic starts
   String? _error;
+  String? _bestLocale; // first available from priority list; null → device default
 
   @override
   void initState() {
@@ -1516,6 +1518,15 @@ class _BrainDumpSheetState extends State<_BrainDumpSheet> {
         }
       },
     );
+    if (available) {
+      // Cache the first locale available from the priority list.
+      // null → device/browser default (still accepts Indian language input).
+      final locales   = await _speech.locales();
+      final localeIds = locales.map((l) => l.localeId).toSet();
+      for (final pref in ['ta_IN', 'te_IN', 'kn_IN', 'ml_IN', 'hi_IN', 'en_IN']) {
+        if (localeIds.contains(pref)) { _bestLocale = pref; break; }
+      }
+    }
     if (mounted) setState(() => _speechAvailable = available);
   }
 
@@ -1531,7 +1542,7 @@ class _BrainDumpSheetState extends State<_BrainDumpSheet> {
       },
       listenFor: const Duration(minutes: 10),
       pauseFor: const Duration(minutes: 10),
-      localeId: 'en_IN',
+      localeId: _bestLocale,
       listenOptions: SpeechListenOptions(partialResults: true),
     );
     if (mounted) setState(() => _isListening = true);

@@ -7,9 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/theme_notifier.dart';
 import '../theme/cue_theme.dart';
 import 'cue_cuttlefish.dart';
-// Phase 5.1+5.2 — Cue Study retired; cueStudyFab field removed from
-// AppLayout's API. Ask Cue lives inline on Profile (right panel /
-// drawer), not as a global FAB.
+import 'cue_study_fab.dart';
 const double _kSidebarFull      = 220;
 const double _kSidebarCollapsed = 56;
 const double _kDesktopBreak     = 1024;
@@ -29,6 +27,9 @@ class AppLayout extends StatelessWidget {
   final String activeRoute;
   final Widget? floatingActionButton;
   final List<Widget> actions;
+  /// Set to false on screens where the global Cue Study FAB doesn't
+  /// belong (add_client, login). Defaults to true everywhere else.
+  final bool showCueStudyFab;
 
   const AppLayout({
     super.key,
@@ -37,6 +38,7 @@ class AppLayout extends StatelessWidget {
     this.activeRoute = 'roster',
     this.floatingActionButton,
     this.actions = const [],
+    this.showCueStudyFab = true,
   });
 
   @override
@@ -66,6 +68,19 @@ class AppLayout extends StatelessWidget {
                           right:  16,
                           child:  floatingActionButton!,
                         ),
+                      // Global Cue Study FAB — bottom-left, above bottom nav
+                      Positioned(
+                        bottom: 72,
+                        left:   16,
+                        child: AnimatedOpacity(
+                          opacity:  showCueStudyFab ? 1.0 : 0.0,
+                          duration: const Duration(milliseconds: 200),
+                          child: IgnorePointer(
+                            ignoring: !showCueStudyFab,
+                            child: const CueStudyFab(),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -108,6 +123,19 @@ class AppLayout extends StatelessWidget {
                         right:  16,
                         child:  floatingActionButton!,
                       ),
+                    // Global Cue Study FAB — bottom-left
+                    Positioned(
+                      bottom: 32,
+                      left:   16,
+                      child: AnimatedOpacity(
+                        opacity:  showCueStudyFab ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: IgnorePointer(
+                          ignoring: !showCueStudyFab,
+                          child: const CueStudyFab(),
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -435,7 +463,7 @@ class _AppSidebar extends StatelessWidget {
             ? Center(
                 child: Icon(
                   Icons.logout_rounded,
-                  color: Colors.white.withOpacity(0.45),
+                  color: Colors.white.withValues(alpha: 0.45),
                   size: 20,
                 ),
               )
@@ -443,14 +471,14 @@ class _AppSidebar extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.logout_rounded,
-                    color: Colors.white.withOpacity(0.45),
+                    color: Colors.white.withValues(alpha: 0.45),
                     size: 18,
                   ),
                   const SizedBox(width: 12),
                   Text(
                     'Sign Out',
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.45),
+                      color: Colors.white.withValues(alpha: 0.45),
                       fontSize: 14,
                     ),
                   ),

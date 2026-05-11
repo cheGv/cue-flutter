@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/cue_reasoning_panel.dart';
+import '../widgets/cue_study_icon.dart';
 import '../widgets/goal_achieved_overlay.dart';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
@@ -270,14 +271,15 @@ class _LtgEditScreenState extends State<LtgEditScreen>
 
   // Cue Study — Voice narrator (multilingual mic in CUE STUDY header)
   final SpeechToText _narratorSpeech   = SpeechToText();
-  bool   _narratorSpeechAvailable      = false;
-  bool   _narratorRecording            = false; // SLP intends to record (drives web auto-restart)
-  bool   _narratorListening            = false; // mic is actively capturing right now
-  String _narratorText                 = '';    // accumulated transcript
-  String _narratorPrevText             = '';    // snapshot before each listen segment
-  bool   _narratorLoading              = false;
+  bool    _narratorSpeechAvailable     = false;
+  bool    _narratorRecording           = false; // SLP intends to record (drives web auto-restart)
+  bool    _narratorListening           = false; // mic is actively capturing right now
+  String  _narratorText                = '';    // accumulated transcript
+  String  _narratorPrevText            = '';    // snapshot before each listen segment
+  bool    _narratorLoading             = false;
   String? _narratorError;
-  String _narratorResponse             = '';
+  String  _narratorResponse            = '';
+  String? _bestLocale; // first available from priority list; null → device default
 
   // ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -740,6 +742,15 @@ class _LtgEditScreenState extends State<LtgEditScreen>
         }
       },
     );
+    if (available) {
+      // Cache the first locale available from the priority list.
+      // null → device/browser default (still accepts Indian language input).
+      final locales   = await _narratorSpeech.locales();
+      final localeIds = locales.map((l) => l.localeId).toSet();
+      for (final pref in ['ta_IN', 'te_IN', 'kn_IN', 'ml_IN', 'hi_IN', 'en_IN']) {
+        if (localeIds.contains(pref)) { _bestLocale = pref; break; }
+      }
+    }
     if (mounted) setState(() => _narratorSpeechAvailable = available);
   }
 
@@ -755,7 +766,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
       },
       listenFor: const Duration(minutes: 10),
       pauseFor: const Duration(minutes: 10),
-      localeId: 'en_IN',
+      localeId: _bestLocale,
       listenOptions: SpeechListenOptions(partialResults: true),
     );
     if (mounted) setState(() => _narratorListening = true);
@@ -1293,10 +1304,7 @@ class _LtgEditScreenState extends State<LtgEditScreen>
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Phase 5.1+5.2 — was CueStudyIcon(); replaced with a
-              // generic in-register icon now that Cue Study is retired.
-              const Icon(Icons.auto_awesome_rounded,
-                  size: 22, color: Color(0xFFB45309)),
+              const CueStudyIcon(),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -1801,10 +1809,7 @@ class _StuckSheetState extends State<_StuckSheet> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Phase 5.1+5.2 — was CueStudyIcon(); replaced with
-                // a generic in-register icon now that Cue Study is retired.
-                const Icon(Icons.auto_awesome_rounded,
-                    size: 22, color: Color(0xFFB45309)),
+                const CueStudyIcon(),
                 const SizedBox(width: 8),
                 Text(
                   'Cue Study',
@@ -1992,5 +1997,3 @@ class _StuckSheetState extends State<_StuckSheet> {
     );
   }
 }
-
-// CueStudyIcon is imported from ../widgets/cue_study_icon.dart
