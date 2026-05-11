@@ -1395,9 +1395,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: c.isDark
-            ? const Color(0x0DFFFFFF)
-            : c.bgCard,
+        // Phase 5.3 Round A.1.1 — solid bg in both modes. Dark mode's
+        // prior 5% white overlay (Color(0x0DFFFFFF)) rendered as nearly
+        // invisible against the new neutral #0A0A0B canvas, letting goal
+        // text bleed through the bar at scroll boundary.
+        color: c.bgCard,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: c.border, width: 0.5),
         boxShadow: [

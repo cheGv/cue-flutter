@@ -17,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
+import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/assessment/ald_capture_section.dart';
 import '../widgets/assessment/ped_dysarthria_capture_section.dart';
@@ -350,11 +351,13 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     final duration =
         (v['visit_duration_minutes'] as num?)?.toInt();
     final status   = (v['visit_status'] as String?) ?? 'in_progress';
+    final cue      = CueColorsResolved.of(context);
     return Container(
       width: 150,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color:        Colors.white,
+        // Phase 5.3 Round A.1.1 — fixed visible white-on-dark bug.
+        color:        cue.bgCard,
         borderRadius: BorderRadius.circular(10),
         border:       Border.all(color: _line),
       ),
@@ -411,10 +414,13 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   }
 
   Widget _section({required String title, required Widget child}) {
+    final cue = CueColorsResolved.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: BoxDecoration(
-        color:        Colors.white,
+        // Phase 5.3 Round A.1.1 — fixed visible white-on-dark bug
+        // (CAPTURES + DIAGNOSTIC SYNTHESIS cards bleeding white on dark).
+        color:        cue.bgCard,
         borderRadius: BorderRadius.circular(12),
         border:       Border.all(color: _line),
       ),

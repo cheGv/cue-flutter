@@ -131,6 +131,8 @@ class BriefThoughtCard extends StatelessWidget {
     final ink     = cue.textPrimary;
     final amberLn = cue.amber;
     final divider = cue.border;
+    // (skeletonFill computed inline at _Skeleton call site below — uses
+    // cue.borderHover for visible loading bars on neutral canvas.)
 
     return Container(
       decoration: BoxDecoration(
@@ -164,7 +166,10 @@ class BriefThoughtCard extends StatelessWidget {
           ),
           const SizedBox(height: CueGap.s16),
           if (loading)
-            _Skeleton(divider: divider)
+            // Phase 5.3 Round A.1.1 — skeleton fill uses borderHover (~37 RGB
+            // levels above canvas) instead of border (~21 levels). Loading
+            // bars were near-invisible against the neutral #0A0A0B canvas.
+            _Skeleton(divider: cue.borderHover)
           else if (errorText != null)
             Text(
               errorText!,
