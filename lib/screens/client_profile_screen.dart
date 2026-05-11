@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,9 +13,12 @@ import '../theme/cue_typography.dart';
 import '../utils/chart_context.dart';
 import '../utils/daily_chart_log.dart';
 import '../widgets/app_layout.dart';
-// Phase 5.3 Round A.1 — ask_cue_drawer / ask_cue_panel imports retired
-// here. Round A.2 reconnects via the new popup architecture.
 import '../widgets/brief_thought_view.dart';
+// Phase 5.3 Round A.2 — Cue popup architecture lives in these two
+// widgets. The HUD strip is persistent across the top of the workspace;
+// the popup floats bottom-right when summoned (⌘K, HUD click, sidebar tap).
+import '../widgets/cue_hud_strip.dart';
+import '../widgets/cue_popup.dart';
 import '../widgets/cue_cuttlefish.dart';
 import '../widgets/goal_achieved_overlay.dart';
 import '../widgets/noticed_moment.dart';
@@ -129,6 +133,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // also clobbered the RHS of the initState assignment into a self-
   // reference; that's restored to widget.client below.)
   Map<String, dynamic> _client = const <String, dynamic>{};
+
+  // Phase 5.3 Round A.2 — Cue popup visibility state. Toggled by HUD strip
+  // click, ⌘K, or Esc. The popup is mounted in the widget tree only when
+  // open; minimization is structural, not opacity-zero.
+  bool _cuePopupOpen = false;
 
   @override
   void initState() {
@@ -281,6 +290,59 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     _stgEditCtrl.dispose();
     _addStgCtrl.dispose();
     super.dispose();
+  }
+
+  // ── Phase 5.3 Round A.2 — Cue popup helpers ──────────────────────────────
+
+  void _toggleCuePopup() {
+    setState(() => _cuePopupOpen = !_cuePopupOpen);
+  }
+
+  void _closeCuePopupIfOpen() {
+    if (!_cuePopupOpen) return;
+    setState(() => _cuePopupOpen = false);
+  }
+
+  /// HUD strip detail line — "Reading {name} — {activity summary}". Empty
+  /// chart variant calls out active step count + 0-sessions explicitly so
+  /// the SLP can see Cue has read the chart even when there's no session
+  /// history yet.
+  String _buildHudDetail(_ReadyData? data, String name) {
+    if (data == null) return 'Reading $name…';
+    final sessions = data.sessions;
+    final activeStgs = data.spine.stgs.where((s) {
+      final st = (s['status'] as String?)?.toLowerCase();
+      return st == null || st.isEmpty || st == 'active';
+    }).length;
+    if (sessions.isEmpty) {
+      final plural = activeStgs == 1 ? '' : 's';
+      return 'Reading $name — $activeStgs active step$plural, 0 sessions yet';
+    }
+    final lastStr = sessions.first['date'] as String?;
+    final last = lastStr != null ? DateTime.tryParse(lastStr) : null;
+    if (last == null) {
+      return 'Reading $name — ${sessions.length} sessions';
+    }
+    final days = DateTime.now().difference(last).inDays;
+    final seen = days == 0
+        ? 'today'
+        : days == 1
+            ? '1 day ago'
+            : '$days days ago';
+    return 'Reading $name — ${sessions.length} sessions, last seen $seen';
+  }
+
+  /// "Fresh signal" check for the HUD strip's amber pill. A.2 v1: trigger
+  /// on time-since-last-session > 7d (and on the no-sessions-yet branch so
+  /// Cue's first-read register has a visible cue to engage). Round B may
+  /// widen this to drift signals, parent comms, etc.
+  bool _computeHasFreshSignal(_ReadyData? data) {
+    if (data == null) return false;
+    if (data.sessions.isEmpty) return true;
+    final lastStr = data.sessions.first['date'] as String?;
+    final last = lastStr != null ? DateTime.tryParse(lastStr) : null;
+    if (last == null) return false;
+    return DateTime.now().difference(last).inDays > 7;
   }
 
   // ── Data fetchers ─────────────────────────────────────────────────────────
@@ -887,10 +949,40 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return AppLayout(
       title:       clientName,
       activeRoute: 'roster',
-      // Phase 5.3 Round A.1 — topbar "Ask Cue" button retired. Round A.2
-      // wires the new popup summon affordances (HUD strip pills, ⌘K).
-      body: LayoutBuilder(
-        builder: (ctx, constraints) {
+      // Phase 5.3 Round A.2 — popup summon affordances wired: ⌘K (or
+      // Ctrl+K on non-mac) toggles, Esc closes, HUD strip click toggles.
+      // The CueHudStrip mounts at top of the workspace; CuePopup is a
+      // Positioned child of the inner Stack (added near the bottom of
+      // mainContent below).
+      body: CallbackShortcuts(
+        bindings: <ShortcutActivator, VoidCallback>{
+          const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+              _toggleCuePopup,
+          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+              _toggleCuePopup,
+          const SingleActivator(LogicalKeyboardKey.escape):
+              _closeCuePopupIfOpen,
+        },
+        child: Focus(
+          autofocus: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── HUD strip — persistent across the top of workspace ─────
+              FutureBuilder<_ReadyData>(
+                future: _readyFuture,
+                builder: (ctx, snap) {
+                  return CueHudStrip(
+                    mode: CueHudMode.ready,
+                    detail: _buildHudDetail(snap.data, clientName),
+                    hasFreshSignal: _computeHasFreshSignal(snap.data),
+                    onTap: _toggleCuePopup,
+                  );
+                },
+              ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (ctx, constraints) {
           final hPad     = constraints.maxWidth > 500 ? 24.0 : 16.0;
           final isMobile = constraints.maxWidth < 600;
           // Phase 5.3 Round A.1 — persistent right column retired; Profile
@@ -1193,12 +1285,36 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                     ),
                   ),
                 ),
+              // ── Phase 5.3 Round A.2 — floating Cue popup ─────────────────
+              // Anchored right-bottom with bottom: 100 to clear the action
+              // bar (sits at bottom: 24, ~50 px tall + shadow). Mounted
+              // only when _cuePopupOpen; minimize (header X, Esc) returns
+              // to the ambient HUD-strip-only state. Click-outside-to-close
+              // not wired in A.2 — Esc + minimize suffice; revisit in
+              // Round G with the command palette work.
+              if (_cuePopupOpen)
+                Positioned(
+                  right: 24,
+                  bottom: 100,
+                  child: CuePopup(
+                    clientId:   clientId,
+                    clientName: clientName,
+                    onMinimize: _closeCuePopupIfOpen,
+                  ),
+                ),
             ],
           );
-          // Phase 5.3 Round A.1 — persistent right column retired. Cue is
-          // summoned via the popup architecture landing in Round A.2.
+          // Phase 5.3 Round A.2 — chart content lives inside the Expanded
+          // below the HUD strip. The popup is a conditional Positioned
+          // child of mainContent's Stack (see the if (_cuePopupOpen)
+          // branch further up).
           return mainContent;
-        },
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
