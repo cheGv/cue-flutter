@@ -1,3 +1,11 @@
+// Phase 5.3 Round B — old _buildGoalsSection + its inline LTG/STG editor
+// helper widgets are no longer called (the three hero pillars at
+// lib/widgets/profile/ replace the goal-card rendering). The code is
+// preserved in this file in case the inline-edit surface needs to
+// resurface as a popup target; the file-level ignore silences the
+// analyzer's transitive unused warnings for that orphaned helper graph.
+// ignore_for_file: unused_element
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +27,10 @@ import '../widgets/brief_thought_view.dart';
 // the popup floats bottom-right when summoned (⌘K, HUD click, sidebar tap).
 import '../widgets/cue_hud_strip.dart';
 import '../widgets/cue_popup.dart';
+// Phase 5.3 Round B — hero pillar widgets replacing the goal-card section.
+import '../widgets/profile/active_stgs_pillar.dart';
+import '../widgets/profile/last_session_pillar.dart';
+import '../widgets/profile/next_session_pillar.dart';
 import '../widgets/cue_cuttlefish.dart';
 import '../widgets/goal_achieved_overlay.dart';
 import '../widgets/noticed_moment.dart';
@@ -502,7 +514,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // Phase 4.0.7.27d-population-router-removal — caller pill removed; this
   // method is currently unreachable. Kept in place for the Phase 2
   // multi-domain rebuild to resurface a domain-aware version.
-  // ignore: unused_element
   Future<void> _openPlanInputs() async {
     await Navigator.push<bool>(
       context,
@@ -783,7 +794,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // retrieval is the Phase 4 "Practice" sidebar surface, not a chart-
   // scoped action. This handler stays as dead code so the intent-
   // classifier prototype can be referenced when Practice is built.
-  // ignore: unused_element
   void _openAskSheet() {
     final c          = CueColorsResolved.of(context);
     final clientName = (_client['name'] as String?) ?? 'this child';
@@ -1218,10 +1228,22 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             ),
                           ),
 
-                          // ── Zone 3: Goals ───────────────────────────────
+                          // ── Phase 5.3 Round B — three hero pillars ────────
+                          // ActiveStgsPillar | NextSessionPillar (scaffold)
+                          // | LastSessionPillar. Replaces the old goal-card
+                          // section. Wrapped in FutureBuilder<_ReadyData> so
+                          // the pillars get the resolved data they need
+                          // without re-querying.
                           SliverToBoxAdapter(
-                            child: _buildGoalsSection(
-                                lc, hPad, isMobile: isMobile),
+                            child: FutureBuilder<_ReadyData>(
+                              future: _readyFuture,
+                              builder: (ctx, snap) =>
+                                  _buildHeroPillarsRow(
+                                snap.data,
+                                hPad,
+                                isMobile: isMobile,
+                              ),
+                            ),
                           ),
 
                           // ── Zone 4: Timeline ────────────────────────────
@@ -1459,6 +1481,68 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ],
         );
       },
+    );
+  }
+
+  // ── Phase 5.3 Round B — Hero pillars row ──────────────────────────────────
+  //
+  // Replaces the legacy _buildGoalsSection rendering. Three pillars at
+  // desktop (Row + Expanded), stacked at narrow (< 600 px). Each pillar
+  // is its own widget under lib/widgets/profile/ and uses CueColorsResolved
+  // throughout. ~300px min height per pillar (set in HeroPillarFrame).
+
+  Widget _buildHeroPillarsRow(
+    _ReadyData? data,
+    double hPad, {
+    required bool isMobile,
+  }) {
+    final allStgs = data?.spine.stgs ?? const <Map<String, dynamic>>[];
+    final activeStgs = allStgs.where((s) {
+      final st = (s['status'] as String?)?.toLowerCase();
+      return st == null || st.isEmpty || st == 'active';
+    }).toList();
+    final sessions   = data?.sessions ?? const <Map<String, dynamic>>[];
+    final clientName = (_client['name'] as String?) ?? '';
+
+    final activePillar = ActiveStgsPillar(
+      activeStgs: activeStgs,
+      sessions:   sessions,
+      clientName: clientName,
+      onAskCue:   _toggleCuePopup,
+    );
+    final nextPillar = NextSessionPillar(
+      clientName: clientName,
+      onAskCue:   _toggleCuePopup,
+    );
+    final lastPillar = LastSessionPillar(
+      sessions:   sessions,
+      clientName: clientName,
+      onAskCue:   _toggleCuePopup,
+    );
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 8),
+      child: isMobile
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                activePillar,
+                const SizedBox(height: 16),
+                nextPillar,
+                const SizedBox(height: 16),
+                lastPillar,
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: activePillar),
+                const SizedBox(width: 16),
+                Expanded(child: nextPillar),
+                const SizedBox(width: 16),
+                Expanded(child: lastPillar),
+              ],
+            ),
     );
   }
 
