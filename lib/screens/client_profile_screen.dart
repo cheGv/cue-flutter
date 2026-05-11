@@ -1579,6 +1579,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
     return Padding(
       padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 8),
+      // Phase 5.3 Round B.2 hotfix — IntrinsicHeight wrap on the desktop
+      // Row. Without it, Row(crossAxisAlignment: stretch) inside an
+      // unbounded-height sliver context (post-B.1 _capped wrap adds a
+      // Center which shrinkWraps height) propagates infinity to children
+      // via BoxConstraints.tightFor(height: maxHeight). The pillars then
+      // try to render at infinity height, blowing out the CustomScrollView's
+      // layout and rendering everything below as empty space. IntrinsicHeight
+      // forces a finite tight-height context derived from children's
+      // intrinsics (each pillar's HeroPillarFrame minHeight: 300 floors it).
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1590,15 +1599,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 lastPillar,
               ],
             )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: activePillar),
-                const SizedBox(width: 16),
-                Expanded(child: nextPillar),
-                const SizedBox(width: 16),
-                Expanded(child: lastPillar),
-              ],
+          : IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: activePillar),
+                  const SizedBox(width: 16),
+                  Expanded(child: nextPillar),
+                  const SizedBox(width: 16),
+                  Expanded(child: lastPillar),
+                ],
+              ),
             ),
     );
   }
