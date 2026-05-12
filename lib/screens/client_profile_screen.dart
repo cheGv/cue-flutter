@@ -22,10 +22,10 @@ import '../utils/chart_context.dart';
 import '../utils/daily_chart_log.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/brief_thought_view.dart';
-// Phase 5.3 Round A.2 — Cue popup architecture lives in these two
-// widgets. The HUD strip is persistent across the top of the workspace;
-// the popup floats bottom-right when summoned (⌘K, HUD click, sidebar tap).
-import '../widgets/cue_hud_strip.dart';
+// Phase 5.3 Round A.2 — Cue popup architecture. Phase 5.4 Sprint 2
+// commit 1 — HUD strip retired; popup floats bottom-right when summoned
+// (⌘K, sidebar tap). Dynamic Island in widgets/dynamic_island_preview.dart
+// is the top-bar surface but does not summon the popup.
 import '../widgets/cue_popup.dart';
 // Phase 5.3 Round B — hero pillar widgets replacing the goal-card section.
 // Phase 5.3 Round B.1 — LtgStrip quiet horizontal band above the pillars.
@@ -35,6 +35,8 @@ import '../widgets/profile/ltg_strip.dart';
 import '../widgets/profile/next_session_pillar.dart';
 import '../widgets/profile/timeline_strip.dart';
 import '../widgets/cue_cuttlefish.dart';
+import '../widgets/cue_top_band.dart';
+import '../widgets/dynamic_island_preview.dart';
 import '../widgets/goal_achieved_overlay.dart';
 import '../widgets/noticed_moment.dart';
 import 'add_session_screen.dart';
@@ -303,50 +305,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   void _closeCuePopupIfOpen() {
     if (!_cuePopupOpen) return;
     setState(() => _cuePopupOpen = false);
-  }
-
-  /// HUD strip detail line — "Reading {name} — {activity summary}". Empty
-  /// chart variant calls out active step count + 0-sessions explicitly so
-  /// the SLP can see Cue has read the chart even when there's no session
-  /// history yet.
-  String _buildHudDetail(_ReadyData? data, String name) {
-    if (data == null) return 'Reading $name…';
-    final sessions = data.sessions;
-    final activeStgs = data.spine.stgs.where((s) {
-      final st = (s['status'] as String?)?.toLowerCase();
-      return st == null || st.isEmpty || st == 'active';
-    }).length;
-    if (sessions.isEmpty) {
-      final plural = activeStgs == 1 ? '' : 's';
-      return 'Reading $name — $activeStgs active step$plural, 0 sessions yet';
-    }
-    final lastStr = sessions.first['date'] as String?;
-    final last = lastStr != null ? DateTime.tryParse(lastStr) : null;
-    if (last == null) {
-      return 'Reading $name — ${sessions.length} sessions';
-    }
-    final days = DateTime.now().difference(last).inDays;
-    final seen = days == 0
-        ? 'today'
-        : days == 1
-            ? '1 day ago'
-            : '$days days ago';
-    return 'Reading $name — ${sessions.length} sessions, last seen $seen';
-  }
-
-  /// "Fresh signal" check for the HUD strip's amber pill. Round B.1
-  /// tightening: fresh-signal requires sessionCount > 0 (the previous
-  /// no-sessions-yet → true branch produced a chronically-on pill on
-  /// first-read charts; that signal is now carried by the LTG strip's
-  /// "build a plan" empty state instead). Trigger when sessionCount > 0
-  /// AND time-since-last-session > 7d.
-  bool _computeHasFreshSignal(_ReadyData? data) {
-    if (data == null) return false;
-    if (data.sessions.isEmpty) return false;
-    final lastStr = data.sessions.first['date'] as String?;
-    final last = lastStr != null ? DateTime.tryParse(lastStr) : null;
-    if (last == null) return false;
-    return DateTime.now().difference(last).inDays > 7;
   }
 
   /// Phase 5.3 Round B.1 — per-sliver width cap. Profile body's outer
@@ -994,11 +952,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return AppLayout(
       title:       clientName,
       activeRoute: 'roster',
+      // Phase 5.4 Sprint 2 commit 1 — Client Profile owns its own
+      // chrome via CueTopBand inside the body Column below. Skip the
+      // shell _TopBar so the band doesn't stack under a duplicate bar.
+      skipTopBar:  true,
       // Phase 5.3 Round A.2 — popup summon affordances wired: ⌘K (or
-      // Ctrl+K on non-mac) toggles, Esc closes, HUD strip click toggles.
-      // The CueHudStrip mounts at top of the workspace; CuePopup is a
-      // Positioned child of the inner Stack (added near the bottom of
-      // mainContent below).
+      // Ctrl+K on non-mac) toggles, Esc closes. Phase 5.4 Sprint 2
+      // commit 1 — HUD strip retired (Path A); Dynamic Island is the
+      // top-bar surface but does NOT summon the popup (architectural
+      // commitment: one surface, not two — popup remains summoned via
+      // ⌘K shortcut or Cue Study FAB). CuePopup is a Positioned child
+      // of the inner Stack (added near the bottom of mainContent below).
       body: CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
           const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
@@ -1013,15 +977,52 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── HUD strip — persistent across the top of workspace ─────
-              FutureBuilder<_ReadyData>(
-                future: _readyFuture,
-                builder: (ctx, snap) {
-                  return CueHudStrip(
-                    mode: CueHudMode.ready,
-                    detail: _buildHudDetail(snap.data, clientName),
-                    hasFreshSignal: _computeHasFreshSignal(snap.data),
-                    onTap: _toggleCuePopup,
+              // ── Phase 5.4 Sprint 2 commit 1 — Dynamic Island top bar ──
+              // Path A landed: HUD retired, Island becomes the sole top-
+              // bar surface inside CueTopBand. The band absorbs nav
+              // chrome on desktop (back arrow + client name); mobile
+              // keeps the hero title in _buildClientHeader below.
+              // ⌘K shortcut binding stays at workspace level (above this
+              // builder); the visual ⌘K hint that lived in HUD is dropped
+              // pending intentional redesign. Green dot indicator retired
+              // with HUD; will return as Thinking-state indicator inside
+              // Island in a later commit. See widgets/cue_top_band.dart
+              // and widgets/dynamic_island_preview.dart.
+              //
+              // LayoutBuilder wraps the FutureBuilder so we can compute
+              // bandHPad locally — the workspace's hPad lives inside the
+              // Expanded > LayoutBuilder below and isn't in scope here.
+              // The formula matches the workspace's hPad so the band's
+              // leading edge aligns with chart content's leading edge.
+              LayoutBuilder(
+                builder: (ctx, constraints) {
+                  final bandHPad =
+                      constraints.maxWidth > 500 ? 24.0 : 16.0;
+                  return FutureBuilder<_ReadyData>(
+                    future: _readyFuture,
+                    builder: (ctx2, snap) {
+                      // Inline STG-active filter — no _isStgActive helper
+                      // exists (only _isLtgActive).
+                      final activeStepsCount = snap.data?.spine.stgs
+                              .where((s) =>
+                                  (s['status'] as String?)?.toLowerCase() ==
+                                  'active')
+                              .length ??
+                          0;
+                      final sessionCount = snap.data?.sessions.length ?? 0;
+                      return CueTopBand(
+                        leading:           const BackButton(),
+                        title:             clientName,
+                        horizontalPadding: bandHPad,
+                        islandBuilder: (ctx3, isDesktop) =>
+                            DynamicIslandPreview(
+                          clientName:       clientName,
+                          activeStepsCount: activeStepsCount,
+                          sessionCount:     sessionCount,
+                          whisperMaxWidth:  isDesktop ? 720.0 : 360.0,
+                        ),
+                      );
+                    },
                   );
                 },
               ),
@@ -1030,6 +1031,10 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   builder: (ctx, constraints) {
           final hPad     = constraints.maxWidth > 500 ? 24.0 : 16.0;
           final isMobile = constraints.maxWidth < 600;
+          // Phase 5.4 Sprint 2 commit 1 — 720 breakpoint matches
+          // CueTopBand. On desktop the band absorbs the hero client
+          // name; _buildClientHeader gates its name Text on this flag.
+          final isDesktop = constraints.maxWidth >= 720;
           // Phase 5.3 Round A.1 — persistent right column retired; Profile
           // renders single-column at every viewport. The 680px reading-
           // width cap stays for the existing chart content; Round B's
@@ -1056,7 +1061,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                         slivers: [
                           // ── Zone 1: Identity ────────────────────────────
                           SliverToBoxAdapter(
-                            child: _capped(_buildClientHeader(lc, hPad), 680),
+                            child: _capped(
+                                _buildClientHeader(lc, hPad, isDesktop), 680),
                           ),
 
                           // ── Phase 5.3 Round B.1 — LTG strip ───────────────
@@ -1472,7 +1478,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   // ── Zone 1: Identity header ───────────────────────────────────────────────
 
-  Widget _buildClientHeader(CueColorsResolved c, double hPad) {
+  Widget _buildClientHeader(
+      CueColorsResolved c, double hPad, bool isDesktop) {
     final client    = _client;
     final name      = client['name'] as String? ?? '';
     final age       = client['age'];
@@ -1486,27 +1493,34 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return Container(
       width:   double.infinity,
       color:   c.bgCanvas,
-      padding: EdgeInsets.fromLTRB(hPad, 28, hPad, 20),
+      // Phase 5.4 Sprint 2 commit 1 — top padding tightens to 12 on
+      // desktop where CueTopBand absorbs the hero name; mobile keeps
+      // the original 28 since the hero title still renders here.
+      padding: EdgeInsets.fromLTRB(hPad, isDesktop ? 12 : 28, hPad, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            name,
-            style: CueType.serif(
-              fontSize:    38,
-              fontWeight:  FontWeight.w700,
-              color:       c.textPrimary,
-              letterSpacing: -1.0,
-              height:      1.1,
+          // Phase 5.4 Sprint 2 commit 1 — hero name + its 5px breather
+          // are paired and both gated on !isDesktop. On desktop the band
+          // absorbs the name; on mobile the Playfair hero renders here.
+          if (!isDesktop) ...[
+            Text(
+              name,
+              style: CueType.serif(
+                fontSize:    38,
+                fontWeight:  FontWeight.w700,
+                color:       c.textPrimary,
+                letterSpacing: -1.0,
+                height:      1.1,
+              ),
             ),
-          ),
-          if (metaParts.isNotEmpty) ...[
             const SizedBox(height: 5),
+          ],
+          if (metaParts.isNotEmpty)
             Text(
               metaParts.join(' · '),
               style: GoogleFonts.dmSans(fontSize: 14, color: c.textBody),
             ),
-          ],
           const SizedBox(height: 12),
           // Cadence row + small pencil-edit icon (far right) for editing
           // client details. Discoverable but quiet.

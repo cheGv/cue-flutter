@@ -30,6 +30,11 @@ class AppLayout extends StatelessWidget {
   /// Set to false on screens where the global Cue Study FAB doesn't
   /// belong (add_client, login). Defaults to true everywhere else.
   final bool showCueStudyFab;
+  /// Phase 5.4 Sprint 2 commit 1 — per-route opt-out of the shell
+  /// `_TopBar`. Set true on screens that own their own chrome (Today,
+  /// Client Profile). Default false preserves existing behavior for
+  /// every other screen.
+  final bool skipTopBar;
 
   const AppLayout({
     super.key,
@@ -39,6 +44,7 @@ class AppLayout extends StatelessWidget {
     this.floatingActionButton,
     this.actions = const [],
     this.showCueStudyFab = true,
+    this.skipTopBar = false,
   });
 
   @override
@@ -56,7 +62,8 @@ class AppLayout extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _TopBar(title: title, actions: actions, isMobile: true),
+                if (!skipTopBar)
+                  _TopBar(title: title, actions: actions, isMobile: true),
                 Expanded(
                   child: Stack(
                     children: [
@@ -112,7 +119,8 @@ class AppLayout extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _TopBar(title: title, actions: actions),
+                        if (!skipTopBar)
+                          _TopBar(title: title, actions: actions),
                         Expanded(child: body),
                       ],
                     ),
@@ -165,12 +173,12 @@ class _TopBar extends StatelessWidget {
     final hPad    = isMobile ? 8.0 : 32.0;
     final fontSize = isMobile ? 16.0 : 20.0;
 
-    // Phase 4.0.8-step-B-surface-1.2 — when a screen passes empty
-    // title AND there are no actions AND no back button, skip the
-    // bar entirely. Today screen uses this so the greeting H1 is the
-    // page identity (the spine's once-per-screen serif moment is the
-    // header). Other screens with title strings keep their bar
-    // unchanged.
+    // Phase 5.4 Sprint 2 commit 1 — preferred per-route opt-out is
+    // now `AppLayout(skipTopBar: true)` (used by Today and Client
+    // Profile, which own their own chrome). This empty-check short-
+    // circuit, originally Phase 4.0.8-step-B-surface-1.2, remains as
+    // a defensive fallback for any caller whose title + actions are
+    // all empty and the route isn't reachable via Navigator.pop.
     if (title.isEmpty && !canPop && actions.isEmpty) {
       return const SizedBox.shrink();
     }

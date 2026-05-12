@@ -773,12 +773,15 @@ class _TodayScreenState extends State<TodayScreen> {
   @override
   Widget build(BuildContext context) {
     return AppLayout(
-      // Phase 4.0.8-step-B-surface-1.2 — empty title suppresses the
-      // top bar entirely on Today. The greeting H1 is the page
-      // identity; the spine's "one serif moment per screen" rule is
-      // honored by that headline, not a duplicated page-title bar.
+      // Phase 5.4 Sprint 2 commit 1 — Today owns its own chrome via
+      // the greeting H1 below. `skipTopBar: true` is the explicit
+      // suppression mechanism (previously the empty-title short-
+      // circuit in AppLayout's _TopBar did this implicitly). Title
+      // stays empty; the H1 below is the page identity (the spine's
+      // "one serif moment per screen" rule).
       title:       '',
       activeRoute: 'today',
+      skipTopBar:  true,
       body: _loading
           ? const Center(
               child: CircularProgressIndicator(
