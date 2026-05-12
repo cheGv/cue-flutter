@@ -1,6 +1,6 @@
-// lib/widgets/dynamic_island_preview.dart
+// lib/widgets/cue_hold.dart
 //
-// Phase 5.4 Sprint 2 — Dynamic Island preview. Minimal two-state surface
+// Phase 5.4 Sprint 2 — The Hold. Minimal two-state surface
 // to land shape + typography + position + morph so we can react to the
 // thing rather than spec it forward. NO business logic, no Supabase,
 // no LLM — just the visual register.
@@ -15,7 +15,7 @@
 //   • Width morph via AnimatedSize, 200ms, Curves.easeOutCubic
 //   • Content swap via AnimatedSwitcher, 180ms cross-fade
 //
-// Phase 5.4 Sprint 2 commit 1: HUD strip retired (Path A). Island is
+// Phase 5.4 Sprint 2 commit 1: HUD strip retired (Path A). The Hold is
 // now the sole top-bar surface, mounted inside CueTopBand. The Whisper
 // string reads structurally as a "Reading {name} — …" line; the content
 // register was inherited from the now-deleted HUD strip's _buildHudDetail.
@@ -38,16 +38,16 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_tokens.dart';
 
-class DynamicIslandPreview extends StatefulWidget {
+class CueHold extends StatefulWidget {
   final String clientName;
   final int    activeStepsCount;
   final int    sessionCount;
   /// Max width of the Whisper-state pill. Default 360 (mobile). On
-  /// desktop, CueTopBand passes 720 via its islandBuilder callback
+  /// desktop, CueTopBand passes 720 via its holdBuilder callback
   /// (see widgets/cue_top_band.dart).
   final double whisperMaxWidth;
 
-  const DynamicIslandPreview({
+  const CueHold({
     super.key,
     required this.clientName,
     required this.activeStepsCount,
@@ -56,10 +56,10 @@ class DynamicIslandPreview extends StatefulWidget {
   });
 
   @override
-  State<DynamicIslandPreview> createState() => _DynamicIslandPreviewState();
+  State<CueHold> createState() => _CueHoldState();
 }
 
-class _DynamicIslandPreviewState extends State<DynamicIslandPreview> {
+class _CueHoldState extends State<CueHold> {
   bool _isWhisper = false;
 
   @override
@@ -105,7 +105,7 @@ class _DynamicIslandPreviewState extends State<DynamicIslandPreview> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Arc-and-dot primary mark. Sized to 18 for clear identity at
-                // Island scale (14 read too small in visual review). Pill height
+                // the Hold's scale (14 read too small in visual review). Pill height
                 // grows from ~30 to ~32-34px as a consequence. Static across
                 // Idle/Whisper for this commit; per-state mark behavior deferred.
                 SvgPicture.asset(

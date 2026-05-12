@@ -24,7 +24,7 @@ import '../widgets/app_layout.dart';
 import '../widgets/brief_thought_view.dart';
 // Phase 5.3 Round A.2 — Cue popup architecture. Phase 5.4 Sprint 2
 // commit 1 — HUD strip retired; popup floats bottom-right when summoned
-// (⌘K, sidebar tap). Dynamic Island in widgets/dynamic_island_preview.dart
+// (⌘K, sidebar tap). The Hold in widgets/cue_hold.dart
 // is the top-bar surface but does not summon the popup.
 import '../widgets/cue_popup.dart';
 // Phase 5.3 Round B — hero pillar widgets replacing the goal-card section.
@@ -35,8 +35,8 @@ import '../widgets/profile/ltg_strip.dart';
 import '../widgets/profile/next_session_pillar.dart';
 import '../widgets/profile/timeline_strip.dart';
 import '../widgets/cue_cuttlefish.dart';
+import '../widgets/cue_hold.dart';
 import '../widgets/cue_top_band.dart';
-import '../widgets/dynamic_island_preview.dart';
 import '../widgets/goal_achieved_overlay.dart';
 import '../widgets/noticed_moment.dart';
 import 'add_session_screen.dart';
@@ -78,7 +78,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // The widget's hardcoded templates (e.g. "$firstName is your first")
   // bypass the LLM brief prompt's chitchat ban and caused duplicate-render
   // conflict with BriefThoughtView. Widget remains intact for Phase 5.4
-  // re-mount via Dynamic Island state machine or summoned popup.
+  // re-mount via the Hold's state machine or summoned popup.
   // To re-enable: flip this flag to false.
   static const bool _kHideNoticedMomentB3 = true;
 
@@ -958,7 +958,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       skipTopBar:  true,
       // Phase 5.3 Round A.2 — popup summon affordances wired: ⌘K (or
       // Ctrl+K on non-mac) toggles, Esc closes. Phase 5.4 Sprint 2
-      // commit 1 — HUD strip retired (Path A); Dynamic Island is the
+      // commit 1 — HUD strip retired (Path A); the Hold is the
       // top-bar surface but does NOT summon the popup (architectural
       // commitment: one surface, not two — popup remains summoned via
       // ⌘K shortcut or Cue Study FAB). CuePopup is a Positioned child
@@ -977,17 +977,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // ── Phase 5.4 Sprint 2 commit 1 — Dynamic Island top bar ──
-              // Path A landed: HUD retired, Island becomes the sole top-
-              // bar surface inside CueTopBand. The band absorbs nav
+              // ── Phase 5.4 Sprint 2 commit 1 — The Hold — top-bar surface ──
+              // Path A landed: HUD retired, the Hold becomes the sole
+              // top-bar surface inside CueTopBand. The band absorbs nav
               // chrome on desktop (back arrow + client name); mobile
               // keeps the hero title in _buildClientHeader below.
               // ⌘K shortcut binding stays at workspace level (above this
               // builder); the visual ⌘K hint that lived in HUD is dropped
               // pending intentional redesign. Green dot indicator retired
               // with HUD; will return as Thinking-state indicator inside
-              // Island in a later commit. See widgets/cue_top_band.dart
-              // and widgets/dynamic_island_preview.dart.
+              // the Hold in a later commit. See widgets/cue_top_band.dart
+              // and widgets/cue_hold.dart.
               //
               // LayoutBuilder wraps the FutureBuilder so we can compute
               // bandHPad locally — the workspace's hPad lives inside the
@@ -1014,8 +1014,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                         leading:           const BackButton(),
                         title:             clientName,
                         horizontalPadding: bandHPad,
-                        islandBuilder: (ctx3, isDesktop) =>
-                            DynamicIslandPreview(
+                        holdBuilder: (ctx3, isDesktop) =>
+                            CueHold(
                           clientName:       clientName,
                           activeStepsCount: activeStepsCount,
                           sessionCount:     sessionCount,
@@ -1099,7 +1099,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                           // multiple-sessions-today) bypass the LLM ban list
                           // shipped in the proxy prompt merge (1f48d23 on
                           // cue-ai-proxy main). Phase 5.4 may re-mount via
-                          // different surface (Dynamic Island state machine or
+                          // different surface (the Hold's state machine or
                           // summoned popup) once the dual-system reconciliation
                           // is designed. Widget remains intact at lib/widgets/
                           // noticed_moment.dart; the import above stays.

@@ -6,9 +6,9 @@
 // Today, Roster, Assessing, Narrator follows in later Sprint 2 commits.
 //
 // Responsive layout (LayoutBuilder, never MediaQuery):
-//   • <720px (mobile): leading + Spacer + Island + Spacer.
+//   • <720px (mobile): leading + Spacer + the Hold + Spacer.
 //   • ≥720px (desktop): leading + 12px gap + title (Syne 18 w600) +
-//                       Spacer + Island + Spacer + trailing.
+//                       Spacer + the Hold + Spacer + trailing.
 //   Title is dropped on mobile; consumer renders hero title below.
 //
 // Sibling-border pattern: bottom 1px border is a separate child
@@ -17,23 +17,23 @@
 // border in the padding-Container's box model on the prior Path A
 // attempt.
 //
-// Island construction goes through islandBuilder(BuildContext, bool
+// The Hold's construction goes through holdBuilder(BuildContext, bool
 // isDesktop) — the band owns the LayoutBuilder and passes isDesktop
-// so the caller can construct the Island with the appropriate Whisper
+// so the caller can construct the Hold with the appropriate Whisper
 // maxWidth (typically 360 mobile, 720 desktop). Keeps CueTopBand
-// decoupled from any specific Island widget.
+// decoupled from the Hold's specific implementation.
 //
 // horizontalPadding: passed by the caller so the band's leading edge
 // (where the back arrow sits) aligns with the page content's leading
 // edge. Client Profile passes its computed hPad (24 desktop / 16
 // mobile); future surfaces match their own page padding formula.
 //
-// Watch-item flagged for visual review: Island is centered via two
+// Watch-item flagged for visual review: the Hold is centered via two
 // equal-flex Spacers, meaning it drifts horizontally based on the
 // (leading + title) width. Short names center cleanly; longer names
-// push the Island right. Standard nav-bar behavior — if drift feels
+// push the Hold right. Standard nav-bar behavior — if drift feels
 // jittery across personas, follow-up commit converts to a Stack with
-// Island in Align(Alignment.center) and a Row underneath for chrome.
+// the Hold in Align(Alignment.center) and a Row underneath for chrome.
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -59,10 +59,10 @@ class CueTopBand extends StatelessWidget {
   /// Rendered only on desktop.
   final Widget? trailing;
 
-  /// Builder that constructs the Island for this band. Receives the
+  /// Builder that constructs the Hold for this band. Receives the
   /// computed [isDesktop] flag so callers can apply the appropriate
   /// Whisper maxWidth (typically 360 mobile, 720 desktop).
-  final Widget Function(BuildContext context, bool isDesktop) islandBuilder;
+  final Widget Function(BuildContext context, bool isDesktop) holdBuilder;
 
   /// Horizontal padding inside the band's Row. Caller passes its
   /// page content padding so the band's leading edge aligns with
@@ -71,7 +71,7 @@ class CueTopBand extends StatelessWidget {
 
   const CueTopBand({
     super.key,
-    required this.islandBuilder,
+    required this.holdBuilder,
     this.leading,
     this.title,
     this.trailing,
@@ -114,7 +114,7 @@ class CueTopBand extends StatelessWidget {
                     ),
                   ],
                   const Spacer(),
-                  islandBuilder(ctx, isDesktop),
+                  holdBuilder(ctx, isDesktop),
                   const Spacer(),
                   if (isDesktop && trailing != null) trailing!,
                 ],
