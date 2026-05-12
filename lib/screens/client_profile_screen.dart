@@ -12,8 +12,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/timeline_entry.dart';
 import '../services/name_formatter.dart';
-import '../services/session_archive_service.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
@@ -33,36 +33,16 @@ import '../widgets/profile/active_stgs_pillar.dart';
 import '../widgets/profile/last_session_pillar.dart';
 import '../widgets/profile/ltg_strip.dart';
 import '../widgets/profile/next_session_pillar.dart';
+import '../widgets/profile/timeline_strip.dart';
 import '../widgets/cue_cuttlefish.dart';
 import '../widgets/goal_achieved_overlay.dart';
 import '../widgets/noticed_moment.dart';
-import 'report_screen.dart';
 import 'add_session_screen.dart';
 import 'add_client_screen.dart';
 import 'goal_authoring_screen.dart';
 import 'ltg_edit_screen.dart';
 import 'pre_therapy_planning_fluency_screen.dart';
-
-// ── Timeline data model ───────────────────────────────────────────────────────
-enum TimelineEntryType { session, goalSet, goalAchieved, assessment, upload, milestone }
-
-class TimelineEntry {
-  final DateTime date;
-  final TimelineEntryType type;
-  final String title;
-  final String? subtitle;
-  final String? referenceId;
-  final Map<String, dynamic>? rawData;
-
-  const TimelineEntry({
-    required this.date,
-    required this.type,
-    required this.title,
-    this.subtitle,
-    this.referenceId,
-    this.rawData,
-  });
-}
+import 'timeline_route.dart';
 
 // ── Data classes ──────────────────────────────────────────────────────────────
 class _SpineData {
@@ -92,6 +72,14 @@ class ClientProfileScreen extends StatefulWidget {
 }
 
 class _ClientProfileScreenState extends State<ClientProfileScreen> {
+  // Phase 5.3 B.3 — NoticedMomentView temporarily hidden on Profile.
+  // The widget's hardcoded templates (e.g. "$firstName is your first")
+  // bypass the LLM brief prompt's chitchat ban and caused duplicate-render
+  // conflict with BriefThoughtView. Widget remains intact for Phase 5.4
+  // re-mount via Dynamic Island state machine or summoned popup.
+  // To re-enable: flip this flag to false.
+  static const bool _kHideNoticedMomentB3 = true;
+
   final _supabase = Supabase.instance.client;
 
   late Future<_SpineData>                _spineFuture;
@@ -493,6 +481,35 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     // and chips without manual reload.
     _refreshClientRow();
   }
+
+  // ── Timeline mapping ─────────────────────────────────────────────────────
+
+  // ── B.3 — TimelineEntry → TimelineEvent mapping for TimelineStrip ────────
+  // Strip simplifies entry types to session/parent/goal at the dot-level
+  // grain. Constructed types are session/goalSet/goalAchieved (per
+  // _makeReadyFuture); the other enum values are never instantiated.
+  // Phase 5.4: when parent comms join the timeline, add a parent-typed
+  // entry source and route it to TimelineEventType.parent here.
+  // Empty-SOAP sessions emit content: '' so they appear as hollow dots on
+  // the strip but don't burn "Last 3 events" list real estate (filter +
+  // empty guards in TimelineStrip handle the rest).
+  TimelineEvent _entryToEvent(TimelineEntry entry) => TimelineEvent(
+        date: entry.date,
+        type: entry.type == TimelineEntryType.session
+            ? TimelineEventType.session
+            : TimelineEventType.goal,
+        content: switch (entry.type) {
+          TimelineEntryType.session =>
+              (entry.subtitle?.isNotEmpty ?? false) ? entry.subtitle! : '',
+          _ =>
+              (entry.subtitle?.isNotEmpty ?? false)
+                  ? entry.subtitle!
+                  : entry.title,
+        },
+        isAttested: entry.type == TimelineEntryType.session &&
+            ((entry.rawData?['clinician_attested'] as bool?) ?? false),
+        sourceId: entry.referenceId,
+      );
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
@@ -1070,8 +1087,21 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                           ),
 
                           // ── Cue noticed (Phase 2) ───────────────────────
-                          // Detection runs over the loaded chart data;
-                          // shows nothing if no special moment matches.
+                          // HIDDEN B.3: NoticedMomentView duplicate-render
+                          // conflict with BriefThoughtView. Hardcoded templates
+                          // (gap, stuck, monday-first, returning-soft,
+                          // multiple-sessions-today) bypass the LLM ban list
+                          // shipped in the proxy prompt merge (1f48d23 on
+                          // cue-ai-proxy main). Phase 5.4 may re-mount via
+                          // different surface (Dynamic Island state machine or
+                          // summoned popup) once the dual-system reconciliation
+                          // is designed. Widget remains intact at lib/widgets/
+                          // noticed_moment.dart; the import above stays.
+                          // `if (!_kHideNoticedMomentB3)` gate keeps the symbols
+                          // referenced — NoticedMomentView and detectNoticedMoment
+                          // stay in the compilation graph so Phase 5.4 re-mount
+                          // is a one-character flag flip.
+                          if (!_kHideNoticedMomentB3)
                           SliverToBoxAdapter(
                             child: _capped(FutureBuilder<_ReadyData>(
                               future: _readyFuture,
@@ -1204,11 +1234,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                       // button on the brief card is
                                       // suppressed by passing null.
                                       onThinkWithCue: null,
-                                      padding: EdgeInsets.fromLTRB(
+                                      outerMargin: EdgeInsets.fromLTRB(
                                           hPad,
                                           CueGap.s24,
                                           hPad,
-                                          CueGap.s24),
+                                          CueGap.s18),
                                     );
                                   }
 
@@ -1235,11 +1265,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                       // button on the brief card is
                                       // suppressed by passing null.
                                       onThinkWithCue: null,
-                                      padding: EdgeInsets.fromLTRB(
+                                      outerMargin: EdgeInsets.fromLTRB(
                                           hPad,
                                           CueGap.s24,
                                           hPad,
-                                          CueGap.s24),
+                                          CueGap.s18),
                                     );
                                   }
 
@@ -1264,11 +1294,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                                       // button on the brief card is
                                       // suppressed by passing null.
                                       onThinkWithCue: null,
-                                        padding: EdgeInsets.fromLTRB(
+                                        outerMargin: EdgeInsets.fromLTRB(
                                             hPad,
                                             CueGap.s24,
                                             hPad,
-                                            CueGap.s24),
+                                            CueGap.s18),
                                       );
                                     },
                                   );
@@ -1303,20 +1333,62 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             ),
                           ),
 
-                          // ── Zone 4: Timeline ────────────────────────────
+                          // ── Zone 4: Timeline (B.3 — TimelineStrip) ──────
+                          // Compressed strip replaces the vertical SliverList
+                          // (~3000px → ~240px). Full vertical view lives at
+                          // /clients/<id>/timeline via TimelineRoute, reached
+                          // through the "See all N events →" link.
                           SliverToBoxAdapter(
                             child: _capped(FutureBuilder<_ReadyData>(
                               future: _readyFuture,
                               builder: (ctx2, snap) {
-                                final lc2 = CueColorsResolved.of(ctx2);
+                                // Three-state branch: while loading, show a
+                                // small inline spinner so charts with 21
+                                // sessions don't flash the TimelineStrip
+                                // empty-state during the brief data fetch.
                                 if (snap.connectionState ==
                                     ConnectionState.waiting) {
-                                  return _buildTimelineLoading(lc2, hPad);
+                                  return Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                        hPad, CueGap.s24, hPad, CueGap.s18),
+                                    child: SizedBox(
+                                      height: 80,
+                                      child: Center(
+                                        child: SizedBox(
+                                          width:  20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 1.5,
+                                              color: CueColorsResolved.of(ctx2).teal),
+                                        ),
+                                      ),
+                                    ),
+                                  );
                                 }
-                                return _buildTimeline(
-                                  snap.data?.timeline ?? [],
-                                  lc2, hPad,
-                                  clientId, clientName,
+                                final entries = snap.data?.timeline ??
+                                    const <TimelineEntry>[];
+                                final events = entries
+                                    .map(_entryToEvent)
+                                    .toList();
+                                return Padding(
+                                  padding: EdgeInsets.fromLTRB(
+                                      hPad, CueGap.s24, hPad, CueGap.s18),
+                                  child: TimelineStrip(
+                                    events:          events,
+                                    totalEventCount: entries.length,
+                                    onSeeAll: entries.isEmpty
+                                        ? null
+                                        : () => Navigator.push(
+                                              ctx2,
+                                              MaterialPageRoute(
+                                                builder: (_) => TimelineRoute(
+                                                  clientId:   clientId,
+                                                  clientName: clientName,
+                                                  entries:    entries,
+                                                ),
+                                              ),
+                                            ),
+                                  ),
                                 );
                               },
                             ), 680),
@@ -2189,418 +2261,6 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  // ── Zone 4: Timeline ──────────────────────────────────────────────────────
-
-  Widget _buildTimelineLoading(CueColorsResolved c, double hPad) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(hPad, 48, hPad, 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(height: 0.5, color: c.border),
-          const SizedBox(height: 20),
-          Text(
-            'TIMELINE',
-            style: GoogleFonts.dmSans(
-              fontSize:    10,
-              fontWeight:  FontWeight.w600,
-              color:       c.textBody,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Center(
-            child: CircularProgressIndicator(
-                strokeWidth: 1.5, color: c.teal),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimeline(
-    List<TimelineEntry> entries,
-    CueColorsResolved c,
-    double hPad,
-    String clientId,
-    String clientName,
-  ) {
-    return Padding(
-      padding: EdgeInsets.fromLTRB(hPad, 48, hPad, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(height: 0.5, color: c.border),
-          const SizedBox(height: 20),
-          Text(
-            'TIMELINE',
-            style: GoogleFonts.dmSans(
-              fontSize:    10,
-              fontWeight:  FontWeight.w600,
-              color:       c.textBody,
-              letterSpacing: 1.2,
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          if (entries.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                'Sessions and goals will appear here as you document them.',
-                style: GoogleFonts.dmSans(
-                  fontSize:  14,
-                  color:     c.textBody,
-                  fontStyle: FontStyle.italic,
-                  height:    1.6,
-                ),
-              ),
-            )
-          else
-            // Stack: teal line (Positioned) behind entry Column
-            Stack(
-              children: [
-                // Continuous teal line at x=83 (center of 24px spine, after 72px date col)
-                Positioned(
-                  left:  83,
-                  top:   0,
-                  bottom: 0,
-                  child: Container(width: 2, color: c.tealFaded),
-                ),
-                Column(
-                  children: entries
-                      .map((e) => _buildTimelineEntry(
-                            e, c, clientId, clientName))
-                      .toList(),
-                ),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimelineEntry(
-    TimelineEntry entry,
-    CueColorsResolved c,
-    String clientId,
-    String clientName,
-  ) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    final dayStr = entry.date.day.toString();
-    final monStr = months[entry.date.month - 1];
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Date column — 72px, right-aligned
-          SizedBox(
-            width: 72,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 1, right: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    dayStr,
-                    style: GoogleFonts.dmSans(
-                      fontSize:   13,
-                      fontWeight: FontWeight.w600,
-                      color:      c.textBody,
-                    ),
-                  ),
-                  Text(
-                    monStr,
-                    style: GoogleFonts.dmSans(fontSize: 10, color: c.textMuted),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Spine — 24px; dot centered on the Positioned teal line
-          SizedBox(
-            width: 24,
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Container(
-                width:  10,
-                height: 10,
-                margin: const EdgeInsets.only(top: 3),
-                decoration: BoxDecoration(
-                  shape:  BoxShape.circle,
-                  color:  c.bgCard,
-                  border: Border.all(color: c.teal, width: 2),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Content card — expanded
-          Expanded(
-            child: _buildEntryCard(entry, c, clientId, clientName),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEntryCard(
-    TimelineEntry entry,
-    CueColorsResolved c,
-    String clientId,
-    String clientName,
-  ) {
-    switch (entry.type) {
-      case TimelineEntryType.session:
-        return _buildSessionCard(entry, c, clientId, clientName);
-      case TimelineEntryType.goalSet:
-        return _buildGoalSetCard(entry, c);
-      case TimelineEntryType.goalAchieved:
-        return _buildGoalAchievedCard(entry, c);
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildSessionCard(
-    TimelineEntry entry,
-    CueColorsResolved c,
-    String clientId,
-    String clientName,
-  ) {
-    // Phase 4.0.7.31b-timeline-notes-aware — third site of the legacy
-    // "soap_note is the only session content" assumption pattern (after
-    // report_screen.dart:196 fixed in aec81a9 and _sessionIsEmpty fixed
-    // in 1ee37ba). soap_note OR notes counts as documentation; either is
-    // a tap-able review target. Tri-state visual ("Notes captured ·
-    // Generate report?") deferred to 4.0.7.34 design pass.
-    final raw      = entry.rawData;
-    final hasSoap  = (raw?['soap_note'] as String?)?.trim().isNotEmpty == true;
-    final hasNotes = (raw?['notes']     as String?)?.trim().isNotEmpty == true;
-    final hasNote  = hasSoap || hasNotes;
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color:        c.bgCard,
-        borderRadius: BorderRadius.circular(12),
-        border: c.isDark ? Border.all(color: c.border, width: 0.5) : null,
-        boxShadow: c.isDark
-            ? const [
-                BoxShadow(
-                  color:      Color(0x33000000),
-                  blurRadius: 6,
-                  offset:     Offset(0, 1),
-                ),
-              ]
-            : const [
-                BoxShadow(
-                  color:      Color(0x08000000),
-                  blurRadius: 8,
-                  offset:     Offset(0, 2),
-                ),
-              ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Phase 4.0.7.10b — eyebrow row with inline kebab. The popup
-          // is the canonical inline-archive affordance for session cards
-          // on the client profile timeline; previously the SLP had to
-          // open the report screen to reach the same action.
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  'Session · ${entry.title}',
-                  style: GoogleFonts.dmSans(
-                    fontSize:    10,
-                    fontWeight:  FontWeight.w600,
-                    color:       c.teal,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 28,
-                height: 28,
-                child: PopupMenuButton<String>(
-                  tooltip: 'More',
-                  iconSize: 16,
-                  padding: EdgeInsets.zero,
-                  icon: Icon(
-                    Icons.more_vert,
-                    size: 16,
-                    color: c.textBody,
-                  ),
-                  onSelected: (value) async {
-                    if (value != 'archive') return;
-                    if (entry.rawData == null) return;
-                    final archived = await archiveSession(
-                      context: context,
-                      session: entry.rawData!,
-                    );
-                    if (archived && mounted) _refreshSpine();
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem<String>(
-                      value: 'archive',
-                      child: Text(
-                        'Archive this session',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (entry.subtitle != null && entry.subtitle!.isNotEmpty) ...[
-            const SizedBox(height: 5),
-            Text(
-              entry.subtitle!,
-              style: GoogleFonts.dmSans(
-                fontSize:  13,
-                color:     c.textBody,
-                fontStyle: FontStyle.italic,
-                height:    1.5,
-              ),
-              maxLines:  2,
-              overflow:  TextOverflow.ellipsis,
-            ),
-          ],
-          const SizedBox(height: 8),
-          GestureDetector(
-            // Phase 4.0.7.36 — await the ReportScreen pop and refresh
-            // the spine. ReportScreen may mutate soap_note /
-            // parent_summary / notes / clinician_attested via the
-            // SOAP form save, parent-update auto-save, or the
-            // "Continue editing →" → SessionCaptureScreen edit flow.
-            // Without the refresh, the timeline subtitle preview
-            // (now driven by _extractSoapPreview's 3-tier fallback,
-            // 31c) reads stale until the SLP navigates away and back.
-            onTap: hasNote && entry.rawData != null
-                ? () async {
-                    // Phase 4.0.7.39 — RouteSettings.name reflects
-                    // /sessions/:id in the URL bar; the imperative push
-                    // forwards the already-loaded session row so the
-                    // timeline → report transition stays one-frame.
-                    final sid = entry.rawData!['id'];
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        settings: sid == null
-                            ? null
-                            : RouteSettings(name: '/sessions/$sid'),
-                        builder: (_) => ReportScreen(
-                          session:    entry.rawData!,
-                          clientName: clientName,
-                          clientId:   clientId,
-                        ),
-                      ),
-                    );
-                    if (mounted) _refreshSpine();
-                  }
-                : null,
-            child: hasNote
-                ? Text(
-                    'View note →',
-                    style: GoogleFonts.dmSans(
-                      fontSize:   12,
-                      color:      c.teal,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                : Text(
-                    'Pending documentation',
-                    style: GoogleFonts.dmSans(
-                      fontSize:   12,
-                      color:      c.amber,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGoalSetCard(TimelineEntry entry, CueColorsResolved c) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color:        c.tealSurface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            entry.title,
-            style: GoogleFonts.dmSans(
-              fontSize:   11,
-              fontWeight: FontWeight.w600,
-              color:      c.teal,
-            ),
-          ),
-        ),
-        if (entry.subtitle != null && entry.subtitle!.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Text(
-            entry.subtitle!,
-            style: GoogleFonts.dmSans(
-                fontSize: 13, color: c.textPrimary, height: 1.5),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-        const SizedBox(height: 4),
-      ],
-    );
-  }
-
-  Widget _buildGoalAchievedCard(TimelineEntry entry, CueColorsResolved c) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color:        c.amber.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            '✓ ${entry.title}',
-            style: GoogleFonts.dmSans(
-              fontSize:   11,
-              fontWeight: FontWeight.w600,
-              color:      c.amber,
-            ),
-          ),
-        ),
-        if (entry.subtitle != null && entry.subtitle!.isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Text(
-            entry.subtitle!,
-            style: GoogleFonts.dmSans(
-                fontSize: 13, color: c.textPrimary, height: 1.5),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-        const SizedBox(height: 4),
-      ],
     );
   }
 

@@ -22,6 +22,7 @@ import '../theme/cue_theme.dart';
 import '../theme/cue_tokens.dart';
 import '../theme/cue_typography.dart';
 import 'cue_cuttlefish.dart';
+import 'linked_evidence.dart';
 
 const _briefUrl = 'https://cue-ai-proxy.onrender.com/generate-brief';
 
@@ -31,15 +32,17 @@ class BriefThoughtView extends StatefulWidget {
   final String       chartContext;
   /// Optional callback when "Think with Cue" is tapped.
   final VoidCallback? onThinkWithCue;
-  /// EdgeInsets — caller controls outer padding/margin.
-  final EdgeInsets   padding;
+  /// Phase 5.3 B.3 — outer margin around the card chrome. Internal content
+  /// padding is fixed inside BriefThoughtCard at (20, 16). Default applies
+  /// only the spec'd bottom: 18; callers pass full EdgeInsets when they need
+  /// horizontal margin or top spacing.
+  final EdgeInsets   outerMargin;
 
   const BriefThoughtView({
     super.key,
     required this.chartContext,
     this.onThinkWithCue,
-    this.padding = const EdgeInsets.symmetric(
-        horizontal: CueGap.s24, vertical: CueGap.s24),
+    this.outerMargin = const EdgeInsets.only(bottom: 18),
   });
 
   @override
@@ -94,7 +97,7 @@ class _BriefThoughtViewState extends State<BriefThoughtView> {
       loading:        _loading,
       errorText:      _error,
       onThinkWithCue: widget.onThinkWithCue,
-      padding:        widget.padding,
+      outerMargin:    widget.outerMargin,
     );
   }
 }
@@ -112,7 +115,8 @@ class BriefThoughtCard extends StatelessWidget {
   final bool         loading;
   final String?      errorText;
   final VoidCallback? onThinkWithCue;
-  final EdgeInsets   padding;
+  // Phase 5.3 B.3 — see BriefThoughtView for semantics.
+  final EdgeInsets   outerMargin;
 
   const BriefThoughtCard({
     super.key,
@@ -121,8 +125,7 @@ class BriefThoughtCard extends StatelessWidget {
     this.loading        = false,
     this.errorText,
     this.onThinkWithCue,
-    this.padding = const EdgeInsets.symmetric(
-        horizontal: CueGap.s24, vertical: CueGap.s24),
+    this.outerMargin = const EdgeInsets.only(bottom: 18),
   });
 
   @override
@@ -130,16 +133,17 @@ class BriefThoughtCard extends StatelessWidget {
     final cue     = CueColorsResolved.of(context);
     final ink     = cue.textPrimary;
     final amberLn = cue.amber;
-    final divider = cue.border;
-    // (skeletonFill computed inline at _Skeleton call site below — uses
-    // cue.borderHover for visible loading bars on neutral canvas.)
+    // skeletonFill computed inline at _Skeleton call site below — uses
+    // cue.borderHover for visible loading bars on neutral canvas.
 
     return Container(
+      margin: outerMargin,
       decoration: BoxDecoration(
-        border: Border(
-            bottom: BorderSide(color: divider, width: CueSize.hairline)),
+        color:        cue.bgCard,
+        border:       Border.all(width: CueSize.hairline, color: cue.border),
+        borderRadius: BorderRadius.circular(10),
       ),
-      padding: padding,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -155,13 +159,20 @@ class BriefThoughtCard extends StatelessWidget {
               ),
               const SizedBox(width: CueGap.s8),
               Text(
-                'CUE NOTICED',
-                style: CueType.labelSmall.copyWith(color: amberLn),
+                'Cue · what\'s in the chart',
+                style: TextStyle(
+                  fontFamily:         'Iowan Old Style',
+                  fontFamilyFallback: const ['Georgia', 'Charter', 'serif'],
+                  fontStyle:          FontStyle.italic,
+                  fontSize:           14,
+                  fontWeight:         FontWeight.w500,
+                  color:              amberLn,
+                ),
               ),
-              const SizedBox(width: CueGap.s12),
-              Expanded(
-                child: Container(
-                    height: CueSize.hairline, color: divider)),
+              // Optional right-aligned timestamp via Spacer() + Text per spec
+              // ("Inter regular 11px textMuted, 'just now' relative string").
+              // Omitted for B.3 since the data isn't threaded through —
+              // wire when timestamp source lands.
             ],
           ),
           const SizedBox(height: CueGap.s16),
@@ -177,7 +188,7 @@ class BriefThoughtCard extends StatelessWidget {
                   .copyWith(color: CueColors.coral),
             )
           else
-            _renderThought(ink, amberLn),
+            _renderThought(ink),
           if (!loading &&
               errorText == null &&
               onThinkWithCue != null) ...[
@@ -189,29 +200,72 @@ class BriefThoughtCard extends StatelessWidget {
     );
   }
 
-  Widget _renderThought(Color ink, Color amberLn) {
+  Widget _renderThought(Color ink) {
     final t  = thought   ?? '';
     final hl = highlight ?? '';
     if (t.isEmpty) return const SizedBox.shrink();
 
-    if (hl.isEmpty || !t.contains(hl)) {
-      return Text(t, style: CueType.displayMedium.copyWith(color: ink));
+    // Phase 5.3 B.3 — Iowan Old Style italic 18/500 with -0.005em tracking.
+    // Fallback chain mirrors _hero_pillar_frame.dart (the locked pattern).
+    // Highlight phrase is split out and rendered via LinkedEvidence so the
+    // semantic emphasis (olive underline + faint tint) replaces the pre-B.3
+    // bright-amber TextSpan treatment. Match is case-insensitive; the
+    // displayed substring is sliced from `t` so casing matches the prose.
+    final headlineStyle = TextStyle(
+      fontFamily:         'Iowan Old Style',
+      fontFamilyFallback: const ['Georgia', 'Charter', 'serif'],
+      fontStyle:          FontStyle.italic,
+      fontSize:           18,
+      fontWeight:         FontWeight.w500,
+      height:             1.35,
+      letterSpacing:      -0.09,  // -0.005em × 18
+      color:              ink,
+    );
+
+    if (hl.isEmpty) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child:       Text(t, style: headlineStyle),
+      );
     }
 
-    final idx    = t.indexOf(hl);
-    final before = t.substring(0, idx);
-    final after  = t.substring(idx + hl.length);
-    return RichText(
-      text: TextSpan(
-        style: CueType.displayMedium.copyWith(color: ink),
-        children: [
-          TextSpan(text: before),
-          TextSpan(
-            text:  hl,
-            style: CueType.displayMedium.copyWith(color: amberLn),
-          ),
-          TextSpan(text: after),
-        ],
+    // Case-insensitive locate so highlight matches even when LLM returns a
+    // casing that differs from the thought string. For ASCII clinical text
+    // (the current and foreseeable case) lowerHl.length == hl.length and
+    // the slice from `t` lines up correctly. For hypothetical future Unicode
+    // cases (Indic script briefings, accented chars), toLowerCase() can
+    // change string length — accept the limitation for B.3, proper
+    // grapheme-cluster handling banked for i18n work.
+    final lowerHl = hl.toLowerCase();
+    final idx     = t.toLowerCase().indexOf(lowerHl);
+    if (idx < 0) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child:       Text(t, style: headlineStyle),
+      );
+    }
+    final before     = t.substring(0, idx);
+    final hlFromText = t.substring(idx, idx + lowerHl.length);
+    final after      = t.substring(idx + lowerHl.length);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: RichText(
+        text: TextSpan(
+          style: headlineStyle,
+          children: [
+            TextSpan(text: before),
+            WidgetSpan(
+              alignment: PlaceholderAlignment.baseline,
+              baseline:  TextBaseline.alphabetic,
+              child: LinkedEvidence(
+                text:      hlFromText,
+                type:      LinkedEvidenceType.data,
+                textStyle: headlineStyle,
+              ),
+            ),
+            TextSpan(text: after),
+          ],
+        ),
       ),
     );
   }

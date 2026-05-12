@@ -37,15 +37,25 @@ class CueColorsResolved {
   final Color bgCardHover;
   final Color bgChrome;
   final Color bgInput;
+  // Phase 5.3 B.3 — alpha-derived chip/pill fill, sits between bgCard and a
+  // tinted accent. Used by TimelineStrip's "last 30 days" pill ground.
+  final Color bgMuted;
 
   // Borders
   final Color border;
   final Color borderHover;
   final Color borderEmphasis;
+  // Phase 5.3 B.3 — softer than border (which itself is the subtle one).
+  // Used by TimelineStrip's "Last 3 events" dashed row separators.
+  final Color borderMuted;
 
   // Text
   final Color textPrimary;
   final Color textBody;
+  // Phase 5.3 B.3 — alias for textBody (same semantic slot). Introduced so
+  // surfaces specced with "textSecondary" don't have to reach for textBody
+  // and silently lose the conceptual mapping.
+  final Color textSecondary;
   final Color textMuted;
   final Color textDim;
 
@@ -72,11 +82,14 @@ class CueColorsResolved {
     required this.bgCardHover,
     required this.bgChrome,
     required this.bgInput,
+    required this.bgMuted,
     required this.border,
     required this.borderHover,
     required this.borderEmphasis,
+    required this.borderMuted,
     required this.textPrimary,
     required this.textBody,
+    required this.textSecondary,
     required this.textMuted,
     required this.textDim,
     required this.olive,
@@ -98,11 +111,14 @@ class CueColorsResolved {
     bgCardHover:    t.kCuePaper,
     bgChrome:       t.kCueInk,
     bgInput:        t.kCueSurfaceWhite,
+    bgMuted:        Color(0x14736B62), // 8% alpha kCueInkSecondary tone
     border:         t.kCueBorder,
     borderHover:    Color(0xFFD8D2C5),
     borderEmphasis: Color(0xFFCEC8BA),
+    borderMuted:    Color(0xFFE8E4DA), // between kCueBorder and bgCanvas
     textPrimary:    t.kCueInk,
     textBody:       t.kCueInkSecondary,
+    textSecondary:  t.kCueInkSecondary, // alias for textBody
     textMuted:      t.kCueInkTertiary,
     textDim:        Color(0xFFB4B2A9),
     olive:          t.kCueOlive,
@@ -124,11 +140,14 @@ class CueColorsResolved {
     bgCardHover:    t.kCueBgCardHover,
     bgChrome:       t.kCueBgChrome,
     bgInput:        t.kCueBgInput,
+    bgMuted:        Color(0x14B5B0A8), // 8% alpha textBody tone (founder bump 6→8)
     border:         Color(0xFF1F1F1F),
     borderHover:    t.kCueBorderHover,
     borderEmphasis: t.kCueBorderEmphasis,
+    borderMuted:    Color(0xFF161616), // between border (1F1F1F) and bgCanvas
     textPrimary:    t.kCueTextPrimary,
     textBody:       t.kCueTextBody,
+    textSecondary:  t.kCueTextBody, // alias for textBody
     textMuted:      t.kCueTextMuted,
     textDim:        t.kCueTextDim,
     olive:          Color(0xFF97C459),
