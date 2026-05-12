@@ -6,9 +6,10 @@
 // no LLM — just the visual register.
 //
 // States (local State<bool>, toggle on tap):
-//   • Idle    — ~140px pill, cuttlefish idle + "Cue · ready"
-//   • Whisper — content-fit pill (capped 480px), cuttlefish thinking +
-//                observation string built from passed counts
+//   • Idle    — ~140px pill, arc-and-dot mark + "Cue · ready"
+//   • Whisper — content-fit pill (capped 360 mobile / 720 desktop),
+//                arc-and-dot mark + observation string built from
+//                passed counts
 //
 // Animations:
 //   • Width morph via AnimatedSize, 200ms, Curves.easeOutCubic
@@ -24,16 +25,18 @@
 // shape only; subsequent sprints add states incrementally based on
 // what this preview teaches us.
 //
-// Pill height: not explicitly set. Content-driven by the cuttlefish
-// slot (22) + vertical padding (CueGap.s6 × 2 = 12) → ~34px natural
-// height. 2px taller than the original spec's 32 but preserves the
-// locked 18/22 cuttlefish slot pattern from Fix 2's Option A decision.
+// Pill height: not explicitly set. Content-driven by the 18×18
+// arc-and-dot mark + vertical padding (CueGap.s6 × 2 = 12)
+// → ~32-34px natural height. Mark sized to 18px after 14px read
+// too small in visual review; pill grows slightly to accommodate.
+// Iowan italic text (13 × 1.4 ≈ 18) centers vertically alongside
+// the mark via Row's CrossAxisAlignment.center.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_tokens.dart';
-import 'cue_cuttlefish.dart';
 
 class DynamicIslandPreview extends StatefulWidget {
   final String clientName;
@@ -101,17 +104,14 @@ class _DynamicIslandPreviewState extends State<DynamicIslandPreview> {
               mainAxisSize:       MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Cuttlefish — matches the briefing card eyebrow's locked
-                // 18-painter-in-22-slot pattern. State swap per design
-                // intent: idle when "Cue · ready", thinking when whispering.
-                SizedBox(
-                  width:  CueSize.cuttlefishEyebrow,
-                  height: CueSize.cuttlefishEyebrowSlot,
-                  child: CueCuttlefish(
-                      size:  CueSize.cuttlefishEyebrow,
-                      state: _isWhisper
-                          ? CueState.thinking
-                          : CueState.idle),
+                // Arc-and-dot primary mark. Sized to 18 for clear identity at
+                // Island scale (14 read too small in visual review). Pill height
+                // grows from ~30 to ~32-34px as a consequence. Static across
+                // Idle/Whisper for this commit; per-state mark behavior deferred.
+                SvgPicture.asset(
+                  'assets/brand/cue_mark.svg',
+                  width:  18,
+                  height: 18,
                 ),
                 const SizedBox(width: CueGap.s8),
                 // Content text — cross-fades on state toggle. Flexible
