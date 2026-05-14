@@ -35,6 +35,7 @@ import 'package:flutter/material.dart';
 import '../animation/cue_motion.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_type_v3.dart';
+import 'domain_pill.dart';
 
 /// Pure-data shape derived from the daily_roster + sessions join. The
 /// TodayScreen state class assembles this from its existing loaders.
@@ -270,7 +271,25 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
           ),
         ),
         const SizedBox(width: 12),
-        _statePill(),
+        // ── Domain Detector Evening 3 — D2 mount ─────────────────────
+        // Stack the existing _statePill above a DomainPill in the
+        // header's top-right Column. clinicalTask register (mono
+        // uppercase tracked, per D3) matches the existing state pill's
+        // typography. B-static: TodayBrief carries no clientId, so all
+        // Today cards render belowThreshold in v1.3.x — Evening 3.5
+        // adds TodayBrief.clientId + .primaryDomain together.
+        Column(
+          mainAxisSize:       MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _statePill(),
+            const SizedBox(height: 4),
+            const DomainPill(
+              register: DomainPillRegister.clinicalTask,
+              state:    DomainPillState.belowThreshold,
+            ),
+          ],
+        ),
       ],
     );
   }

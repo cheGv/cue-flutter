@@ -42,6 +42,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/session_archive_service.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/domain_pill.dart';
 import '../widgets/voice_note_sheet.dart';
 import 'report_screen.dart';
 
@@ -768,6 +769,14 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
     return AppLayout(
       title: '$titlePrefix — ${widget.clientName}',
       activeRoute: 'roster',
+      // ── Domain Detector Evening 3 — C mount ─────────────────────────
+      // Pass the DomainPill into AppLayout's actions slot (right side
+      // of the _TopBar). clinicalTask register (mono uppercase tracked).
+      // Test wiring reads widget.clientId so the surface demonstrates
+      // multiple state variants depending on which session was opened.
+      // Evening 3.5 reads clients.primary_domain via a one-shot
+      // Supabase query before render.
+      actions: [_buildDomainPillAction()],
       body: Column(
         children: [
           if (_showOfflineBanner) _buildOfflineBanner(),
@@ -799,6 +808,24 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
           _buildActionRow(),
         ],
       ),
+    );
+  }
+
+  // ── Domain Detector Evening 3 — actions-slot helper ─────────────────
+  //
+  // Builds the DomainPill that mounts into AppLayout._TopBar's actions
+  // slot. clinicalTask register (mono uppercase tracked) matches the
+  // session header's clinical-task surface classification per the
+  // v1.3.1 spec and Evening 3 D3 lock.
+  Widget _buildDomainPillAction() {
+    final ts = _evening3DomainStateFor(widget.clientId);
+    return DomainPill(
+      register: DomainPillRegister.clinicalTask,
+      state:    ts.state,
+      domain:   ts.domain,
+      onTap:    () {
+        // Evening 3.5: open override popover. Inert in v1.3.x.
+      },
     );
   }
 
@@ -1164,5 +1191,36 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
         ],
       ),
     );
+  }
+}
+
+// ── Evening 3 test wiring (display-only) ─────────────────────────────
+//
+// TODO(evening-3.5): Remove this helper when DomainPill reads from
+// ClientRosterEntry.primaryDomain / Session.client.primaryDomain.
+//
+// Display-only stub: returns the test state for visual review of
+// Surface C (session capture header). Real data lands when this
+// screen does a one-shot read of clients.primary_domain by clientId
+// before render. Duplicates the helper in clients_roster_row.dart —
+// both delete together in Evening 3.5.
+({DomainPillState state, ClinicalDomain? domain}) _evening3DomainStateFor(
+    String clientId) {
+  switch (clientId) {
+    // TEMP — Evening 3 display test only. Domain Detector Test Client
+    // (verified clients.id; primary_domain in DB is currently NULL,
+    // overridden here to demonstrate the developmental-bucket variant).
+    case 'f62e1d15-6728-436e-a746-b40817cce8d2':
+      return (state: DomainPillState.detected, domain: ClinicalDomain.aac);
+    // TEMP — Evening 3 display test only. Rishi — verified clients.id +
+    // owned by guruvignesh0033@gmail.com (clinician_id checked
+    // 2026-05-13). Demonstrates the acute_clinical-bucket variant.
+    case '743e5a3b-7eea-4837-811b-8a2b52d24ff0':
+      return (
+        state:  DomainPillState.detected,
+        domain: ClinicalDomain.dysphagia,
+      );
+    default:
+      return (state: DomainPillState.belowThreshold, domain: null);
   }
 }

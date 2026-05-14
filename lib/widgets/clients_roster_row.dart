@@ -14,6 +14,7 @@ import '../animation/cue_motion.dart';
 import '../services/clients_roster_service.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_type_v3.dart';
+import 'domain_pill.dart';
 
 class ClientsRosterRow extends StatefulWidget {
   final ClientRosterEntry entry;
@@ -112,7 +113,7 @@ class _ClientsRosterRowState extends State<ClientsRosterRow> {
                 const SizedBox(width: 18),
                 SizedBox(width: 130, child: _recencyStack(e)),
                 const SizedBox(width: 18),
-                SizedBox(width: 90, child: Center(child: _statePill(e))),
+                SizedBox(width: 90, child: Center(child: _statePillStack(e))),
               ],
             ),
           ),
@@ -265,5 +266,62 @@ class _ClientsRosterRowState extends State<ClientsRosterRow> {
         ),
       ),
     );
+  }
+
+  // ── Domain Detector Evening 3 — D1 mount ────────────────────────────
+  //
+  // Stack the existing _statePill above a DomainPill in the same 90w
+  // column. libraryBrowse register (Inter sentence-case) matches the
+  // surrounding row's typography. onTap is wired but inert — Evening
+  // 3.5 hooks it to the override popover.
+  Widget _statePillStack(ClientRosterEntry e) {
+    final ts = _evening3DomainStateFor(e.id);
+    return Column(
+      mainAxisSize:       MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        _statePill(e),
+        const SizedBox(height: 4),
+        DomainPill(
+          register: DomainPillRegister.libraryBrowse,
+          state:    ts.state,
+          domain:   ts.domain,
+          onTap:    () {
+            // Evening 3.5: open override popover (bottom sheet mobile /
+            // popover desktop). Inert in v1.3.x.
+          },
+        ),
+      ],
+    );
+  }
+}
+
+// ── Evening 3 test wiring (display-only) ─────────────────────────────
+//
+// TODO(evening-3.5): Remove this helper when DomainPill reads from
+// ClientRosterEntry.primaryDomain / Session.client.primaryDomain.
+//
+// Display-only stub: returns the test state for visual review of
+// Surface A. Real data lands when ClientRosterEntry gains the
+// primaryDomain field and the loaders populate it from
+// clients.primary_domain.
+({DomainPillState state, ClinicalDomain? domain}) _evening3DomainStateFor(
+    String clientId) {
+  switch (clientId) {
+    // TEMP — Evening 3 display test only. Domain Detector Test Client
+    // (verified clients.id; primary_domain in DB is currently NULL,
+    // overridden here to demonstrate the developmental-bucket variant).
+    case 'f62e1d15-6728-436e-a746-b40817cce8d2':
+      return (state: DomainPillState.detected, domain: ClinicalDomain.aac);
+    // TEMP — Evening 3 display test only. Rishi — verified clients.id +
+    // owned by guruvignesh0033@gmail.com (clinician_id checked
+    // 2026-05-13). Demonstrates the acute_clinical-bucket variant.
+    case '743e5a3b-7eea-4837-811b-8a2b52d24ff0':
+      return (
+        state:  DomainPillState.detected,
+        domain: ClinicalDomain.dysphagia,
+      );
+    default:
+      return (state: DomainPillState.belowThreshold, domain: null);
   }
 }
