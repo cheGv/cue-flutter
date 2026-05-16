@@ -104,25 +104,31 @@ class CueColorsResolved {
     required this.red,
   });
 
+  // Phase 4.1.2 — day mode token shift (Option B). Light mode moves from
+  // a warm-cream page (#FAF7F0) with navy primary text (kCueInk) to a
+  // near-white page (#FCFAF6) with warm near-black primary text (#1F1F1D).
+  // Cream surfaces sit ABOVE the page, not below it: focused / compact
+  // STG surfaces are now warmer than the page they sit on. Dark mode is
+  // unchanged (the dark register already has correct contrast budget).
   static const _light = CueColorsResolved._(
     isDark:         false,
-    bgCanvas:       t.kCuePaper,
+    bgCanvas:       Color(0xFFFCFAF6),               // was t.kCuePaper #FAF7F0
     bgCard:         t.kCueSurfaceWhite,
-    bgCardHover:    t.kCuePaper,
+    bgCardHover:    Color(0xFFFCFAF6),               // matches bgCanvas
     bgChrome:       t.kCueInk,
     bgInput:        t.kCueSurfaceWhite,
     bgMuted:        Color(0x14736B62), // 8% alpha kCueInkSecondary tone
-    border:         t.kCueBorder,
+    border:         Color(0xFFE2DDD2),               // was t.kCueBorder #E8E4DC
     borderHover:    Color(0xFFD8D2C5),
     borderEmphasis: Color(0xFFCEC8BA),
-    borderMuted:    Color(0xFFE8E4DA), // between kCueBorder and bgCanvas
-    textPrimary:    t.kCueInk,
-    textBody:       t.kCueInkSecondary,
-    textSecondary:  t.kCueInkSecondary, // alias for textBody
+    borderMuted:    Color(0xFFEEE9DD),               // between border and bgCanvas
+    textPrimary:    Color(0xFF1F1F1D),               // warm near-black, was kCueInk navy
+    textBody:       Color(0xFF6B6862),               // medium-darker grey, was kCueInkSecondary
+    textSecondary:  Color(0xFF6B6862),               // alias for textBody
     textMuted:      t.kCueInkTertiary,
     textDim:        Color(0xFFB4B2A9),
     olive:          t.kCueOlive,
-    amber:          t.kCueAmber,
+    amber:          Color(0xFFBA7517),               // burnt amber, was kCueAmber #B45309
     amberDeep:      t.kCueAmberDeep,
     blue:           t.kCueInk,
     purple:         t.kCueInkSecondary,

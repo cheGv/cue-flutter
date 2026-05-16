@@ -103,6 +103,73 @@ Corollaries:
 
 > **Phase 5.1+5.2 Ask Cue (added 10 May 2026):** Cue Study is retired; Reasoning + Study merged at the database (Phase 5.0 migration moved 15 threads + 44 messages into `reasoning_threads` / `reasoning_messages`, dropped the client-scoped check constraint) and at the UI (new `AskCuePanel` widget at `lib/widgets/ask_cue_panel.dart`, service at `lib/services/ask_cue_service.dart`, drawer wrapper at `lib/widgets/ask_cue_drawer.dart`). Profile is now a two-column workspace at viewport ≥ `kDesktopBreak` (1024) — chart-side left (with the 680px reading-width cap dropped), AskCuePanel persistent-right at 460px wide. Below 1024 the panel is reachable via a topbar "Ask Cue" button that opens a right-side drawer. Streaming exposes `Stream<String>` from day one; v1 emits the full assistant text in one chunk after the batch reasoning-respond edge function call (real SSE deferred to Phase 5.3 alongside voice input). Citations are scope-conditional: goal-scoped threads (when reachable from Edit Goal) keep action chips via the legacy `cue_reasoning_panel.dart`; client-scoped threads on Profile render plain text in v1 (footnote-style citations deferred). Database tables stay `reasoning_*` — don't rename. Don't reintroduce "Cue Study" naming in code; user-visible label is "Ask Cue." Spine doc Revision 2026-05-11 governs the panel's design tokens (warm paper HUD, Iowan italic 22px briefing, Inter 13.5 message body, rounded-pill input dock, scope-dot inline thread list) and the two-column Profile layout. The Edit Goal `cue_reasoning_panel` migration to AskCuePanel is deferred to a follow-up commit so the existing goal-scoped Reasoning behavior (Cite-in-rationale, Apply-revision) ships unchanged in v1.
 
+## Visual language locked (Phase 4.0.9)
+
+This section is load-bearing. Every screen built after Phase 4.0.9 references these tokens, palette, surface system, and patterns. Do not introduce new hex values, new font sizes, new tokens, or new surface treatments without explicit founder approval. When in doubt, ask before improvising.
+
+### Palette
+
+**Olive** (state indicators, domain tags, Active pill): `#97C459`, `#3B6D11`, `#639922`.
+
+**Amber** (Cue mark, action lines, hero italic, up-next, attention surfaces): `#F59E0B`, `#F5C778`, `#BA7517`, `#854F0B`, `#633806`, `#FAEEDA`.
+
+**Dark surfaces** (three-stop system): `#0A0A0B` canvas / `#111112` card / `#181715` sidebar / `#2A2620` selected / `#2D2B26` hairline / `#2A2925` row divider.
+
+**Light surfaces** (two-stop, not three): `#FAF7F0` canvas (`kCuePaper`) / `#FFFFFF` card (`kCueSurfaceWhite`) / `#F4EFE3` sidebar / `#FAEEDA` selected / `#D8D1C2` hairline / `#EBE6DA` row divider. Note: two distinct surface tones in light mode, not three. If a third tone becomes needed for a future screen, surface a redesign decision rather than introducing a new hex inline.
+
+**Dark text**: `#F5F1E8` primary / `#E8E2D4` prose / `#A8A49A` secondary / `#888780` tertiary / `#5F5E5A` faintest.
+
+**Light text**: `#2C2C2A` primary / `#5F5E5A` secondary / `#888780` tertiary.
+
+### Typography tokens (CueTextStyles)
+
+All typography on landing screens, list rows, and chart screens uses these tokens. No inline font sizes. No new tokens without approval.
+
+- `cueTextHero` — Playfair italic, 30px desktop / 22px mobile, burnt amber (`#F5C778` dark / `#854F0B` light). Hero italic, one line per landing screen only.
+- `cueTextChartName` — DM Sans 28/22, weight 500, primary text. Chart screen header name.
+- `cueTextName` — DM Sans 20/16, weight 500, primary text. List row names (Clients).
+- `cueTextCardTitle` — DM Sans 17/15, weight 500, primary text. Card titles inside chart pillars (Active Steps, Next Session, Last Session, Timeline, Documents).
+- `cueTextMeta` — DM Sans 14/12, weight 400, secondary text. Age and diagnosis inline meta.
+- `cueTextProse` — DM Sans 13/11, weight 400, line-height 1.55, tertiary/secondary text. Prose state lines, card body.
+- `cueTextAction` — DM Sans 13, weight 400, burnt amber. Action line text.
+- `cueTextSectionLabel` — Syne caps, 11px, weight 500, letter-spacing 0.12em, tertiary text. Section labels (WORKING TOWARD, DOCUMENTS).
+
+### Surface system
+
+Light mode is the canonical reference. Dark mode is ported from light mode, not the reverse. Both modes use the same palette mapped to mode-specific values. Three-stop surface hierarchy: canvas (page background) → card (containers) → sidebar (chrome).
+
+### Card grammar
+
+- **Flat rows with hairline dividers** for lists (Clients roster). No boxed cards, no left accent stripes, no shadows. Hairline at `#2A2925` dark / `#EBE6DA` light, full opacity.
+- **Cards with warm surface** for chart pillars (Active Steps, Next Session, Last Session). Background = card surface from palette. No shadows.
+- **The Cue card** (italic editorial prose, "Cue · what's in the chart") is a unique surface. Do not generalize its treatment to other cards. The italic Playfair register and amber Cue mark are reserved for this surface.
+
+### Locked patterns
+
+- **Hero block**: italic Playfair line in burnt amber, 24px gap, then content. One italic line per landing screen, no subtitle stack.
+- **Action line**: conditional render priority — stale clients → draft sessions → silent. Parent summaries branch deferred to Phase 1.5 when the parent summaries table ships. Single amber row, tap routes via `AppRoutes` constants.
+- **Search row**: full-width input with ⌘K hint, 40px ghost-square `+` button at the end. No bright filled primary buttons.
+- **Tabs**: hide zero-count tabs. No sort dropdown until client count exceeds 10.
+- **Right column in list rows**: `SizedBox(width: 100)`, not `MainAxisAlignment.spaceBetween`. Anchors pill+date close to the prose line.
+- **Width caps**: AppLayout content cap at 1040px (covers Today, Clients, Assessing, Inbox, Settings). Chart screen has its own dedicated cap system at outer 1024 + per-sliver 680. Do not unify these — the chart's prose-dense column needs the narrower inner cap.
+- **Top-level routes** (Today, Clients, Assessing, Inbox, Settings) suppress the back arrow via `automaticallyImplyLeading: false`. Sub-routes (chart, session detail, reasoning view) keep it.
+- **`AppRoutes.inbox` constant**: currently `'/today'` as a temporary fallback. Flip to `'/inbox'` in one line when the Inbox screen ships. Do not hardcode `/today` inline anywhere — always reference the constant.
+
+### Cuttlefish placement
+
+- **Sidebar** = ambient brand mark, idle only, static.
+- **The Hold** (CueTopBand top-right pill) = state surface for Cue's working state. Idle ↔ Whisper shipped. Thinking, Listening, Done states are Sprint 2 expansion work. Suppress all animation in this widget when `isClinicalWorkInFlight = true`.
+
+### Domain rendering
+
+- In list row meta: lowercase diagnosis as stored (e.g. "stroke", "B/L vocal cord paralysis").
+- In prose state line: uppercase first segment, olive color (`#97C459` dark / `#3B6D11` light), weight 500. Examples: "STROKE", "VOI", "AAC", "MOTOR", "DYSPH".
+- If diagnosis is null, skip the "in {DOMAIN}" segment entirely. Render just "{N} active steps · last seen {date}".
+
+### Fixture filter
+
+`is_fixture` boolean column on `clients` table. Service layer filters `is_fixture = false` only when `kReleaseMode == true`. Debug builds show fixtures with a "DEV · N FIXTURE VISIBLE" banner at the top of the Clients screen. Migration: `supabase/migrations/20260514120000_phase_4_0_9_clients_is_fixture.sql`.
+
 ## 6. Clinical Definitions
 
 These definitions are load-bearing. Every schema field and AI prompt must respect this vocabulary.
@@ -1121,5 +1188,21 @@ phase ships → `flutter analyze` + `flutter build web` pass → hot-restart ver
 Every system prompt embedded in a Cue Edge Function or Render proxy endpoint gets a partner-mode review pass before deploy. Review covers: enum coverage gaps, undefined field semantics, unbounded output lengths, language handling for code-mixed Indian clinical notes, trust calibration (confidence honesty over false certainty), invariant pairings (sentinel values paired across fields), and design-spine alignment for any UI artifacts the prompt drives. Review writeups stored in `/prompts/reviews/` alongside the prompt artifact.
 
 Every prompt is single-sourced in code via a `DETECTOR_VERSION` (or equivalent) constant plus a SHA256 hash of the prompt string, both logged on every API call. Version bumps without prompt changes (or prompt changes without version bumps) are caught at log inspection.
+
+## Phase 1.1 reliability backlog
+
+1. **Auth listener gap.** Cue has no `onAuthStateChange` subscription. Mid-session token expiry silently breaks the app until reload. Add reactive auth state handling that gracefully redirects to login and preserves user intent.
+
+2. **Clients screen request fan-out.** Currently 33 requests on page load (`daily_roster`, `slp_day_states`, multiple sessions queries, `short_term_goals`, `long_term_goals`). Audit which are necessary; combine queries where possible.
+
+3. **Client duplicate/merge flow.** DB has duplicate rows (Aarif×2, Jayansh×3, Rishi×2, Amara×2, Amarah×2) hidden by archive. Founding clinicians will create duplicates accidentally. Need a merge/dedup UI.
+
+4. **Pagination on Clients list.** `ListView` handles current scale fine. Will degrade past ~50 clients per SLP. Implement lazy loading or virtualization.
+
+5. **Search query verification.** Search input exists; the ILIKE query across name/diagnosis/concern hasn't been tested for case sensitivity, partial matches, multi-field coverage. Verify or fix.
+
+6. **Release build verification.** Run `flutter run -d chrome --web-port=5173 --release` once to confirm the fixture filter activates and the dev banner disappears in production mode. Verify Domain Detector Test Client is hidden.
+
+7. **Dev workflow hygiene.** Always run `taskkill /F /IM dart.exe` before `flutter run` on Windows to clear orphaned dev servers. Use `--profile` not `--release` for local dev to avoid service worker caching. Project should live outside any OneDrive-synced path. Document these in a `dev-run.bat` script.
 
 External-system behavior claims in a spec (cache hits, rate limits, model capabilities, third-party API guarantees) must be verified against current documentation at draft time, not assumed from prior knowledge. Anthropic, Supabase, Render, and other dependencies change behavior on monthly timescales. Cite the doc URL and date checked in the spec comment, or mark the claim as "needs verification" until confirmed.

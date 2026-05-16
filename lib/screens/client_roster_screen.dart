@@ -1,53 +1,31 @@
 // lib/screens/client_roster_screen.dart
 //
-// Phase 4.0.9-step-B-roster-surface-2 — full replacement of the Phase 3.2
-// CRM-style + "needs you" roster. Surface 2 is a clean breathing
-// recency-sorted list with search, prominent numerics, and a quiet
-// new-client signal.
+// The /clients screen — redesigned to the locked visual spec.
 //
-// Founder direction (locked in step B spec, revised in amend #3):
-//   • Single recency-sorted list (no sectional grouping). "Assessment
-//     is an event, not a state" → no In-assessment filter.
-//   • No cuttlefish on the main surface (amend #3). Identity-mark
-//     consistency across surfaces was a design value, but Roster is
-//     a working library — different job from Today's ritual surface,
-//     and the cuttlefish kept competing with the page header for
-//     attention. She earns her place on Today; future surfaces decide
-//     independently whether she belongs. The empty-state still keeps
-//     the 96px softWave cuttlefish — that screen IS a quasi-ritual
-//     moment ("welcome to your case file") with no content to fight.
-//   • Page identity: italic Iowan H1 "Everyone in your care." at 44px.
-//   • Summary plaque: 3 numerics (Total / Active goals / Sessions).
-//   • Search-first row with ⌘K hint + dark-navy "New client" CTA.
-//   • Filter chips: All / Active / Discharged. Counts in Inter.
-//   • Each row: olive stripe + Iowan name + Inter focus strip + Inter
-//     weight 700 numerics + Inter recency stack + Inter sentence-case
-//     state pill. Conditional italic "Just enrolled" when sessions=0.
-//   • "Today" recency in amber — single amber moment per surface.
-//   • Numerics are LOAD-BEARING. Tabular figures across data tokens
-//     and summary plaque so columns align when stacked.
+// Structure (top to bottom):
+//   • Hero: a single italic Playfair line, "Everyone in your care."
+//   • Action line (conditional): stale-client nudge, else draft-session
+//     nudge, else nothing. Replaces the old three-column stat strip.
+//   • Search row: search input + ⌘K hint + ghost-square "+" button.
+//   • Tab row: All / Active / Discharged — zero-count tabs hidden, no
+//     sort control.
+//   • Client list: flat rows with hairline dividers (not cards).
 //
-// Navigation: row click forwards the pre-loaded client row to
-// ClientProfileScreen via MaterialPageRoute with
-// RouteSettings(name: '/clients/:id'). URL bar still reflects the
-// path (deep-link refresh works via main.dart's loader); the
-// pre-loaded row avoids a second DB fetch on the happy path.
-//
-// Data layer lives in services/clients_roster_service.dart. This
-// screen does load → filter → search → render only.
+// Tokens live in lib/theme/cue_text_styles.dart (CueTextStyles +
+// CueClientsPalette). The data layer is clients_roster_service.dart;
+// this screen does load → filter → search → render only.
 
 import 'package:flutter/material.dart';
 
 import '../animation/cue_motion.dart';
+import '../constants/app_routes.dart';
 import '../services/clients_roster_service.dart';
-import '../theme/cue_phase4_tokens.dart';
-import '../theme/cue_type_v3.dart';
+import '../theme/cue_text_styles.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/clients_roster_empty_state.dart';
 import '../widgets/clients_roster_filter_chips.dart';
 import '../widgets/clients_roster_row.dart';
 import '../widgets/clients_roster_search_bar.dart';
-import '../widgets/clients_roster_summary_plaque.dart';
 import '../widgets/cue_animated_entrance.dart';
 import 'add_client_screen.dart';
 import 'client_profile_screen.dart';
@@ -66,9 +44,13 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
   bool _loading = true;
   String? _loadError;
   List<ClientRosterEntry> _entries = const [];
+  int _draftSessionCount = 0;
+  int _fixtureVisibleCount = 0;
   String _query = '';
-  String _filter = 'all'; // all | active | discharged
-  String _sortBy = 'recent';
+
+  /// 'all' | 'active' | 'discharged' | 'stale'. 'stale' is not a tab —
+  /// it's set by tapping the action line and cleared by tapping a tab.
+  String _filter = 'all';
 
   @override
   void initState() {
@@ -94,10 +76,12 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
       });
     }
     try {
-      final entries = await _service.loadRoster();
+      final result = await _service.loadRoster();
       if (mounted) {
         setState(() {
-          _entries = entries;
+          _entries = result.entries;
+          _draftSessionCount = result.draftSessionCount;
+          _fixtureVisibleCount = result.fixtureVisibleCount;
           _loading = false;
         });
       }
@@ -111,14 +95,20 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
     }
   }
 
-  // ── Filtering / sorting / search ────────────────────────────────────────
+  // ── Filtering / search / sort ───────────────────────────────────────
 
   List<ClientRosterEntry> get _visible {
     Iterable<ClientRosterEntry> seq = _entries;
-    if (_filter == 'active') {
-      seq = seq.where((e) => e.isActive);
-    } else if (_filter == 'discharged') {
-      seq = seq.where((e) => e.isDischarged);
+    switch (_filter) {
+      case 'active':
+        seq = seq.where((e) => e.isActive);
+        break;
+      case 'discharged':
+        seq = seq.where((e) => e.isDischarged);
+        break;
+      case 'stale':
+        seq = seq.where((e) => e.isStale14d);
+        break;
     }
     if (_query.isNotEmpty) {
       seq = seq.where((e) {
@@ -130,32 +120,18 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
         return hay.contains(_query);
       });
     }
-    final list = seq.toList();
-    // Sort plumbing scaffolded for future alphabetical / other sorts;
-    // 'recent' is the only option in v1 and matches the service's
-    // pre-sorted order — kept explicit so a re-sort after filtering
-    // remains deterministic.
-    if (_sortBy == 'recent') {
-      list.sort((a, b) => b.lastTouchedAt.compareTo(a.lastTouchedAt));
-    }
-    return list;
+    // Default sort: most-recently-active.
+    return seq.toList()
+      ..sort((a, b) => b.lastTouchedAt.compareTo(a.lastTouchedAt));
   }
 
-  // ── Counts for filter chips ─────────────────────────────────────────────
-
   int get _activeCount => _entries.where((e) => e.isActive).length;
-  int get _dischargedCount =>
-      _entries.where((e) => e.isDischarged).length;
-  int get _totalActiveGoals =>
-      _entries.fold<int>(0, (sum, e) => sum + e.activeGoalsCount);
-  int get _totalSessions =>
-      _entries.fold<int>(0, (sum, e) => sum + e.sessionsCount);
+  int get _dischargedCount => _entries.where((e) => e.isDischarged).length;
+  int get _staleCount => _entries.where((e) => e.isStale14d).length;
 
-  // ── Navigation ──────────────────────────────────────────────────────────
+  // ── Navigation ──────────────────────────────────────────────────────
 
   Future<void> _openClient(ClientRosterEntry e) async {
-    // Pre-loaded MaterialPageRoute pattern. URL bar reflects /clients/:id
-    // via RouteSettings.name; main.dart's loader handles hard refresh.
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -163,7 +139,6 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
         builder: (_) => ClientProfileScreen(client: e.rawRow),
       ),
     );
-    // Profile may have edited or archived the row — refresh either way.
     if (mounted) _load();
   }
 
@@ -175,66 +150,75 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
     if (added == true && mounted) _load();
   }
 
-  // ── Build ───────────────────────────────────────────────────────────────
+  // ── Build ───────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    // Amend #3: cuttlefish removed from the main surface. The Stack
-    // wrapper that hosted her viewport-anchor is gone; body is the
-    // scrollable content directly. Empty state retains the 96px
-    // softWave cuttlefish — see ClientsRosterEmptyState.
     return AppLayout(
       title: '',
       activeRoute: 'roster',
-      body: _buildContent(),
+      // Cap the content width on wide monitors; stays fluid below 1040.
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1040),
+          child: _buildContent(),
+        ),
+      ),
     );
   }
 
   Widget _buildContent() {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_loadError != null) {
+      final palette = CueClientsPalette.of(context);
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
-            'Couldn\'t load your case file. $_loadError',
-            style: CueTypeV3.body(color: kCueInkSecondary),
+            "Couldn't load your case file. $_loadError",
             textAlign: TextAlign.center,
+            style: TextStyle(color: palette.textSecondary),
           ),
         ),
       );
     }
     if (_entries.isEmpty) {
-      return ClientsRosterEmptyState(onNewClient: _openAddClient);
+      return ClientsRosterEmptyState(
+        isMobile: isMobile,
+        onNewClient: _openAddClient,
+      );
     }
+
+    final text = CueTextStyles.of(context, isMobile: isMobile);
+    final action = _actionLineData(isMobile);
+
+    final padding = isMobile
+        ? const EdgeInsets.fromLTRB(20, 28, 20, 40)
+        : const EdgeInsets.fromLTRB(80, 50, 56, 56);
+
     return ListView(
-      // Page padding. Left 80 originally cleared the cuttlefish
-      // column (removed in amend #3); the value is preserved as the
-      // page's editorial left margin so the content doesn't drift
-      // toward the sidebar. Right 56 / vertical 50/56 carry from the
-      // original layout.
-      padding: const EdgeInsets.fromLTRB(80, 50, 56, 56),
+      padding: padding,
       children: [
-        // Phase 4.2 page-entrance choreography:
-        //   • Page header:     0 ms
-        //   • Summary plaque:  80 ms
-        //   • Search row:     160 ms
-        //   • Filter chips:   240 ms
-        //   • Row 0:          320 ms (then +60 ms each, capped at
-        //                     index 11 per kMotionStaggerMaxIndex)
-        CueAnimatedEntrance(child: _pageHeader()),
-        const SizedBox(height: 32),
+        if (_fixtureVisibleCount > 0) ...[
+          _devFixtureBanner(text),
+          const SizedBox(height: 16),
+        ],
+        // Hero — one italic line, nothing else.
         CueAnimatedEntrance(
-          delay: const Duration(milliseconds: 80),
-          child: ClientsRosterSummaryPlaque(
-            totalClients:   _entries.length,
-            activeGoals:    _totalActiveGoals,
-            sessionsLogged: _totalSessions,
-          ),
+          child: Text('Everyone in your care.', style: text.hero),
         ),
         const SizedBox(height: 24),
+        if (action != null) ...[
+          CueAnimatedEntrance(
+            delay: const Duration(milliseconds: 80),
+            child: _actionLine(text, action),
+          ),
+          const SizedBox(height: 24),
+        ],
         CueAnimatedEntrance(
           delay: const Duration(milliseconds: 160),
           child: ClientsRosterSearchBar(
@@ -245,81 +229,77 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
         const SizedBox(height: 16),
         CueAnimatedEntrance(
           delay: const Duration(milliseconds: 240),
-          child: ClientsRosterFilterChips(
-            activeFilter:    _filter,
-            onFilter:        (v) => setState(() => _filter = v),
-            allCount:        _entries.length,
-            activeCount:     _activeCount,
+          child: ClientsRosterTabs(
+            activeFilter: _filter,
+            onFilter: (v) => setState(() => _filter = v),
+            allCount: _entries.length,
+            activeCount: _activeCount,
             dischargedCount: _dischargedCount,
-            sortBy:          _sortBy,
-            onSort:          (v) => setState(() => _sortBy = v),
           ),
         ),
-        const SizedBox(height: 12),
-        ..._buildList(),
-        const SizedBox(height: 56),
+        const SizedBox(height: 24),
+        ..._buildList(isMobile),
+        const SizedBox(height: 40),
       ],
     );
   }
 
-  // Page header: eyebrow + italic Iowan H1 + count + tagline.
-  Widget _pageHeader() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Eyebrow — mono uppercase tracked is the data-tag carve-out;
-        // page locator counts as a data tag here. Bumped twice:
-        // amend #2 (10.5/500/InkTertiary → 12/600/InkSecondary) and
-        // amend #4 (12/600/InkSecondary → 13.5/700/kCueInk, +0.14em
-        // → +0.16em). With the cuttlefish removed in amend #3, this
-        // row carries the brand identity by itself — eyebrow needs
-        // to read as "this is Cue, you're in the Clients surface,"
-        // not as a whisper above the H1.
-        Text(
-          'CUE · CLIENTS',
-          style: CueTypeV3.dataEyebrow(color: kCueInk).copyWith(
-            fontSize:      13.5,
-            fontWeight:    FontWeight.w700,
-            letterSpacing: 13.5 * 0.16,
+  // ── Action line ─────────────────────────────────────────────────────
+
+  /// Resolves the conditional action line. Priority: stale clients,
+  /// then draft sessions, then nothing.
+  _ActionLineData? _actionLineData(bool isMobile) {
+    if (_staleCount > 0) {
+      final text = isMobile
+          ? '$_staleCount clients need a check-in'
+          : "$_staleCount clients haven't been seen in 14+ days";
+      return _ActionLineData(text, () => setState(() => _filter = 'stale'));
+    }
+    if (_draftSessionCount > 0) {
+      return _ActionLineData(
+        '$_draftSessionCount sessions waiting to be documented',
+        () => Navigator.pushNamed(context, AppRoutes.inbox),
+      );
+    }
+    return null;
+  }
+
+  Widget _actionLine(CueTextStyles text, _ActionLineData data) {
+    final palette = CueClientsPalette.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: data.onTap,
+        child: Container(
+          padding:
+              const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+          decoration: BoxDecoration(
+            color: palette.actionBg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: palette.actionBorder, width: 0.5),
+          ),
+          child: Row(
+            children: [
+              Expanded(child: Text(data.text, style: text.action)),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 14,
+                color: palette.amber,
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 14),
-        // H1 text swap in amend #2: "Your case file." →
-        // "Everyone in your care." — option (e) from founder
-        // brainstorm. Same Iowan italic 44/500/kCueInk register;
-        // content swap only.
-        Text(
-          'Everyone in your care.',
-          style: CueTypeV3.rosterPageTitle(),
-        ),
-        const SizedBox(height: 14),
-        // Page count "{N} in your care" — bumped in amend #2
-        // (14/400 → 16/500) so the count reads at a glance, not
-        // as a throwaway line below the H1.
-        Text(
-          _entries.length == 1
-              ? '1 in your care'
-              : '${_entries.length} in your care',
-          style: CueTypeV3.body(color: kCueInkSecondary).copyWith(
-            fontSize:   16,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Every person, every story, in one place.',
-          style: CueTypeV3.rosterPageTagline(),
-        ),
-      ],
+      ),
     );
   }
 
-  List<Widget> _buildList() {
+  // ── List ────────────────────────────────────────────────────────────
+
+  List<Widget> _buildList(bool isMobile) {
     final rows = _visible;
     if (rows.isEmpty) {
-      // Filter-empty messaging is filter-aware so the SLP knows whether
-      // it's a search miss, an empty Active bucket, etc.
       String msg;
       if (_query.isNotEmpty) {
         msg = 'No clients match "$_query".';
@@ -327,43 +307,54 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
         msg = 'No discharged clients yet.';
       } else if (_filter == 'active') {
         msg = 'No active clients in this view.';
+      } else if (_filter == 'stale') {
+        msg = 'No clients need a check-in.';
       } else {
         msg = 'No clients to show.';
       }
       return [ClientsRosterFilterEmptyState(message: msg)];
     }
     return [
-      Container(
-        decoration: BoxDecoration(
-          color: kCueSurfaceWhite,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: kCueBorder, width: 0.5),
+      for (var i = 0; i < rows.length; i++)
+        CueAnimatedEntrance(
+          delay: Duration(
+            milliseconds: 320 +
+                (i <= kMotionStaggerMaxIndex ? i : kMotionStaggerMaxIndex) *
+                    60,
+          ),
+          child: ClientsRosterRow(
+            entry: rows[i],
+            isMobile: isMobile,
+            isLast: i == rows.length - 1,
+            onTap: () => _openClient(rows[i]),
+          ),
         ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          children: [
-            for (var i = 0; i < rows.length; i++)
-              CueAnimatedEntrance(
-                // List rows enter 60ms apart starting at 320ms,
-                // capped at index 11 (kMotionStaggerMaxIndex). Rows
-                // beyond #11 share the cap's delay so an SLP with
-                // 30 clients doesn't watch each row pop in over
-                // 1.8s+ of choreography.
-                delay: Duration(
-                  milliseconds: 320 +
-                      (i <= kMotionStaggerMaxIndex
-                          ? i
-                          : kMotionStaggerMaxIndex) *
-                          60,
-                ),
-                child: ClientsRosterRow(
-                  entry: rows[i],
-                  onTap: () => _openClient(rows[i]),
-                ),
-              ),
-          ],
-        ),
-      ),
     ];
   }
+
+  // ── Dev affordance ──────────────────────────────────────────────────
+
+  /// Debug-only banner so a developer never forgets a fixture client is
+  /// in the list. Never renders in release builds (the service reports
+  /// fixtureVisibleCount as 0 there).
+  Widget _devFixtureBanner(CueTextStyles text) {
+    final palette = CueClientsPalette.of(context);
+    final label = _fixtureVisibleCount == 1
+        ? 'DEV · 1 FIXTURE VISIBLE'
+        : 'DEV · $_fixtureVisibleCount FIXTURES VISIBLE';
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: palette.controlBorder, width: 0.5),
+      ),
+      child: Text(label, style: text.sectionLabel),
+    );
+  }
+}
+
+class _ActionLineData {
+  final String text;
+  final VoidCallback onTap;
+  const _ActionLineData(this.text, this.onTap);
 }

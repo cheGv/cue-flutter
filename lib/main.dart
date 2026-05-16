@@ -6,12 +6,18 @@ import 'screens/signup_screen.dart';
 import 'screens/client_roster_screen.dart';
 import 'screens/client_profile_screen.dart';
 import 'screens/assessing_screen.dart';
-import 'screens/narrator_screen.dart';
+// Phase 4.1.7 — standalone Narrator destination removed. The narrate
+// capability still lives inside the session-documentation flow via
+// `narrate_session_screen.dart` (invoked from add_session_screen /
+// session_capture_screen). The sidebar slot that pointed here now
+// hosts the Inbox (worklist of draft sessions).
+import 'screens/inbox_screen.dart';
 import 'screens/slp_profile_screen.dart';
 import 'screens/assessment_case_screen.dart';
 import 'screens/new_assessment_case_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/session_capture_screen.dart';
+import 'screens/settings/settings_shell.dart';
 import 'theme/cue_theme.dart';
 import 'theme/theme_notifier.dart';
 import 'utils/daily_chart_log.dart';
@@ -403,13 +409,25 @@ class CueApp extends StatelessWidget {
               builder: (_) => const AssessingScreen(),
             );
           }
-          if (uri.path == '/narrator') {
+          // Phase 4.1.7 — `/narrator` retired with the standalone screen.
+          // The sidebar slot it occupied is now `/inbox`.
+          if (uri.path == '/inbox') {
             return MaterialPageRoute(
               settings: settings,
-              builder: (_) => const NarratorScreen(),
+              builder: (_) => const InboxScreen(),
             );
           }
           if (uri.path == '/settings') {
+            // Phase 5 Settings — repointed from SlpProfileScreen to the new
+            // 10-screen module shell. SlpProfileScreen remains accessible
+            // via /profile (its sole inbound link was /settings).
+            final screen = uri.queryParameters['screen'];
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => SettingsShell(initialScreen: screen),
+            );
+          }
+          if (uri.path == '/profile') {
             return MaterialPageRoute(
               settings: settings,
               builder: (_) => const SlpProfileScreen(),
