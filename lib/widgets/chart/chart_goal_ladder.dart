@@ -165,6 +165,15 @@ class _ChartGoalLadderState extends State<ChartGoalLadder> {
         .where((s) => s['id'].toString() != focusedStg?['id'].toString())
         .toList();
 
+    final ltgSeqByLtgId = <String, int>{};
+    for (final ltg in widget.ltgs) {
+      final id = ltg['id']?.toString();
+      final seq = _seqOf(ltg);
+      if (id != null && id.isNotEmpty && seq != null) {
+        ltgSeqByLtgId[id] = seq;
+      }
+    }
+
     final stgCount = activeStgs.length;
     final ltgCount = activeLtgs.length;
 
@@ -191,6 +200,8 @@ class _ChartGoalLadderState extends State<ChartGoalLadder> {
             child: _FocusedStgCard(
               key: ValueKey('focused-${focusedStg['id']}'),
               stg: focusedStg,
+              parentLtgSeq: ltgSeqByLtgId[
+                  focusedStg['long_term_goal_id']?.toString() ?? ''],
               hasSiblings: activeStgs.length > 1,
               onCycleFocus: () => _cycleFocus(activeStgs),
               onThinkWithCue: widget.onThinkWithCue == null
@@ -203,6 +214,7 @@ class _ChartGoalLadderState extends State<ChartGoalLadder> {
         if (compactStgs.isNotEmpty)
           _CompactStgGroupedList(
             compactStgs: compactStgs,
+            ltgSeqByLtgId: ltgSeqByLtgId,
             onTapCompact: (s) => _swapFocus(s['id'].toString()),
           ),
 
@@ -273,6 +285,14 @@ bool _isStgActive(Map<String, dynamic> stg) {
   return status == null || status.isEmpty || status == 'active';
 }
 
+int? _seqOf(Map<String, dynamic> row) {
+  final v = row['sequence_num'];
+  if (v is int) return v;
+  if (v is num) return v.toInt();
+  if (v is String) return int.tryParse(v);
+  return null;
+}
+
 String _stgBodyText(Map<String, dynamic> stg) {
   return ((stg['target_behavior'] as String?) ??
           (stg['specific'] as String?) ??
@@ -328,6 +348,7 @@ class _SectionHeader extends StatelessWidget {
 
 class _FocusedStgCard extends StatelessWidget {
   final Map<String, dynamic> stg;
+  final int? parentLtgSeq;
   final bool hasSiblings;
   final VoidCallback onCycleFocus;
   final VoidCallback? onThinkWithCue;
@@ -335,6 +356,7 @@ class _FocusedStgCard extends StatelessWidget {
   const _FocusedStgCard({
     super.key,
     required this.stg,
+    required this.parentLtgSeq,
     required this.hasSiblings,
     required this.onCycleFocus,
     required this.onThinkWithCue,
@@ -350,6 +372,10 @@ class _FocusedStgCard extends StatelessWidget {
     final body = _stgBodyText(stg);
     final domain = (stg['domain'] as String?)?.trim();
     final duration = _stgDurationLabel(stg);
+    final stgSeq = _seqOf(stg);
+    final identifier = parentLtgSeq != null && stgSeq != null
+        ? '$parentLtgSeq.$stgSeq · '
+        : (stgSeq != null ? '$stgSeq · ' : '');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -381,7 +407,7 @@ class _FocusedStgCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                'SHORT-TERM GOAL · IN FOCUS',
+                '${identifier}SHORT-TERM GOAL · IN FOCUS',
                 style: t.ladderEyebrow.copyWith(color: amber),
               ),
               if (domain != null && domain.isNotEmpty) ...[
@@ -470,10 +496,12 @@ List<_DomainGroup> _groupByDomain(List<Map<String, dynamic>> stgs) {
 
 class _CompactStgGroupedList extends StatelessWidget {
   final List<Map<String, dynamic>> compactStgs;
+  final Map<String, int> ltgSeqByLtgId;
   final void Function(Map<String, dynamic>) onTapCompact;
 
   const _CompactStgGroupedList({
     required this.compactStgs,
+    required this.ltgSeqByLtgId,
     required this.onTapCompact,
   });
 
@@ -498,6 +526,7 @@ class _CompactStgGroupedList extends StatelessWidget {
               ],
               _CompactStgRail(
                 stgs: groups[i].stgs,
+                ltgSeqByLtgId: ltgSeqByLtgId,
                 isDesktop: isDesktop,
                 onTap: onTapCompact,
               ),
@@ -523,11 +552,13 @@ class _DomainGroupHeader extends StatelessWidget {
 
 class _CompactStgRail extends StatefulWidget {
   final List<Map<String, dynamic>> stgs;
+  final Map<String, int> ltgSeqByLtgId;
   final bool isDesktop;
   final void Function(Map<String, dynamic>) onTap;
 
   const _CompactStgRail({
     required this.stgs,
+    required this.ltgSeqByLtgId,
     required this.isDesktop,
     required this.onTap,
   });
@@ -579,6 +610,7 @@ class _CompactStgRailState extends State<_CompactStgRail> {
                 height: 120,
                 child: _CompactStgCard(
                   stg: s,
+                  ltgSeqByLtgId: widget.ltgSeqByLtgId,
                   fixedWidth: null,
                   onTap: () => widget.onTap(s),
                 ),
@@ -608,6 +640,7 @@ class _CompactStgRailState extends State<_CompactStgRail> {
                       padding: const EdgeInsets.only(right: 8),
                       child: _CompactStgCard(
                         stg: s,
+                        ltgSeqByLtgId: widget.ltgSeqByLtgId,
                         fixedWidth: 320,
                         onTap: () => widget.onTap(s),
                       ),
@@ -644,11 +677,13 @@ class _CompactStgRailState extends State<_CompactStgRail> {
 
 class _CompactStgCard extends StatelessWidget {
   final Map<String, dynamic> stg;
+  final Map<String, int> ltgSeqByLtgId;
   final double? fixedWidth;
   final VoidCallback onTap;
 
   const _CompactStgCard({
     required this.stg,
+    required this.ltgSeqByLtgId,
     required this.fixedWidth,
     required this.onTap,
   });
@@ -662,6 +697,12 @@ class _CompactStgCard extends StatelessWidget {
     final body = _stgBodyText(stg);
     final domain = (stg['domain'] as String?)?.trim();
     final stepCount = body.isEmpty ? 0 : 1;
+    final parentLtgSeq =
+        ltgSeqByLtgId[stg['long_term_goal_id']?.toString() ?? ''];
+    final stgSeq = _seqOf(stg);
+    final identifier = parentLtgSeq != null && stgSeq != null
+        ? '$parentLtgSeq.$stgSeq'
+        : (stgSeq != null ? '$stgSeq' : '');
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -681,6 +722,11 @@ class _CompactStgCard extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  if (identifier.isNotEmpty) ...[
+                    Text(identifier, style: t.ladderEyebrow),
+                    if (domain != null && domain.isNotEmpty)
+                      const SizedBox(width: 8),
+                  ],
                   if (domain != null && domain.isNotEmpty)
                     Text(domain.toUpperCase(), style: t.domainPill),
                   const Spacer(),
@@ -768,6 +814,7 @@ class _CompactLtgRow extends StatelessWidget {
     final body = (ltg['goal_text'] as String?)?.trim() ?? '';
     final domain = (ltg['domain'] as String?)?.trim();
     final duration = _ltgDurationLabel(ltg);
+    final seq = _seqOf(ltg);
 
     final truncated = !expanded && body.length > 120
         ? '${body.substring(0, 117)}…'
@@ -795,7 +842,7 @@ class _CompactLtgRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'LONG-TERM GOAL',
+                  seq != null ? '$seq · LONG-TERM GOAL' : 'LONG-TERM GOAL',
                   style: t.ladderEyebrow.copyWith(color: cue.textSecondary),
                 ),
                 if (domain != null && domain.isNotEmpty) ...[
