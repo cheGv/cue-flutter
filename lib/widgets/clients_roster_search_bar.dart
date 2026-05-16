@@ -1,14 +1,13 @@
 // lib/widgets/clients_roster_search_bar.dart
 //
-// Phase 4.0.9-step-B-roster-surface-2 — search input + ⌘K hint +
-// "New client" CTA. The cmd-K hint is a soft affordance; no actual
-// keyboard listener is wired in v1 (deferred until a global shortcut
-// system exists).
+// /clients search row: full-width search input (with a ⌘K hint badge)
+// and a small ghost-square "+" button for the new-client flow. The
+// cmd-K hint is a soft affordance — no keyboard listener is wired yet.
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
-import '../theme/cue_phase4_tokens.dart';
-import '../theme/cue_type_v3.dart';
+import '../theme/cue_text_styles.dart';
 
 class ClientsRosterSearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -22,88 +21,103 @@ class ClientsRosterSearchBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = CueClientsPalette.of(context);
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Expanded(
-          child: Container(
-            height: 44,
-            decoration: BoxDecoration(
-              color: kCueSurfaceWhite,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: kCueBorder, width: 0.5),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.search_rounded,
-                  size: 18,
-                  color: kCueInkTertiary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    style: CueTypeV3.body(color: kCueInk)
-                        .copyWith(fontSize: 14),
-                    decoration: InputDecoration(
-                      isCollapsed: true,
-                      contentPadding: EdgeInsets.zero,
-                      border: InputBorder.none,
-                      hintText: 'Search by name, diagnosis, concern',
-                      hintStyle:
-                          CueTypeV3.body(color: kCueInkTertiary)
-                              .copyWith(fontSize: 14),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: kCuePaper,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(color: kCueBorder, width: 0.5),
-                  ),
-                  child: Text(
-                    '⌘ K',
-                    style: CueTypeV3.dataMono(color: kCueInkTertiary)
-                        .copyWith(fontSize: 11),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          height: 44,
-          child: ElevatedButton.icon(
-            onPressed: onNewClient,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('New client'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kCueInk,
-              foregroundColor: kCueSurfaceWhite,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              textStyle: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                letterSpacing: -0.07,
-              ),
-            ),
-          ),
-        ),
+        Expanded(child: _searchInput(palette)),
+        const SizedBox(width: 10),
+        _newClientButton(palette),
       ],
+    );
+  }
+
+  Widget _searchInput(CueClientsPalette palette) {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: palette.searchBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: palette.controlBorder, width: 0.5),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 14),
+      child: Row(
+        children: [
+          Icon(Icons.search_rounded, size: 18, color: palette.textTertiary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              style: GoogleFonts.dmSans(
+                fontSize: 14,
+                color: palette.textPrimary,
+              ),
+              decoration: InputDecoration(
+                isCollapsed: true,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                hintText: 'Search by name, diagnosis, concern',
+                hintStyle: GoogleFonts.dmSans(
+                  fontSize: 14,
+                  color: palette.textTertiary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _cmdKHint(palette),
+        ],
+      ),
+    );
+  }
+
+  Widget _cmdKHint(CueClientsPalette palette) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: palette.controlBorder, width: 0.5),
+      ),
+      child: Text(
+        '⌘K',
+        style: GoogleFonts.dmSans(
+          fontSize: 11,
+          color: palette.textTertiary,
+        ),
+      ),
+    );
+  }
+
+  Widget _newClientButton(CueClientsPalette palette) {
+    return Semantics(
+      button: true,
+      label: 'New client',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onNewClient,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: palette.controlBorder, width: 0.5),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '+',
+              style: GoogleFonts.dmSans(
+                fontSize: 18,
+                color: palette.ghostPlus,
+                height: 1.0,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

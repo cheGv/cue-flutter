@@ -1,0 +1,163 @@
+[
+  {
+    "name": "clear_dysphagia_pediatric",
+    "input": {
+      "diagnosis": "Pediatric feeding disorder, suspected aspiration on thin liquids",
+      "assessment_text": "Coughs consistently on water, refuses thickened formula. Currently NPO for thin liquids per pediatrician.",
+      "stg_text": "Tolerate IDDSI Level 2 across three consecutive sessions"
+    },
+    "expected": {
+      "primary_domain": "dysphagia",
+      "secondary_domains": [],
+      "confidence_min": 0.85
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "clear_aac_minimally_verbal",
+    "input": {
+      "diagnosis": "ASD, minimally verbal, age 4",
+      "assessment_text": "Currently uses 5-symbol core board. Functional communication limited to requesting preferred items. No protest or comment functions emerging.",
+      "stg_text": "Independently combine 2 symbols to request and refuse across 5 daily routines"
+    },
+    "expected": {
+      "primary_domain": "aac",
+      "secondary_domains": [],
+      "confidence_min": 0.85
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "motor_speech_with_language_secondary",
+    "input": {
+      "diagnosis": "Childhood Apraxia of Speech, expressive language delay",
+      "assessment_text": "Inconsistent productions of bilabials and alveolars. Limited phoneme inventory. MLU 1.2. PROMPT trained.",
+      "stg_text": "Produce CV combinations with bilabials at 80% accuracy with visual-auditory cueing"
+    },
+    "expected": {
+      "primary_domain": "motor_speech",
+      "secondary_domains": ["language"],
+      "confidence_min": 0.75
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "ambiguous_autism_intake",
+    "input": {
+      "diagnosis": "Autism Spectrum Disorder",
+      "intake_notes": "Parent reports concerns with communication"
+    },
+    "expected": {
+      "primary_domain": "any",
+      "secondary_domains": "any",
+      "confidence_max": 0.65,
+      "reasoning_must_contain_keyword_from": ["ambig", "unclear", "limited", "insufficient"]
+    },
+    "failure_acceptable": true
+  },
+  {
+    "name": "adult_stroke_aphasia",
+    "input": {
+      "diagnosis": "Left MCA stroke, expressive aphasia",
+      "assessment_text": "Broca's aphasia profile. Severe anomia. Agrammatic output. Comprehension relatively preserved. No dysphagia signs on bedside screen.",
+      "stg_text": "Retrieve 20 functional nouns with semantic cueing"
+    },
+    "expected": {
+      "primary_domain": "aphasia",
+      "secondary_domains": [],
+      "confidence_min": 0.85
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "code_mixed_hindi_english_dysphagia",
+    "input": {
+      "diagnosis": "Stroke, kha nahi sakte, aspiration risk hai",
+      "assessment_text": "Patient post-CVA. Thin liquids pe cough. NG tube currently. Need to start oral trials safely.",
+      "stg_text": "IDDSI 4 tolerance with no aspiration signs"
+    },
+    "expected": {
+      "primary_domain": "dysphagia",
+      "secondary_domains": [],
+      "confidence_min": 0.75
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "code_mixed_tamil_english_aac",
+    "input": {
+      "diagnosis": "ASD, 5 years, pesa maatraan (non-speaking)",
+      "assessment_text": "Symbol board use limited. Parent wants device-based AAC trial. Currently uses 3-4 pictures for basic requests.",
+      "stg_text": "Combine 2 symbols on tablet AAC for request and refusal"
+    },
+    "expected": {
+      "primary_domain": "aac",
+      "secondary_domains": [],
+      "confidence_min": 0.75
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "right_hemisphere_cognitive_communication",
+    "input": {
+      "diagnosis": "Right MCA stroke",
+      "assessment_text": "Intact lexical retrieval and syntax. Pragmatic deficits — fails to interpret prosody, missing implied meaning, inappropriate humor timing. Reduced topic maintenance. Family reports personality changes.",
+      "stg_text": "Identify inferred meaning in 8/10 conversational vignettes"
+    },
+    "expected": {
+      "primary_domain": "cognitive_communication",
+      "secondary_domains": [],
+      "confidence_min": 0.80
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "voice_vocal_cord_paralysis",
+    "input": {
+      "diagnosis": "B/L vocal cord paralysis post-thyroidectomy",
+      "assessment_text": "Severe breathy dysphonia. s/z ratio 2.1. MPT 4 seconds. No aspiration on FEES.",
+      "stg_text": "Begin baseline observation, prepare for RVT trial"
+    },
+    "expected": {
+      "primary_domain": "voice",
+      "secondary_domains": [],
+      "confidence_min": 0.85
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "comorbid_stroke_dysphagia_aphasia",
+    "input": {
+      "diagnosis": "Left MCA stroke with dysphagia; mild aphasia secondary",
+      "assessment_text": "Primary clinical concern is failed 3oz water swallow test with cough — NPO pending VFSS. Also presents with mild Broca's profile, functional naming limited but communication preserved. Swallowing is the immediate intervention priority.",
+      "stg_text": "Tolerate IDDSI 2 across three consecutive sessions"
+    },
+    "expected": {
+      "primary_domain": "dysphagia",
+      "secondary_domains": ["aphasia"],
+      "confidence_min": 0.80
+    },
+    "failure_acceptable": false
+  },
+  {
+    "name": "tempts_over_classification",
+    "input": {
+      "diagnosis": "Complex pediatric case — ASD, motor planning concerns, AAC user, fluency emerging in connected speech",
+      "assessment_text": "Multiple intervention threads. Currently uses AAC for primary communication. PROMPT cueing for emerging speech. Some disfluency noted in 2-word combinations. Sensory regulation needs ongoing support.",
+      "stg_text": "Combine 2 symbols on AAC; emerging speech with PROMPT cueing"
+    },
+    "expected": {
+      "primary_domain": "aac",
+      "secondary_domains_max_count": 2,
+      "secondary_domains_must_be_subset_of": [
+        "motor_speech",
+        "asd_regulatory",
+        "fluency",
+        "language"
+      ],
+      "confidence_max": 0.75,
+      "note": "Validates max-2 secondaries rule AND clinical content sanity. Should NOT return 3+ secondaries, and any returned secondary must be among the plausibly-present domains in the input."
+    },
+    "failure_acceptable": false
+  }
+]
