@@ -582,6 +582,16 @@ class _AddClientScreenState extends State<AddClientScreen> {
     }
 
     final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) {
+      // RLS WITH CHECK on `clients.clinician_id` rejects null with a cryptic
+      // 42501. Block the save and surface a human-readable signal instead.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("You're signed out — please sign in again"),
+        ),
+      );
+      return;
+    }
     setState(() => _isSaving = true);
 
     // Layer-01 Phase 4.0.2: parse comma-separated languages → text[]
@@ -672,7 +682,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
               'client_id':       clientId,
               'population_type': 'developmental_stuttering',
               'payload':         wrappedPayload,
-              'created_by': ?userId,
+              'created_by': userId,
             });
           }
         } catch (caseErr) {
