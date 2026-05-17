@@ -442,7 +442,7 @@ class _FocusedStgCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: p.focusedSurface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: p.amberAccentBorder, width: 0.5),
+        border: Border.all(color: p.amberAccentBorder, width: 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

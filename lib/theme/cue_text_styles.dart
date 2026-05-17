@@ -430,7 +430,7 @@ class CueChartPalette {
   // metaphor — focused surface is slightly more saturated than compact.
 
   Color get focusedSurface =>
-      isDark ? const Color(0x801F1E1A) : const Color(0xFFF4ECD8);
+      isDark ? const Color(0xB31F1E1A) : const Color(0xFFECE1C5);
   Color get compactSurface =>
       isDark ? const Color(0x4D1F1E1A) : const Color(0xFFF8F2E4);
 
@@ -446,7 +446,7 @@ class CueChartPalette {
   Color get amberAccentSurface =>
       isDark ? const Color(0x1AF5C778) : const Color(0x0FBA7517); // 10% / 6% alpha
   Color get amberAccentBorder =>
-      isDark ? const Color(0x66F5C778) : const Color(0x66BA7517); // 40% alpha
+      isDark ? const Color(0xB3F5C778) : const Color(0xB3BA7517); // 70% alpha
 
   // ── Discharged / archived gray surface (per spine doc kCueGraySurface) ─
   Color get graySurface =>
