@@ -50,14 +50,36 @@ class ChartGoalLadder extends StatefulWidget {
   State<ChartGoalLadder> createState() => _ChartGoalLadderState();
 }
 
-class _ChartGoalLadderState extends State<ChartGoalLadder> {
+class _ChartGoalLadderState extends State<ChartGoalLadder>
+    with SingleTickerProviderStateMixin {
   String? _focusedStgId;
   final Map<String, bool> _ltgExpanded = <String, bool>{};
+
+  // Confirmation pulse owned at the ladder level so the ring renders OUTSIDE
+  // the focused card's AnimatedSwitcher fade — alpha is no longer multiplied
+  // by the cross-fade opacity, so the ring appears at full intended opacity
+  // the instant the new card paints.
+  late final AnimationController _ringController;
+  late final Animation<double> _ringOpacity;
 
   @override
   void initState() {
     super.initState();
+    _ringController = AnimationController(
+      duration: const Duration(milliseconds: 380),
+      vsync: this,
+    );
+    _ringOpacity = CurvedAnimation(
+      parent: _ringController,
+      curve: Curves.easeInOutCubic,
+    ).drive(Tween<double>(begin: 1.0, end: 0.0));
     _loadState();
+  }
+
+  @override
+  void dispose() {
+    _ringController.dispose();
+    super.dispose();
   }
 
   @override
@@ -99,6 +121,9 @@ class _ChartGoalLadderState extends State<ChartGoalLadder> {
         ..clear()
         ..addEntries(ltgResults);
     });
+    if (focused != null) {
+      _ringController.forward(from: 0);
+    }
   }
 
   String? _mostRecentActiveStgId(List<Map<String, dynamic>> actives) {
@@ -117,6 +142,7 @@ class _ChartGoalLadderState extends State<ChartGoalLadder> {
   void _swapFocus(String nextStgId) {
     if (nextStgId == _focusedStgId) return;
     setState(() => _focusedStgId = nextStgId);
+    _ringController.forward(from: 0);
     ChartUiState.setFocusedStgId(widget.clientId, nextStgId);
   }
 
@@ -144,6 +170,7 @@ class _ChartGoalLadderState extends State<ChartGoalLadder> {
 
   @override
   Widget build(BuildContext context) {
+    final cue = CueColorsResolved.of(context);
     final activeLtgs = widget.ltgs.where(_isLtgActive).toList();
     final activeStgs = widget.stgs.where(_isStgActive).toList();
 
@@ -191,23 +218,55 @@ class _ChartGoalLadderState extends State<ChartGoalLadder> {
 
         // ── 2. Focused STG ─────────────────────────────────────────────
         if (focusedStg != null)
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeOutCubic,
-            transitionBuilder: (child, anim) =>
-                FadeTransition(opacity: anim, child: child),
-            child: _FocusedStgCard(
-              key: ValueKey('focused-${focusedStg['id']}'),
-              stg: focusedStg,
-              parentLtgSeq: ltgSeqByLtgId[
-                  focusedStg['long_term_goal_id']?.toString() ?? ''],
-              hasSiblings: activeStgs.length > 1,
-              onCycleFocus: () => _cycleFocus(activeStgs),
-              onThinkWithCue: widget.onThinkWithCue == null
-                  ? null
-                  : () => widget.onThinkWithCue!(focusedStg!),
-            ),
+          Stack(
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 160),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeOutCubic,
+                transitionBuilder: (child, anim) =>
+                    FadeTransition(opacity: anim, child: child),
+                child: _FocusedStgCard(
+                  key: ValueKey('focused-${focusedStg['id']}'),
+                  stg: focusedStg,
+                  parentLtgSeq: ltgSeqByLtgId[
+                      focusedStg['long_term_goal_id']?.toString() ?? ''],
+                  hasSiblings: activeStgs.length > 1,
+                  onCycleFocus: () => _cycleFocus(activeStgs),
+                  onThinkWithCue: widget.onThinkWithCue == null
+                      ? null
+                      : () => widget.onThinkWithCue!(focusedStg!),
+                ),
+              ),
+              // Confirmation ring — sits OUTSIDE the AnimatedSwitcher so its
+              // alpha isn't multiplied by the cross-fade opacity. bottom: 14
+              // matches the focused card's bottom margin so the ring traces
+              // the card's painted outline, not the margin gap below.
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 14,
+                child: IgnorePointer(
+                  child: AnimatedBuilder(
+                    animation: _ringOpacity,
+                    builder: (context, _) {
+                      final v = _ringOpacity.value;
+                      if (v <= 0.001) return const SizedBox.shrink();
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: cue.olive.withValues(alpha: v),
+                            width: 2,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
 
         // ── 3. Compact STGs — grouped by domain, horizontal on desktop ─
@@ -374,8 +433,8 @@ class _FocusedStgCard extends StatelessWidget {
     final duration = _stgDurationLabel(stg);
     final stgSeq = _seqOf(stg);
     final identifier = parentLtgSeq != null && stgSeq != null
-        ? '$parentLtgSeq.$stgSeq · '
-        : (stgSeq != null ? '$stgSeq · ' : '');
+        ? '$parentLtgSeq.$stgSeq'
+        : (stgSeq != null ? '$stgSeq' : '');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -406,8 +465,12 @@ class _FocusedStgCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              if (identifier.isNotEmpty) ...[
+                Text(identifier, style: t.ladderIdentifier),
+                const SizedBox(width: 8),
+              ],
               Text(
-                '${identifier}SHORT-TERM GOAL · IN FOCUS',
+                'SHORT-TERM GOAL · IN FOCUS',
                 style: t.ladderEyebrow.copyWith(color: amber),
               ),
               if (domain != null && domain.isNotEmpty) ...[
@@ -432,10 +495,6 @@ class _FocusedStgCard extends StatelessWidget {
               style: t.ladderBody,
             ),
           ),
-          const SizedBox(height: 16),
-
-          // Active steps
-          _ActiveStepsGrid(stg: stg),
 
           // Evidence section
           const SizedBox(height: 14),
@@ -723,7 +782,7 @@ class _CompactStgCard extends StatelessWidget {
               Row(
                 children: [
                   if (identifier.isNotEmpty) ...[
-                    Text(identifier, style: t.ladderEyebrow),
+                    Text(identifier, style: t.ladderIdentifier),
                     if (domain != null && domain.isNotEmpty)
                       const SizedBox(width: 8),
                   ],
@@ -841,8 +900,12 @@ class _CompactLtgRow extends StatelessWidget {
                   color: cue.textSecondary,
                 ),
                 const SizedBox(width: 8),
+                if (seq != null) ...[
+                  Text('$seq', style: t.ladderIdentifier),
+                  const SizedBox(width: 8),
+                ],
                 Text(
-                  seq != null ? '$seq · LONG-TERM GOAL' : 'LONG-TERM GOAL',
+                  'LONG-TERM GOAL',
                   style: t.ladderEyebrow.copyWith(color: cue.textSecondary),
                 ),
                 if (domain != null && domain.isNotEmpty) ...[
@@ -861,7 +924,7 @@ class _CompactLtgRow extends StatelessWidget {
                   constraints: const BoxConstraints(maxWidth: 760),
                   child: Text(
                     truncated,
-                    style: t.ladderBody.copyWith(color: cue.textSecondary),
+                    style: t.ladderBody.copyWith(fontWeight: FontWeight.w500),
                     maxLines: expanded ? null : 1,
                     overflow: expanded
                         ? TextOverflow.clip
@@ -1085,8 +1148,16 @@ class _CitationRow extends StatelessWidget {
   }
 }
 
-// ── Active steps grid (carried over from Phase 4.1.0) ────────────────────────
-
+// ── Active steps grid ────────────────────────────────────────────────────────
+//
+// TODO: real STG sub-steps — future data feature.
+//
+// Currently unused. Phase 4.1.x removed the "ACTIVE STEPS · N" section from
+// _FocusedStgCard because there is no STG sub-step column in the schema; the
+// prior implementation re-rendered the goal body through _stgBodyText and
+// hardcoded "· 1". Preserved here so it can be re-wired when sub-steps become
+// real, queryable data (with their own count, ids, statuses, etc.).
+// ignore: unused_element
 class _ActiveStepsGrid extends StatelessWidget {
   final Map<String, dynamic> stg;
   const _ActiveStepsGrid({required this.stg});

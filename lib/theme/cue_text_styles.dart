@@ -248,12 +248,23 @@ class CueChartTextStyles {
         fontFeatures: const [FontFeature.tabularFigures()],
       );
 
-  /// Ladder eyebrow (LTG / STG / "Active steps · N") — Syne uppercase tracked.
+  /// Ladder eyebrow (LTG / STG label, IN FOCUS state) — Syne uppercase tracked.
   TextStyle get ladderEyebrow => GoogleFonts.syne(
         fontWeight: FontWeight.w500,
         fontSize: 10,
         letterSpacing: 10 * 0.14,
         color: _textSecondary,
+      );
+
+  /// Ladder identifier — the goal sequence number (N for LTG, N.M for STG)
+  /// on every ladder surface. Sized and weighted to dominate the eyebrow
+  /// label beside it as the row's visual anchor. Tabular figures keep digit
+  /// widths consistent across sequences.
+  TextStyle get ladderIdentifier => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w700,
+        fontSize: 18,
+        color: _textPrimary,
+        fontFeatures: const [FontFeature.tabularFigures()],
       );
 
   /// Domain code pill text — Syne 10px tracked, olive.
