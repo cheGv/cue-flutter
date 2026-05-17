@@ -734,7 +734,7 @@ class _CompactStgRailState extends State<_CompactStgRail> {
   }
 }
 
-class _CompactStgCard extends StatelessWidget {
+class _CompactStgCard extends StatefulWidget {
   final Map<String, dynamic> stg;
   final Map<String, int> ltgSeqByLtgId;
   final double? fixedWidth;
@@ -748,32 +748,49 @@ class _CompactStgCard extends StatelessWidget {
   });
 
   @override
+  State<_CompactStgCard> createState() => _CompactStgCardState();
+}
+
+class _CompactStgCardState extends State<_CompactStgCard> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final t = CueChartTextStyles.of(context, isMobile: false);
     final p = CueChartPalette.of(context);
     final cue = CueColorsResolved.of(context);
 
-    final body = _stgBodyText(stg);
-    final domain = (stg['domain'] as String?)?.trim();
+    final body = _stgBodyText(widget.stg);
+    final domain = (widget.stg['domain'] as String?)?.trim();
     final stepCount = body.isEmpty ? 0 : 1;
-    final parentLtgSeq =
-        ltgSeqByLtgId[stg['long_term_goal_id']?.toString() ?? ''];
-    final stgSeq = _seqOf(stg);
+    final parentLtgSeq = widget
+        .ltgSeqByLtgId[widget.stg['long_term_goal_id']?.toString() ?? ''];
+    final stgSeq = _seqOf(widget.stg);
     final identifier = parentLtgSeq != null && stgSeq != null
         ? '$parentLtgSeq.$stgSeq'
         : (stgSeq != null ? '$stgSeq' : '');
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: fixedWidth,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          width: widget.fixedWidth,
           padding: const EdgeInsets.all(14),
+          transform: _hovered
+              ? (Matrix4.identity()..translateByDouble(0.0, -2.0, 0.0, 1.0))
+              : Matrix4.identity(),
           decoration: BoxDecoration(
             color: p.compactSurface,
             borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: p.sectionDivider, width: 0.5),
+            border: Border.all(
+              color: _hovered ? cue.borderHover : p.sectionDivider,
+              width: 0.5,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
