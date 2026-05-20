@@ -38,6 +38,7 @@ import '../widgets/chart/chart_masthead.dart';
 import '../widgets/chart/chart_session_history.dart';
 import '../widgets/cue_hold/cue_hold_state.dart';
 import '../widgets/cue_popup.dart';
+import '../widgets/recall_assistant/recall_assistant_controller.dart';
 import 'add_client_screen.dart';
 import 'add_session_screen.dart';
 import 'goal_authoring_screen.dart';
@@ -125,6 +126,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       cueHoldController.setClientContext(
         clientId: _client['id'].toString(),
         clientName: (_client['name'] as String?) ?? '',
+      );
+      // Carried-client focus for the recall assistant. Persists across
+      // navigation (NOT cleared on leaving the chart) until the chip ×,
+      // Clear, sign-out, or idle. Deferred to post-frame for the same
+      // reason as setClientContext: avoid notifyListeners() during the
+      // recall overlay's build pass.
+      recallAssistantController.setFocusedClient(
+        _client['id'].toString(),
+        (_client['name'] as String?) ?? '',
       );
       _fireCompactHold();
     });

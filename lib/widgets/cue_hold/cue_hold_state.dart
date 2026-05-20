@@ -81,6 +81,14 @@ class CueHoldController extends ChangeNotifier {
   // mounted.
   bool _thinkingInExpanded = false;
 
+  // Phase 4.1.x — "held" means the EXPANDED panel was minimized
+  // (rather than closed). Conversation, anchors, and client context
+  // stay alive in memory so a re-tap resumes the same thread.
+  // Cannot be derived from _conversation.isEmpty — the normal flow is
+  // open → read context → minimize WITHOUT typing, so the clinician's
+  // intent is the only authoritative signal.
+  bool _heldFromMinimize = false;
+
   // ── Public read API ──────────────────────────────────────────────────────
 
   CueHoldState get state => _state;
@@ -97,6 +105,7 @@ class CueHoldController extends ChangeNotifier {
   CueHoldState? get secondaryState => _secondaryState;
   String get secondaryLabel => _secondaryLabel;
   bool get thinkingInExpanded => _thinkingInExpanded;
+  bool get hasPreservedConversation => _heldFromMinimize;
 
   /// True when [state] resolves to a pill-shaped surface (vs. expanded
   /// chat / full popup / multi). Used by the renderer to pick the layout.
@@ -206,6 +215,10 @@ class CueHoldController extends ChangeNotifier {
     _stgAnchorId = stgId;
     _ltgAnchorId = ltgId;
     _stgBodyText = stgBodyText;
+    // Re-opening ends the held condition. Set BEFORE _setState so the
+    // single notify carries the new state and the cleared flag atomically
+    // (same pattern as closeExpanded / setClientContext).
+    _heldFromMinimize = false;
     _setState(CueHoldState.expanded);
   }
 
@@ -215,6 +228,15 @@ class CueHoldController extends ChangeNotifier {
     if (_state != CueHoldState.expanded) return;
     final back = _previousState ?? CueHoldState.idle;
     _setState(back);
+    // Held flag flips AFTER the state pop per the spec. _setState already
+    // fired one notify carrying state=back, held=false; we now fire a
+    // second carrying held=true. Both are synchronous markNeedsBuild calls
+    // on the AnimatedBuilder listener in cue_hold.dart and coalesce into a
+    // single rebuild before the next paint.
+    _heldFromMinimize = true;
+    // If a single-frame held-dot flicker ever appears on minimize, move
+    // _heldFromMinimize=true before _setState(back) per the expand() pattern.
+    _safeNotify();
   }
 
   /// "Close X" — collapses to IDLE and clears conversation history.
@@ -224,6 +246,7 @@ class CueHoldController extends ChangeNotifier {
       _stgAnchorId = null;
       _ltgAnchorId = null;
       _stgBodyText = null;
+      _heldFromMinimize = false;
       return;
     }
     _conversation.clear();
@@ -231,6 +254,7 @@ class CueHoldController extends ChangeNotifier {
     _ltgAnchorId = null;
     _stgBodyText = null;
     _contextLabel = 'Cue · ready';
+    _heldFromMinimize = false;
     _setState(CueHoldState.idle);
   }
 

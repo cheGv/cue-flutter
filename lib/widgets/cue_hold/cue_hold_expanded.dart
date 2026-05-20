@@ -158,38 +158,55 @@ class _CueHoldExpandedState extends State<CueHoldExpanded> {
     final p = CueChartPalette.of(context);
     final cue = CueColorsResolved.of(context);
 
-    final width = widget.isMobile
-        ? MediaQuery.of(context).size.width - 24
-        : 380.0;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Fix 3 — panel width comes from parent constraints, not MediaQuery.
+        // The Positioned in _ExpandedChatOverlay sets left:12/right:12 on
+        // mobile (finite maxWidth) and right:32 only on desktop (infinite
+        // maxWidth → fall back to the locked 380.0).
+        final panelWidth =
+            widget.isMobile ? constraints.maxWidth : 380.0;
 
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: width,
-        constraints: const BoxConstraints(maxHeight: 480),
-        decoration: BoxDecoration(
-          color: p.holdSurface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: p.holdBorder, width: 0.5),
-          boxShadow: [
-            BoxShadow(
-              color: cue.isDark
-                  ? const Color(0x66000000)
-                  : const Color(0x26000000),
-              offset: const Offset(0, 12),
-              blurRadius: 48,
+        // Fix 1 — Material owns the opaque fill + shape + clip; the drop
+        // shadow moves OUT to an enclosing DecoratedBox so the Material's
+        // antiAlias clip can't truncate it.
+        return SizedBox(
+          width: panelWidth,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: cue.isDark
+                      ? const Color(0x66000000)
+                      : const Color(0x26000000),
+                  offset: const Offset(0, 12),
+                  blurRadius: 48,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _header(p, cue),
-            Flexible(child: _body(cue)),
-            _inputBar(p, cue),
-          ],
-        ),
-      ),
+            child: Material(
+              color: p.holdSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: p.holdBorder, width: 0.5),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 480),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _header(p, cue),
+                    Flexible(child: _body(cue, panelWidth)),
+                    _inputBar(p, cue),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -256,7 +273,7 @@ class _CueHoldExpandedState extends State<CueHoldExpanded> {
     );
   }
 
-  Widget _body(CueColorsResolved cue) {
+  Widget _body(CueColorsResolved cue, double panelWidth) {
     final messages = widget.controller.conversation;
     final intro = _resolveIntro(widget.controller);
 
@@ -267,13 +284,14 @@ class _CueHoldExpandedState extends State<CueHoldExpanded> {
         _systemMessage(intro.headline, intro.subtext, cue),
         for (final m in messages) ...[
           const SizedBox(height: 12),
-          _chatBubble(m, cue),
+          _chatBubble(m, cue, panelWidth),
         ],
         if (_sending && _streamingAssistant.isNotEmpty) ...[
           const SizedBox(height: 12),
           _chatBubble(
             CueHoldChatMessage(text: _streamingAssistant, fromUser: false),
             cue,
+            panelWidth,
           ),
         ] else if (_sending) ...[
           const SizedBox(height: 12),
@@ -366,16 +384,17 @@ class _CueHoldExpandedState extends State<CueHoldExpanded> {
     );
   }
 
-  Widget _chatBubble(CueHoldChatMessage m, CueColorsResolved cue) {
+  Widget _chatBubble(
+      CueHoldChatMessage m, CueColorsResolved cue, double panelWidth) {
     final isUser = m.fromUser;
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: (widget.isMobile
-                  ? MediaQuery.of(context).size.width - 48
-                  : 320)
-              .toDouble(),
+          // Fix 3 — bubble cap derived from parent panel width. Mobile:
+          // panelWidth - 24 (≡ screen - 48, matching the prior formula
+          // exactly since panelWidth = screen - 24). Desktop: locked 320.
+          maxWidth: widget.isMobile ? panelWidth - 24 : 320.0,
         ),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),

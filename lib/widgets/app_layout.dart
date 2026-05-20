@@ -691,9 +691,9 @@ class _CueHoldShortcuts extends StatelessWidget {
       // In release, just wire the global ⌘K binding.
       return CallbackShortcuts(
         bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+          const SingleActivator(LogicalKeyboardKey.keyK, meta: true, shift: true):
               cueHoldController.toFullActivity,
-          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+          const SingleActivator(LogicalKeyboardKey.keyK, control: true, shift: true):
               cueHoldController.toFullActivity,
           const SingleActivator(LogicalKeyboardKey.escape):
               cueHoldController.closeFullActivity,
@@ -704,9 +704,9 @@ class _CueHoldShortcuts extends StatelessWidget {
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
         // Global ⌘K opens full activity.
-        const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
+        const SingleActivator(LogicalKeyboardKey.keyK, meta: true, shift: true):
             cueHoldController.toFullActivity,
-        const SingleActivator(LogicalKeyboardKey.keyK, control: true):
+        const SingleActivator(LogicalKeyboardKey.keyK, control: true, shift: true):
             cueHoldController.toFullActivity,
         const SingleActivator(LogicalKeyboardKey.escape):
             cueHoldController.closeFullActivity,

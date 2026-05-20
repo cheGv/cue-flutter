@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'config/app_config.dart';
 import 'screens/today_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -18,17 +20,38 @@ import 'screens/new_assessment_case_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/session_capture_screen.dart';
 import 'screens/settings/settings_shell.dart';
+// Debug-only recall resolver verification harness. Referenced solely from
+// the kDebugMode-gated '/debug/recall-test' route below; tree-shaken out
+// of release builds.
+import 'screens/recall_resolver_test_screen.dart';
+// Recall wiring (composition root). main.dart constructs the concrete
+// DirectTableCardSource + roster query and injects them into the dedicated
+// recall assistant controller; the recall_assistant_*.dart files stay free
+// of Supabase / RecallCardSource imports (the seam).
+import 'services/recall_card_source.dart';
+import 'services/recall_resolver.dart';
+import 'widgets/cue_hold.dart' show cueHoldController;
+import 'widgets/recall_assistant/recall_assistant_controller.dart';
+import 'widgets/recall_assistant/recall_assistant_overlay.dart';
 import 'theme/cue_theme.dart';
 import 'theme/theme_notifier.dart';
 import 'utils/daily_chart_log.dart';
 
+/// Root navigator key — shared with the recall assistant overlay so it can
+/// present modal routes (the voice sheet) from above the Navigator.
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Supabase target is compile-time-selected (see lib/config/app_config.dart).
+  // Defaults to PRODUCTION; unchanged when launched with no overrides. For a
+  // sandbox build, launch with:
+  //   --dart-define=SUPABASE_URL=https://uuqhusmgoiaxdvtgbmwh.supabase.co
+  //   --dart-define=SUPABASE_ANON_KEY=<sandbox anon key from app_config doc>
   await Supabase.initialize(
-    url: 'https://cgnjbjbargkxtcnafxaa.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnbmpiamJhcmdreHRjbmFmeGFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyODQyNzcsImV4cCI6MjA5MDg2MDI3N30.AWmyJoSuXUi7X74vBN2E1Jv7mStsjepKqRFyA6iFfmE',
+    url: kSupabaseUrl,
+    anonKey: kSupabaseAnonKey,
   );
 
   // Restore persisted theme before first frame.
@@ -38,7 +61,42 @@ Future<void> main() async {
   // Monday-first detection only reads today's opens.
   await DailyChartLog.pruneStaleEntries();
 
+  // Wire the verified recall resolver into the dedicated recall assistant
+  // surface (NOT the Hold). Construction of the concrete
+  // DirectTableCardSource + clients-roster query lives HERE (composition
+  // root) so the recall_assistant_*.dart files never import Supabase or
+  // RecallCardSource — the seam holds. Built ONCE. The roster provider runs
+  // the same query the Today screen uses (clients, RLS-scoped, deleted_at
+  // null, by name).
+  recallAssistantController.attach(
+    resolver: RecallResolver(source: DirectTableCardSource()),
+    rosterProvider: () async {
+      final rows = await Supabase.instance.client
+          .from('clients')
+          .select()
+          .isFilter('deleted_at', null)
+          .order('name', ascending: true);
+      return (rows as List)
+          .map((r) => Map<String, dynamic>.from(r as Map))
+          .toList();
+    },
+    // "Open in Cue Study" hands off to the existing Cue Study full-activity
+    // popup (unchanged — its own redesign is a separate session). Pre-loading
+    // the question into Study is owned by that redesign: flagged, not wired.
+    onOpenInStudy: (query) => cueHoldController.toFullActivity(),
+  );
+
+  // Suppress the recall surface when signed-out (proxy for auth screens —
+  // recall reads are RLS-scoped to the clinician) and clear the
+  // session-scoped recent list on sign-out.
   final session = Supabase.instance.client.auth.currentSession;
+  recallAssistantController.setSuppressed(session == null);
+  Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+    final signedIn = data.session != null;
+    recallAssistantController.setSuppressed(!signedIn);
+    if (!signedIn) recallAssistantController.onSignOut();
+  });
+
   runApp(CueApp(hasSession: session != null));
 }
 
@@ -364,6 +422,36 @@ class CueApp extends StatelessWidget {
         themeMode: mode,
         theme:     CueTheme.dayTheme,
         darkTheme: CueTheme.nightTheme,
+        // Root navigator key — lets the recall overlay (mounted above the
+        // Navigator in `builder`) present the voice sheet via the modal route.
+        navigatorKey: rootNavigatorKey,
+        // The recall assistant overlay floats above every screen. Mounted in
+        // `builder` (above the Navigator) so the card + dim backdrop + the
+        // "Ask Cue" button sit over all chrome. Global Cmd/Ctrl+K is
+        // intercepted inside the overlay.
+        //
+        // Wrapped in a dedicated Overlay (Option A): MaterialApp.builder sits
+        // ABOVE the Navigator's own Overlay, so without this the recall
+        // surfaces have no Overlay ancestor — the card's mic Tooltip /
+        // IconButton (and TextField selection) throw "No Overlay widget
+        // found", which cascades into a viewport overflow. The single
+        // OverlayEntry hosts the existing RecallAssistantOverlay (which still
+        // composes the app `child` + button + card), giving every recall
+        // surface this Overlay as its ancestor. The app's own Navigator still
+        // provides the Overlay for the screens inside `child`.
+        builder: (context, child) => Overlay(
+          initialEntries: [
+            OverlayEntry(
+              opaque: true,
+              maintainState: true,
+              builder: (_) => RecallAssistantOverlay(
+                controller: recallAssistantController,
+                navigatorKey: rootNavigatorKey,
+                child: child ?? const SizedBox.shrink(),
+              ),
+            ),
+          ],
+        ),
         // `home` stays as the implicit landing surface for `/`. Phase
         // 4.0.7.39 adds named routes for every chrome destination and
         // every Category 1 surface so refresh on any deep-linkable URL
@@ -373,6 +461,18 @@ class CueApp extends StatelessWidget {
           final name = settings.name;
           if (name == null) return null;
           final uri = Uri.parse(name);
+
+          // ── Debug-only recall resolver verification harness ─────────
+          // Throwaway live-verify screen, reachable ONLY in debug builds.
+          // In release, kDebugMode is a const false so this branch (and
+          // the screen it references) is tree-shaken out — it never ships.
+          // Not wired into any production navigation surface.
+          if (kDebugMode && uri.path == '/debug/recall-test') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const RecallResolverTestScreen(),
+            );
+          }
 
           // ── Auth surfaces ───────────────────────────────────────────
           if (uri.path == '/login') {
