@@ -405,7 +405,7 @@ class CueChartPalette {
 
   // ── The Hold (global cuttlefish pill in the top bar) ───────────────────
   Color get holdSurface =>
-      isDark ? const Color(0xD91F1E1A) : const Color(0xD9FFFFFF); // 0.85 alpha
+      isDark ? const Color(0xFF1F1E1A) : const Color(0xFFFFFFFF); // opaque
   Color get holdBorder => const Color(0x40F5C778); // ~0.25 alpha amber
 
   // ── Floating action bar pill ───────────────────────────────────────────

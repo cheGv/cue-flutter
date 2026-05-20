@@ -20,6 +20,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../models/reasoning_message.dart';
 import '../models/reasoning_thread.dart';
 import '../services/cue_reasoning_service.dart';
+import '../theme/cue_theme.dart';
 
 // ── Tokens (local — match the existing CueStudy navy-dark register) ─────
 const Color _navyDark   = Color(0xFF0E1B2C);
@@ -671,10 +672,17 @@ class _CueReasoningPanelState extends State<CueReasoningPanel> {
   }
 
   void _showFrameworksList(ReasoningMessage m) {
+    // Inverted-surface island — sheet background is hardcoded white
+    // (line 678 below) and the framework-name Text leaves color unset,
+    // so under night theme that label inherits cream-white onSurface
+    // and disappears. Same pathology as the pre-auth login/signup
+    // surfaces; same one-wrapper fix.
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.white,
-      builder: (_) => SafeArea(
+      builder: (_) => Theme(
+        data: CueTheme.dayTheme,
+        child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -714,6 +722,7 @@ class _CueReasoningPanelState extends State<CueReasoningPanel> {
             ],
           ),
         ),
+      ),
       ),
     );
   }

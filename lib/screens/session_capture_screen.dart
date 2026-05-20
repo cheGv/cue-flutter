@@ -40,6 +40,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/session_archive_service.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/domain_pill.dart';
@@ -1115,8 +1116,10 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
               OutlinedButton(
                 onPressed: _saving ? null : _save,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: kCueInk,
-                  side: const BorderSide(color: kCueBorder),
+                  foregroundColor:
+                      CueColorsResolved.of(context).textPrimary,
+                  side: BorderSide(
+                      color: CueColorsResolved.of(context).border),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 18, vertical: 14),
                   shape: RoundedRectangleBorder(
@@ -1128,7 +1131,6 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
                   style: GoogleFonts.dmSans(
                     fontSize:   14,
                     fontWeight: FontWeight.w500,
-                    color:      kCueInk,
                   ),
                 ),
               ),

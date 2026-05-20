@@ -49,6 +49,12 @@ class CueHoldPill extends StatefulWidget {
   /// in LISTENING it stops. Caller (CueHold widget) routes the tap.
   final VoidCallback? onMicTap;
 
+  /// Phase 4.1.x — when true AND state is idle/compact, the cuttlefish
+  /// disc gains a small amber dot at upper-right to signal that the
+  /// EXPANDED chat was minimized (not closed). Default false preserves
+  /// CueHoldMulti call sites untouched.
+  final bool held;
+
   const CueHoldPill({
     super.key,
     required this.state,
@@ -56,6 +62,7 @@ class CueHoldPill extends StatefulWidget {
     this.onTap,
     this.onLongPress,
     this.onMicTap,
+    this.held = false,
   });
 
   @override
@@ -128,7 +135,7 @@ class _CueHoldPillState extends State<CueHoldPill>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _mark(),
+                _mark(p.holdSurface),
                 const SizedBox(width: 8),
                 _label(),
                 if (isThinking) ...[
@@ -147,7 +154,7 @@ class _CueHoldPillState extends State<CueHoldPill>
     );
   }
 
-  Widget _mark() {
+  Widget _mark(Color holdSurfaceColor) {
     final svg = SvgPicture.asset(
       'assets/brand/cue_mark.svg',
       width: 14,
@@ -200,6 +207,9 @@ class _CueHoldPillState extends State<CueHoldPill>
     );
 
     if (widget.state == CueHoldState.listening) {
+      // Listening branch — UNCHANGED. Held dot suppressed during listening:
+      // the mic ring already carries an attention register, a second
+      // marker would be visual noise.
       return SizedBox(
         width: 36,
         height: 36,
@@ -226,6 +236,39 @@ class _CueHoldPillState extends State<CueHoldPill>
               },
             ),
             circle,
+          ],
+        ),
+      );
+    }
+
+    // Held marker — only when held && state ∈ {idle, compact}. An 8px
+    // amber dot ringed with 1.5px holdSurface so it reads on the disc
+    // (amber-0.12) and on the pill body (holdSurface). Stack uses
+    // Clip.none so the -2/-2 offset poke does not consume layout slot.
+    if (widget.held &&
+        (widget.state == CueHoldState.idle ||
+            widget.state == CueHoldState.compact)) {
+      return SizedBox(
+        width: 22,
+        height: 22,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: circle),
+            Positioned(
+              top: -2,
+              right: -2,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: _amber,
+                  shape: BoxShape.circle,
+                  border:
+                      Border.all(color: holdSurfaceColor, width: 1.5),
+                ),
+              ),
+            ),
           ],
         ),
       );

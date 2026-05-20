@@ -43,3 +43,21 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Credentials and scratch files - never commit
+*.key
+*.pem
+token.txt
+anon.txt
+antkey.txt
+pw.txt
+body.json
+token_response.json
+reset_url.txt
+q.json
+qc.json
+ac.json
+rc.json
+
+# Supabase CLI local state
+supabase/.temp/

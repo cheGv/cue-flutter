@@ -9,6 +9,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/session_archive_service.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import 'narrate_session_screen.dart';
@@ -1235,6 +1236,7 @@ class _ReportScreenState extends State<ReportScreen> {
                             onPressed: _isLoading ? null : _generateReport,
                             style: FilledButton.styleFrom(
                               backgroundColor: kCueAmber,
+                              foregroundColor: Colors.white,
                               disabledBackgroundColor:
                                   kCueAmber.withValues(alpha: 0.5),
                               padding: const EdgeInsets.symmetric(
@@ -1249,7 +1251,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                     child: CircularProgressIndicator(
                                         color: Colors.white,
                                         strokeWidth: 2))
-                                : const Icon(Icons.auto_awesome),
+                                : const Icon(Icons.auto_awesome,
+                                    color: Colors.white),
                             label: Text(
                               _isLoading ? 'Generating…' : 'Generate Report',
                               style: GoogleFonts.dmSans(
@@ -1305,6 +1308,7 @@ class _ReportScreenState extends State<ReportScreen> {
                                 onPressed: _downloadPdf,
                                 style: FilledButton.styleFrom(
                                   backgroundColor: kCueAmber,
+                                  foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 20, vertical: 12),
                                   shape: RoundedRectangleBorder(
@@ -1313,7 +1317,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                   ),
                                 ),
                                 icon: const Icon(
-                                    Icons.download_rounded, size: 18),
+                                    Icons.download_rounded, size: 18,
+                                    color: Colors.white),
                                 label: Text(
                                   'Download PDF',
                                   style: GoogleFonts.dmSans(
@@ -1376,6 +1381,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               backgroundColor: _attested
                                   ? kCueAmber
                                   : kCueAmber.withValues(alpha: 0.45),
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                   vertical: 14),
                               shape: RoundedRectangleBorder(
@@ -1428,6 +1434,7 @@ class _ReportScreenState extends State<ReportScreen> {
                             style: FilledButton.styleFrom(
                               backgroundColor:
                                   const Color(0xFF1B2B4B),
+                              foregroundColor: Colors.white,
                               disabledBackgroundColor:
                                   const Color(0xFF1B2B4B).withAlpha(77),
                               padding: const EdgeInsets.symmetric(
@@ -1530,9 +1537,12 @@ class _ReportScreenState extends State<ReportScreen> {
                                   label: const Text('Copy'),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor:
-                                        const Color(0xFF1B2B4B),
-                                    side: const BorderSide(
-                                        color: Color(0xFF1B2B4B)),
+                                        CueColorsResolved.of(context)
+                                            .textPrimary,
+                                    side: BorderSide(
+                                        color: CueColorsResolved.of(
+                                                context)
+                                            .textPrimary),
                                     padding:
                                         const EdgeInsets.symmetric(
                                             vertical: 12),
@@ -1553,7 +1563,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                       const Text('Send via WhatsApp'),
                                   style: FilledButton.styleFrom(
                                     backgroundColor:
-                                        const Color(0xFF25D366),
+                                        const Color(0xFF075E54),
+                                    foregroundColor: Colors.white,
                                     padding:
                                         const EdgeInsets.symmetric(
                                             vertical: 12),
@@ -1646,8 +1657,10 @@ class _ReportScreenState extends State<ReportScreen> {
                   _showNoteFields = true;
                 }),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: kCueInk,
-                  side: const BorderSide(color: kCueBorder),
+                  foregroundColor:
+                      CueColorsResolved.of(context).textPrimary,
+                  side: BorderSide(
+                      color: CueColorsResolved.of(context).border),
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 10),
                   shape: RoundedRectangleBorder(
@@ -1659,7 +1672,6 @@ class _ReportScreenState extends State<ReportScreen> {
                   style: GoogleFonts.dmSans(
                     fontSize:   14,
                     fontWeight: FontWeight.w500,
-                    color:      kCueInk,
                   ),
                 ),
               ),
@@ -1707,8 +1719,10 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                foregroundColor: kCueAmberDeep,
-                side: const BorderSide(color: kCueAmberDeep),
+                foregroundColor:
+                    CueColorsResolved.of(context).amberDeep,
+                side: BorderSide(
+                    color: CueColorsResolved.of(context).amberDeep),
                 padding: const EdgeInsets.symmetric(
                     horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(

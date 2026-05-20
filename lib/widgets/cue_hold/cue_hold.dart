@@ -95,12 +95,23 @@ class CueHold extends StatelessWidget {
       case CueHoldState.thinking:
       case CueHoldState.listening:
       default:
+        // Phase 4.1.x — held dot lights up only when the controller's
+        // actual state is a parked pill (idle/compact) AND a prior
+        // EXPANDED session was minimized. Suppressed while chat is open
+        // (c.state == expanded — pill is just a visual anchor behind the
+        // overlay) or while the full-activity popup is mounted.
+        final held = c.hasPreservedConversation &&
+            (state == CueHoldState.idle ||
+                state == CueHoldState.compact) &&
+            c.state != CueHoldState.expanded &&
+            c.state != CueHoldState.fullActivity;
         return CueHoldPill(
           state: state,
           label: c.contextLabel,
           onTap: () => _onPillTap(c),
           onLongPress: c.toFullActivity,
           onMicTap: () => _onMicTap(context),
+          held: held,
         );
     }
   }

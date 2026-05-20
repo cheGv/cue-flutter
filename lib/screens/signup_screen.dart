@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/cue_theme.dart';
 
 class SignupScreen extends StatefulWidget {
   /// Phase 4.0.7.39 — threaded through from `/signup?return=<url>`
@@ -82,7 +83,13 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     // Phase 4.0.7.22a-hotfix — pre-pivot desktop guard removed.
     // Mobile chrome ships in 2a75655; the guard contradicted strategy.
-    return Scaffold(
+    //
+    // Scoped to `dayTheme` for the same reason as LoginScreen — see the
+    // comment there. The pre-auth surfaces are a light-register island
+    // and must not inherit night theme's light-on-light text.
+    return Theme(
+      data: CueTheme.dayTheme,
+      child: Scaffold(
       backgroundColor: const Color(0xFF00897B),
       body: Center(
         child: SingleChildScrollView(
@@ -185,9 +192,9 @@ class _SignupScreenState extends State<SignupScreen> {
                         child: FilledButton(
                           onPressed: _isLoading ? null : _signup,
                           style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF00897B),
+                            backgroundColor: const Color(0xFF00796B),
                             disabledBackgroundColor:
-                                const Color(0xFF00897B).withOpacity(0.5),
+                                const Color(0xFF00796B).withOpacity(0.5),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -243,6 +250,7 @@ class _SignupScreenState extends State<SignupScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 

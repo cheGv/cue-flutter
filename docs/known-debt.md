@@ -41,3 +41,18 @@ Pre-existing issues identified but deliberately not fixed in the work that surfa
 - **What's still open:** every other insert site listed above. Same fix applies (null-check userId before the network call; SnackBar + return). Cheap individually, tedious in aggregate — needs a sweep, not a one-off.
 - **Why not fix all sites now:** the immediate symptom was the client-add screen; widening the diff to ~10 files unrelated to the surfacing bug courts regression in surfaces that aren't currently broken (most of the sites haven't hit a null userId in observed use). A coordinated sweep — ideally paired with enabling RLS on `sessions` so the silent-write mode becomes a loud `42501` instead — is the right shape, and that's bigger than a single bug-fix turn.
 - **Revisit before:** the founding-cohort launch. Silent-write loss of session/goal data to logged-out users is a clinical-trust-breaker that must not survive into real-user hands. Pair the sweep with `ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;` (and any other RLS-off tables with `user_id`/`clinician_id` columns) so the failure mode is uniformly loud + recoverable, not silent + lossy.
+
+---
+
+## Environment switch + debug recall-verify harness (added 2026-05-20)
+
+- **What:** Supabase target is now compile-time-selectable. [`lib/config/app_config.dart`](../lib/config/app_config.dart) exposes `kSupabaseUrl` / `kSupabaseAnonKey` via `String.fromEnvironment` with the **production** values as defaults; [`main.dart`](../lib/main.dart) `Supabase.initialize` reads those constants. Launched with no `--dart-define`, the app is byte-identical to before (production). A sandbox build is opt-in:
+    ```
+    flutter run \
+      --dart-define=SUPABASE_URL=https://uuqhusmgoiaxdvtgbmwh.supabase.co \
+      --dart-define=SUPABASE_ANON_KEY=<sandbox anon key, documented in app_config.dart>
+    ```
+- **Debug-only harness:** [`lib/screens/recall_resolver_test_screen.dart`](../lib/screens/recall_resolver_test_screen.dart) — live end-to-end verification of the recall resolver against the launched environment. Reachable ONLY via the `kDebugMode`-gated route `/debug/recall-test` in `main.dart`; tree-shaken out of release builds. Has a belt-and-suspenders guardrail: it reads `kSupabaseUrl`, shows a red/green/amber target banner, and disables its Resolve buttons unless the target is the sandbox ref.
+- **Why it's "debt":** the harness is **throwaway** — it exists to capture the live direct-table latency number, after which it stays as a debug tool or is deleted in one commit. It is not user-facing and not part of the product.
+- **Removal:** delete `recall_resolver_test_screen.dart` + its import + the `/debug/recall-test` route block. The env switch (`app_config.dart` + the `main.dart` init change) is independently useful and can stay; it changes nothing for production launches.
+- **Anon-key note:** both the production (pre-existing) and sandbox anon keys are legacy JWT anon keys — RLS-protected and publishable, safe to live in-repo. They are NOT service-role keys.

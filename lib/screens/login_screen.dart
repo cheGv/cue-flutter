@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/cue_theme.dart';
 
 // ── LoginScreen ────────────────────────────────────────────────────────────────
 class LoginScreen extends StatefulWidget {
@@ -75,7 +76,19 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     // Phase 4.0.7.22a-hotfix — pre-pivot desktop guard removed.
     // Mobile chrome ships in 2a75655; the guard contradicted strategy.
-    return Scaffold(
+    //
+    // The pre-auth surfaces are an intentional light-register island
+    // (white card on teal hero) and must render that way regardless of
+    // the user's persisted day/night preference — we don't know the
+    // preference yet, and the hero/card colors are hardcoded. Scoping
+    // the subtree to `dayTheme` makes the TextField text, the
+    // FilledButton foreground, and any other theme-derived ink resolve
+    // against a light-surface ColorScheme instead of inheriting the
+    // night theme's cream-white onSurface (which produces invisible
+    // text on the hardcoded white card).
+    return Theme(
+      data: CueTheme.dayTheme,
+      child: Scaffold(
       backgroundColor: const Color(0xFF00897B),
       body: Center(
         child: SingleChildScrollView(
@@ -178,9 +191,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: FilledButton(
                           onPressed: _isLoading ? null : _login,
                           style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF00897B),
+                            backgroundColor: const Color(0xFF00796B),
                             disabledBackgroundColor:
-                                const Color(0xFF00897B).withOpacity(0.5),
+                                const Color(0xFF00796B).withOpacity(0.5),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
@@ -241,6 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    ),
     );
   }
 

@@ -194,9 +194,10 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                         onPressed: _isSaving ? null : _save,
                         style: FilledButton.styleFrom(
                           backgroundColor:
-                              const Color(0xFF00897B),
+                              const Color(0xFF00796B),
+                          foregroundColor: Colors.white,
                           disabledBackgroundColor:
-                              const Color(0xFF00897B)
+                              const Color(0xFF00796B)
                                   .withValues(alpha: 0.5),
                           shape: RoundedRectangleBorder(
                             borderRadius:

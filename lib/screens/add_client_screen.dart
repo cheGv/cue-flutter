@@ -8,6 +8,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../theme/cue_phase4_tokens.dart';
+import '../theme/cue_theme.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/intake/fluency_intake_section.dart';
 import '../widgets/intake/generic_intake_placeholder.dart';
@@ -716,7 +717,16 @@ class _AddClientScreenState extends State<AddClientScreen> {
       title: _isEditMode ? 'Edit client' : 'Add client',
       activeRoute: 'roster',
       showCueStudyFab: false,
-      body: Container(
+      // Scoped to `dayTheme` for the same reason as the pre-auth surfaces
+      // and the FRAMEWORKS sheet — the body is a hardcoded light-register
+      // island (Container painted kCuePaper) and the 16 TextFields below
+      // never set an explicit color in their `style:` argument. Under
+      // night theme they'd inherit `inkDark` cream-white onto the kCuePaper
+      // surface, producing invisible input across the new-client intake.
+      // One wrapper, no per-field style patches, no global theme touch.
+      body: Theme(
+        data: CueTheme.dayTheme,
+        child: Container(
         color: kCuePaper,
         child: Center(
           child: ConstrainedBox(
@@ -948,6 +958,7 @@ class _AddClientScreenState extends State<AddClientScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -1810,7 +1821,8 @@ class _BrainDumpSheetState extends State<_BrainDumpSheet> {
                   child: FilledButton(
                     onPressed: _isExtracting ? null : _extract,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF1D9E75),
+                      backgroundColor: const Color(0xFF1A7E5C),
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
