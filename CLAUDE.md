@@ -439,6 +439,8 @@ create index if not exists idx_narrator_session
 
 ## 8. Database Schema — Additive Migration (this sprint)
 
+**Migration naming convention.** Repo migration files use 14-digit `YYYYMMDDHHMMSS` timestamps; disambiguate same-date siblings by shifting the time field (e.g. `…120000` → `…120200`), never a `_NN` suffix — `supabase db push` orders by the numeric prefix before the first `_`, so a bare `YYYYMMDD_NN` would sort ahead of full-timestamp migrations and break a fresh apply.
+
 Run this via Supabase MCP `apply_migration` on project `cgnjbjbargkxtcnafxaa`. It is safe to run against the existing prototype database — it does not drop data.
 
 ```sql
@@ -581,6 +583,16 @@ When a session is documented, the AI extracts per-STG evidence and updates:
 - CDSCO SaMD regulatory pathway mapped but not yet filed — track as Phase 2 prerequisite.
 - No billing infrastructure — Phase 2.
 - No parent portal — Phase 2 (Cue Living).
+
+### 11.1 Migration application paths
+
+Two paths exist for applying migrations: MCP `apply_migration` and Supabase CLI `db push`. The MCP path stamps the remote `schema_migrations` version with wall-clock apply time, not the repo filename. The CLI path uses the filename version. This creates remote-vs-repo drift on every MCP-applied migration.
+
+**Rule:** MCP `apply_migration` is permitted only for sandbox project `uuqhusmgoiaxdvtgbmwh`. Any migration targeting production (`cgnjbjbargkxtcnafxaa`) MUST be applied via `supabase db push` from the repo, so remote history stays filename-aligned. Violations break prod migration reasoning under pressure.
+
+Sandbox drift is accepted. Do not attempt to manually realign sandbox remote history with filenames.
+
+**Cross-ref:** §7 deploy chain — production migrations are gated on the §7 chain being green, and this CLI-only-for-prod rule is part of that gate. See also §8 (migration naming convention).
 
 ## 12. Known Followups
 
