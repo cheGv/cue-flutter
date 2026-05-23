@@ -53,6 +53,41 @@ class StgRepository {
   Future<ShortTermGoal> updateStatus(String id, StgStatus status) =>
       update(id, {'status': status.toJson()});
 
+  /// The STG to show "in focus": the one with the most recent
+  /// session_goal_data activity for this client, falling back to the
+  /// most-recently-created active STG. Returns null when there are no STGs.
+  Future<ShortTermGoal?> loadFocusedStgForClient(String clientId) async {
+    try {
+      final rows = await _client
+          .from('session_goal_data')
+          .select('short_term_goal_id, created_at, sessions!inner(client_id)')
+          .eq('sessions.client_id', clientId)
+          .not('short_term_goal_id', 'is', null)
+          .order('created_at', ascending: false)
+          .limit(1);
+      final list = List<Map<String, dynamic>>.from(rows);
+      if (list.isNotEmpty) {
+        final stgId = list.first['short_term_goal_id']?.toString();
+        if (stgId != null) {
+          final row =
+              await _client.from(_table).select().eq('id', stgId).maybeSingle();
+          if (row != null) return ShortTermGoal.fromJson(row);
+        }
+      }
+    } catch (_) {
+      // session_goal_data join unavailable — fall through to the fallback.
+    }
+    final fallback = await _client
+        .from(_table)
+        .select()
+        .eq('client_id', clientId)
+        .eq('status', 'active')
+        .order('created_at', ascending: false)
+        .limit(1);
+    final list = List<Map<String, dynamic>>.from(fallback);
+    return list.isEmpty ? null : ShortTermGoal.fromJson(list.first);
+  }
+
   List<ShortTermGoal> _mapRows(List<dynamic> rows) =>
       rows.map((r) => ShortTermGoal.fromJson(r as Map<String, dynamic>)).toList();
 }

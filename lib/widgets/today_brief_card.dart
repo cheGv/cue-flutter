@@ -33,6 +33,7 @@
 import 'package:flutter/material.dart';
 
 import '../animation/cue_motion.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_type_v3.dart';
 import 'domain_pill.dart';
@@ -134,14 +135,17 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
     //   • Reduced-motion: snap _hover effects to static colors with no
     //     transform, no curve. Hover still shifts colors so the SLP
     //     gets feedback; just nothing animated.
+    final cue           = CueColorsResolved.of(context);
     final reduceMotion  = kReduceMotion(context);
-    final stripeBase    = isUpNext ? kCueAmber : kCueOlive;
-    final stripeHoverColor = isUpNext ? kCueAmber : kCueOliveDeep;
+    final stripeBase    = isUpNext ? cue.amber : cue.olive;
+    // kCueOliveDeep has no resolver equivalent; the hover olive maps to
+    // cue.olive (the stripe still widens 2→4px on hover for feedback).
+    final stripeHoverColor = isUpNext ? cue.amber : cue.olive;
     final stripeColor   = _hover ? stripeHoverColor : stripeBase;
     final stripeWidthBase  = isUpNext ? 3.0 : 2.0;
     final stripeWidth   = _hover ? 4.0 : stripeWidthBase;
-    final bgColor       = _hover ? kCuePaper : kCueSurfaceWhite;
-    final borderColor   = _hover ? kCueInkTertiary : kCueBorder;
+    final bgColor       = _hover ? cue.bgCardHover : cue.bgCard;
+    final borderColor   = _hover ? cue.borderHover : cue.border;
 
     final card = AnimatedContainer(
       duration: reduceMotion ? Duration.zero : kMotionHoverDuration,
@@ -230,6 +234,7 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
 
   // ── Row 1: name + metadata + state pill ────────────────────────────────
   Widget _header() {
+    final cue = CueColorsResolved.of(context);
     final metadataParts = <String>[
       if (brief.todayTimeLabel != null) brief.todayTimeLabel!,
       if (brief.clientAge != null) 'age ${brief.clientAge}',
@@ -253,7 +258,7 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
                   fontSize:           20,
                   fontWeight:         FontWeight.w600,
                   letterSpacing:      -0.2,
-                  color:              kCueInk,
+                  color:              cue.textPrimary,
                   height:             1.1,
                 ),
               ),
@@ -262,7 +267,7 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
                 Text(
                   metadata,
                   overflow: TextOverflow.ellipsis,
-                  style:    CueTypeV3.dataMono(color: kCueInkSecondary).copyWith(
+                  style:    CueTypeV3.dataMono(color: cue.textSecondary).copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -295,19 +300,24 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
   }
 
   Widget _statePill() {
+    final cue = CueColorsResolved.of(context);
     final label = _resolvedStateLabel;
     final isUrgent  = isUpNext;
     final isBaseline = brief.baselinePhase && !isUpNext;
 
+    // Urgent (amber) + active (olive) chips use the spine's fixed amber/
+    // olive surface tints — no resolver equivalent exists, so they're left
+    // intact and flagged for a future theme-aware-chip design pass. Only
+    // the neutral baseline branch is theme-resolved here.
     final bg = isUrgent
         ? const Color(0xFFFBE9D2)
-        : (isBaseline ? kCuePaper : kCueOliveSurface);
+        : (isBaseline ? cue.bgCanvas : kCueOliveSurface);
     final border = isUrgent
         ? const Color(0xFFE8DCB8)
-        : (isBaseline ? kCueBorder : kCueOliveSurface);
+        : (isBaseline ? cue.border : kCueOliveSurface);
     final textColor = isUrgent
         ? kCueAmberDeep
-        : (isBaseline ? kCueInkTertiary : kCueOliveDeep);
+        : (isBaseline ? cue.textMuted : kCueOliveDeep);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -325,12 +335,13 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
 
   // ── Row 2: Today's move (always renders) ───────────────────────────────
   Widget _todayMoveRow() {
+    final cue = CueColorsResolved.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           "Today's move",
-          style: CueTypeV3.clinicalLabel(emphasis: 'strong', color: kCueOlive),
+          style: CueTypeV3.clinicalLabel(emphasis: 'strong', color: cue.olive),
         ),
         const SizedBox(height: 4),
         Text(
@@ -341,7 +352,7 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
             fontSize:           14,
             fontWeight:         FontWeight.w500,
             letterSpacing:      -0.07, // -0.005em × 14
-            color:              kCueInk,
+            color:              cue.textPrimary,
             height:             1.45,
           ),
         ),
@@ -351,6 +362,7 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
 
   // ── Row 3a: Where we left off (when baselinePhase = false) ─────────────
   Widget _whereWeLeftOffRow() {
+    final cue = CueColorsResolved.of(context);
     final narrative = brief.lastNarrative?.trim();
     final accuracy  = brief.lastAccuracy?.trim();
 
@@ -359,7 +371,8 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
       children: [
         Text(
           'Where we left off',
-          style: CueTypeV3.clinicalLabel(emphasis: 'strong'),
+          style: CueTypeV3.clinicalLabel(
+              emphasis: 'strong', color: cue.textSecondary),
         ),
         const SizedBox(height: 4),
         _whereWeLeftOffBody(narrative, accuracy),
@@ -370,13 +383,14 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
   /// Body for "Where we left off" — Text.rich pattern. Prose in body();
   /// trial-count spans in dataMono(olive) inline.
   Widget _whereWeLeftOffBody(String? narrative, String? accuracy) {
+    final cue = CueColorsResolved.of(context);
     final fallback = brief.lastTargetBehavior?.trim().isNotEmpty == true
         ? 'Target was: ${brief.lastTargetBehavior}.'
         : 'Session not yet documented.';
 
     if ((narrative == null || narrative.isEmpty) &&
         (accuracy == null || accuracy.isEmpty)) {
-      return Text(fallback, style: CueTypeV3.body(color: kCueInkSecondary));
+      return Text(fallback, style: CueTypeV3.body(color: cue.textSecondary));
     }
 
     final spans = <InlineSpan>[];
@@ -389,17 +403,17 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
       }
       spans.add(TextSpan(
         text:  'Accuracy: ',
-        style: CueTypeV3.body(color: kCueInkSecondary),
+        style: CueTypeV3.body(color: cue.textSecondary),
       ));
       spans.add(TextSpan(
         text:  accuracy,
-        style: CueTypeV3.dataMono(color: kCueOlive),
+        style: CueTypeV3.dataMono(color: cue.olive),
       ));
     }
 
     return Text.rich(
       TextSpan(
-        style:    CueTypeV3.body(color: kCueInkSecondary),
+        style:    CueTypeV3.body(color: cue.textSecondary),
         children: spans,
       ),
     );
@@ -407,15 +421,18 @@ class _TodayBriefCardState extends State<TodayBriefCard> {
 
   // ── Row 3b: Context (when baselinePhase = true) ────────────────────────
   Widget _contextRow() {
+    final cue = CueColorsResolved.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Context', style: CueTypeV3.clinicalLabel(emphasis: 'light')),
+        Text('Context',
+            style: CueTypeV3.clinicalLabel(
+                emphasis: 'light', color: cue.textMuted)),
         const SizedBox(height: 4),
         Text(
           'Baseline phase — no sessions on record. '
           'Begin baseline observation today.',
-          style: CueTypeV3.body(color: kCueInkSecondary),
+          style: CueTypeV3.body(color: cue.textSecondary),
         ),
       ],
     );

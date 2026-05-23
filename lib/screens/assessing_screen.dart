@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
+import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
 // 4.0.7.27c-split — assessment intake split out of AddClientScreen
 // (which is now therapy-only). NewAssessmentCaseScreen is the slim
@@ -21,12 +22,13 @@ import '../widgets/app_layout.dart';
 // '/assessing/:clientId'. Neither is imported here — both resolve
 // through main.dart's onGenerateRoute.
 
+// Polarity migration (2026-05-21): rendered surface colors now resolve
+// via CueColorsResolved.of(context). These two light-register consts
+// survive only for _errorBanner(), which is flagged for the deliberate
+// batch — its amber-surface fill has no resolver equivalent (the
+// resolver exposes the amber accent, not an amber surface tint).
 const Color _ink       = Color(0xFF0E1C36);
-const Color _inkGhost  = Color(0xFF6B7690);
-const Color _paper     = Color(0xFFFAF6EE);
-const Color _amber     = Color(0xFFD68A2B);
 const Color _amberSoft = Color(0xFFF4E4C4);
-const Color _line      = Color(0xFFE6DDCA);
 
 class AssessingScreen extends StatefulWidget {
   const AssessingScreen({super.key});
@@ -141,6 +143,7 @@ class _AssessingScreenState extends State<AssessingScreen> {
   }
 
   Widget _header() {
+    final cue = CueColorsResolved.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -149,7 +152,7 @@ class _AssessingScreenState extends State<AssessingScreen> {
           style: GoogleFonts.syne(
             fontSize:      10,
             fontWeight:    FontWeight.w600,
-            color:         _amber,
+            color:         cue.amber,
             letterSpacing: 1.6,
           ),
         ),
@@ -160,7 +163,7 @@ class _AssessingScreenState extends State<AssessingScreen> {
             fontSize:    28,
             fontWeight:  FontWeight.w400,
             fontStyle:   FontStyle.italic,
-            color:       _ink,
+            color:       cue.textPrimary,
             height:      1.05,
           ),
         ),
@@ -169,26 +172,27 @@ class _AssessingScreenState extends State<AssessingScreen> {
           'Cases here run on the assessment workflow until you '
           'discharge them or convert to therapy.',
           style: GoogleFonts.dmSans(
-              fontSize: 13, color: _inkGhost, height: 1.45),
+              fontSize: 13, color: cue.textSecondary, height: 1.45),
         ),
       ],
     );
   }
 
   Widget _addButton() {
+    final cue = CueColorsResolved.of(context);
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
         onPressed: _openAdd,
-        icon: const Icon(Icons.add_rounded, size: 18, color: _amber),
+        icon: Icon(Icons.add_rounded, size: 18, color: cue.amber),
         label: Text(
           'New assessment case',
           style: GoogleFonts.dmSans(
-              fontSize: 14, color: _amber, fontWeight: FontWeight.w500),
+              fontSize: 14, color: cue.amber, fontWeight: FontWeight.w500),
         ),
         style: OutlinedButton.styleFrom(
-          foregroundColor: _amber,
-          side: BorderSide(color: _amber.withValues(alpha: 0.45)),
+          foregroundColor: cue.amber,
+          side: BorderSide(color: cue.amber.withValues(alpha: 0.45)),
           padding: const EdgeInsets.symmetric(vertical: 12),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10)),
@@ -198,25 +202,26 @@ class _AssessingScreenState extends State<AssessingScreen> {
   }
 
   Widget _emptyState() {
+    final cue = CueColorsResolved.of(context);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 24),
       decoration: BoxDecoration(
-        color:        _paper,
+        color:        cue.bgCard,
         borderRadius: BorderRadius.circular(12),
-        border:       Border.all(color: _line),
+        border:       Border.all(color: cue.border),
       ),
       child: Column(
         children: [
           Text(
             'No active assessments.',
             style: GoogleFonts.dmSans(
-                fontSize: 15, color: _ink, fontWeight: FontWeight.w500),
+                fontSize: 15, color: cue.textPrimary, fontWeight: FontWeight.w500),
           ),
           const SizedBox(height: 4),
           Text(
             "Tap 'New assessment case' to start one.",
-            style: GoogleFonts.dmSans(fontSize: 13, color: _inkGhost),
+            style: GoogleFonts.dmSans(fontSize: 13, color: cue.textSecondary),
           ),
         ],
       ),
@@ -255,6 +260,7 @@ class _AssessmentCaseCard extends StatelessWidget {
     final age    = ageRaw is int
         ? ageRaw
         : (ageRaw is String ? int.tryParse(ageRaw) : null);
+    final cue = CueColorsResolved.of(context);
 
     return Material(
       color: Colors.transparent,
@@ -264,9 +270,9 @@ class _AssessmentCaseCard extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           decoration: BoxDecoration(
-            color:        Colors.white,
+            color:        cue.bgCard,
             borderRadius: BorderRadius.circular(12),
-            border:       Border.all(color: _line),
+            border:       Border.all(color: cue.border),
           ),
           child: Row(
             children: [
@@ -279,7 +285,7 @@ class _AssessmentCaseCard extends StatelessWidget {
                       style: GoogleFonts.dmSans(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: _ink),
+                          color: cue.textPrimary),
                     ),
                     const SizedBox(height: 4),
                     Wrap(
@@ -287,10 +293,10 @@ class _AssessmentCaseCard extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         if (area.isNotEmpty)
-                          _badge(clinicalAreaLabel(area), color: _amber),
-                        _badge(_humanStatus(status), color: _inkGhost),
+                          _badge(clinicalAreaLabel(area), color: cue.amber),
+                        _badge(_humanStatus(status), color: cue.textSecondary),
                         if (age != null && age > 0)
-                          _badge('age $age', color: _inkGhost),
+                          _badge('age $age', color: cue.textSecondary),
                       ],
                     ),
                   ],
@@ -298,7 +304,7 @@ class _AssessmentCaseCard extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Icon(Icons.chevron_right_rounded,
-                  color: _inkGhost.withValues(alpha: 0.7)),
+                  color: cue.textSecondary.withValues(alpha: 0.7)),
             ],
           ),
         ),

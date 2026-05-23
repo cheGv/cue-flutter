@@ -55,6 +55,27 @@ class CueColors {
   /// Mid-amber for borders / accent lines on dark.
   static const amberDarkNight    = Color(0xFFD97706);
 
+  // ── Phase B chart — Reading Room register (locked 2026-05-22) ────────────
+  // The chart rebuild introduces a sienna "active clinical commitment" accent
+  // on cream/dark paper, plus a three-state trajectory tick palette. These are
+  // new to the app; resolve them per-mode through CueColorsResolved.
+  /// Active clinical commitment — light register.
+  static const sienna                 = Color(0xFFB8542C);
+  /// Active clinical commitment — dark register (lighter, dark-readable).
+  static const siennaDark             = Color(0xFFE89968);
+  /// Chart page ground — cream paper (light).
+  static const creamPaper             = Color(0xFFFAF6EE);
+  /// Chart page ground — dark paper (night).
+  static const darkPaper              = Color(0xFF1A1815);
+  /// Trajectory tick — progress (light / dark).
+  static const trajectoryProgress     = Color(0xFF1D9E75);
+  static const trajectoryProgressDark = Color(0xFF5DCAA5);
+  /// Trajectory tick — plan revised (light / dark).
+  static const trajectoryRevised      = Color(0xFFEF9F27);
+  static const trajectoryRevisedDark  = Color(0xFFFAC775);
+  /// Trajectory tick — holding (neutral; same both modes).
+  static const trajectoryHolding      = Color(0xFFB4B2A9);
+
   // ── Legacy aliases — keep existing screens compiling ─────────────────────
   /// Old `accent` was deep navy used for primary actions. Phase 2: keep
   /// pointing to ink for stable visual; new code should use `amber` for

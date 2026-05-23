@@ -1,69 +1,92 @@
 // lib/screens/client_profile_screen.dart
 //
-// Phase 4.1.0 — Chart screen visual rebuild. The chart screen renders a
-// single client's chart: identity masthead with 4 meta cards, Cue's
-// editorial "what's in the chart" prose, the LTG/STG ladder with inline
-// reasoning, a session-history timeline with expandable rows, and a
-// floating action bar.
+// Phase B chart rebuild — "Reading Room" register (design locked 2026-05-22).
+// Replaces the Phase 4.1 masthead/meta-card chart with a single scrollable
+// surface composed from lib/widgets/chart/* sub-widgets.
 //
-// The class name remains [ClientProfileScreen] (and the file remains
-// `client_profile_screen.dart`) to keep import sites stable across the
-// app. The chart screen, conceptually, is everything composed below.
+// Read-only: this prompt (2 of 3) renders + binds data. Action chips, the
+// recall surface, and write flows are placeholders; routing + state land in
+// prompt 3. Stub points are marked `STUB (prompt 3)`.
 //
-// Data fetched once in initState:
-//   • _spineFuture     — LTGs + STGs from Supabase.
-//   • _sessionsFuture  — sessions for this client, newest-first.
-//   • _readyFuture     — wraps both + a derived TimelineEntry list.
-//   • _chartContextFuture — pre-built context string for the Cue brief.
-//
-// All visible cards are composed from lib/widgets/chart/* widgets so the
-// chart screen itself stays a thin composition layer.
-
-import 'dart:async';
+// The class name stays [ClientProfileScreen] (and the file path is unchanged)
+// so the /clients/:clientId route wiring and the deep-link loader keep working.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+// supabase_flutter re-exports gotrue's Session; hide it so `Session` here means
+// our sessions-table model.
+import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 
-import '../models/timeline_entry.dart';
-import '../services/name_formatter.dart';
+import '../models/citation.dart';
+import '../models/client_chart_state.dart';
+import '../models/session.dart';
+import '../models/short_term_goal.dart';
+import '../models/stg_session_metric.dart';
+import '../repositories/citations_repository.dart';
+import '../repositories/client_chart_state_repository.dart';
+import '../repositories/ltg_repository.dart';
+import '../repositories/sessions_repository.dart';
+import '../repositories/stg_metrics_repository.dart';
+import '../repositories/stg_repository.dart';
+import '../services/chart_narrator_service.dart';
+import '../services/session_headline_service.dart';
 import '../theme/cue_color_scheme.dart';
-import '../theme/cue_theme.dart';
-import '../utils/chart_context.dart';
+import '../theme/cue_text_styles.dart';
+import '../utils/chart_navigation.dart';
+import '../utils/stg_numbering.dart';
 import '../widgets/app_layout.dart';
-import '../widgets/chart/chart_action_bar.dart';
-import '../widgets/chart/chart_cue_editorial.dart';
-import '../widgets/chart/chart_goal_ladder.dart';
-import '../widgets/chart/chart_masthead.dart';
+import '../widgets/chart/chart_action_chips.dart';
+import '../widgets/chart/chart_footer_meta.dart';
+import '../widgets/chart/chart_format.dart';
+import '../widgets/chart/chart_header.dart';
+import '../widgets/chart/chart_ltg_anchor.dart';
+import '../widgets/chart/chart_narrator.dart';
 import '../widgets/chart/chart_session_history.dart';
-import '../widgets/cue_hold/cue_hold_state.dart';
-import '../widgets/cue_popup.dart';
+import '../widgets/chart/chart_stg_compact.dart';
+import '../widgets/chart/chart_stg_focus.dart';
+import '../widgets/chart/chart_stg_section.dart';
+import '../widgets/chart/chart_substrate_link_strip.dart';
+import '../widgets/chart/chart_trajectory_strip.dart';
 import '../widgets/recall_assistant/recall_assistant_controller.dart';
-import 'add_client_screen.dart';
-import 'add_session_screen.dart';
-import 'goal_authoring_screen.dart';
-import 'timeline_route.dart';
 
-// ── Data classes ─────────────────────────────────────────────────────────────
+// ── Aggregated chart data ──────────────────────────────────────────────────
 
-class _SpineData {
-  final List<Map<String, dynamic>> ltgs;
-  final List<Map<String, dynamic>> stgs;
-  const _SpineData({required this.ltgs, required this.stgs});
-}
+class _ChartData {
+  final ClientChartState state;
+  final List<ShortTermGoal> activeStgs;
+  final Map<String, List<Citation>> citationsByStg;
+  final Map<String, List<StgSessionMetric>> metricsByStg;
+  final Map<String, String> stgNumbers;
+  final String? initialFocusId;
+  final List<Session> sessions;
+  final DateTime? earliestSessionDate;
+  final DateTime? firstSessionDate;
+  final bool sessionToday;
+  final String? ltgText;
+  final int? ltgSeq;
+  final int? ltgMonthsTotal;
+  final int? ltgCurrentMonth;
+  final DateTime? ltgAuthoredDate;
 
-class _ReadyData {
-  final _SpineData spine;
-  final List<Map<String, dynamic>> sessions;
-  final List<TimelineEntry> timeline;
-  const _ReadyData({
-    required this.spine,
+  const _ChartData({
+    required this.state,
+    required this.activeStgs,
+    required this.citationsByStg,
+    required this.metricsByStg,
+    required this.stgNumbers,
+    required this.initialFocusId,
     required this.sessions,
-    required this.timeline,
+    required this.earliestSessionDate,
+    required this.firstSessionDate,
+    required this.sessionToday,
+    required this.ltgText,
+    required this.ltgSeq,
+    required this.ltgMonthsTotal,
+    required this.ltgCurrentMonth,
+    required this.ltgAuthoredDate,
   });
 }
 
-// ── Screen ───────────────────────────────────────────────────────────────────
+// ── Screen ──────────────────────────────────────────────────────────────────
 
 class ClientProfileScreen extends StatefulWidget {
   final Map<String, dynamic> client;
@@ -74,647 +97,610 @@ class ClientProfileScreen extends StatefulWidget {
 }
 
 class _ClientProfileScreenState extends State<ClientProfileScreen> {
-  final _supabase = Supabase.instance.client;
+  final _historyKey = GlobalKey<ChartSessionHistoryState>();
 
-  late Future<_SpineData> _spineFuture;
-  late Future<List<Map<String, dynamic>>> _sessionsFuture;
-  late Future<_ReadyData> _readyFuture;
-  late Future<String> _chartContextFuture;
+  late final String _clientId = widget.client['id'].toString();
+  late final String _clientName =
+      (widget.client['name'] as String?)?.trim().isNotEmpty == true
+          ? (widget.client['name'] as String).trim()
+          : 'Client';
 
-  Map<String, dynamic> _client = const <String, dynamic>{};
+  late Future<_ChartData> _future;
 
-  // Cue popup (⌘K) — floating reasoning panel. Not removed in 4.1.0; the
-  // rebuild scope explicitly leaves the popup in place.
-  bool _cuePopupOpen = false;
+  // Locally-held in-focus STG. Null until the first compact-row tap, after
+  // which it overrides the loaded initialFocusId. Reset on retry/reload.
+  String? _focusedStgId;
 
-  // Phase 4.1.2 — when the SLP fires the "Think with Cue" pill inside a
-  // focused STG, the popup opens scoped to that STG. ⌘K still opens the
-  // popup with this id null (client-scoped chat).
-  String? _cuePopupStgId;
-  String? _cuePopupLtgId;
-
-  // Phase 4.1.4 — chart mount fires a COMPACT Hold transition with the
-  // client's first name. The label sticks for 3 seconds then reverts to
-  // IDLE. Rapid chart-to-chart navigation cancels the pending revert so
-  // the label updates in place without cycling through IDLE.
-  Timer? _holdCompactTimer;
+  // AI narrator (one call per load) + lazily-generated session headlines.
+  String? _narratorText;
+  bool _narratorLoading = false;
+  final Map<int, String> _headlineOverrides = {};
 
   @override
   void initState() {
     super.initState();
-    _client = Map<String, dynamic>.from(widget.client);
-    _spineFuture = _fetchSpine();
-    _sessionsFuture = _fetchSessions();
-    _readyFuture = _makeReadyFuture();
-    _chartContextFuture = buildChartContext(
-      _client['id'].toString(),
-      _client,
-    );
-    // Attach client context so a plain Hold pill tap on this chart
-    // opens the EXPANDED chat at Tier 2 (client-aware intro). Cleared
-    // in dispose() if the chat isn't open.
-    //
-    // Phase 4.1.6 — must NOT call setClientContext synchronously from
-    // initState. It fires `notifyListeners()` on the global
-    // cueHoldController; the AnimatedBuilder inside CueHold (mounted
-    // in the topbar) is mid-build at this point, and marking it dirty
-    // during build throws "setState() called during build" (observed
-    // thousands of times in production console). Deferring to the next
-    // frame fires the listeners outside any build pass.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      cueHoldController.setClientContext(
-        clientId: _client['id'].toString(),
-        clientName: (_client['name'] as String?) ?? '',
-      );
-      // Carried-client focus for the recall assistant. Persists across
-      // navigation (NOT cleared on leaving the chart) until the chip ×,
-      // Clear, sign-out, or idle. Deferred to post-frame for the same
-      // reason as setClientContext: avoid notifyListeners() during the
-      // recall overlay's build pass.
-      recallAssistantController.setFocusedClient(
-        _client['id'].toString(),
-        (_client['name'] as String?) ?? '',
-      );
-      _fireCompactHold();
-    });
+    // Auth-null guard — mirror of the deep-link loaders in main.dart.
+    if (Supabase.instance.client.auth.currentUser == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final ret = Uri.encodeQueryComponent('/clients/$_clientId');
+        Navigator.pushReplacementNamed(context, '/login?return=$ret');
+      });
+    } else {
+      // Scope the global recall surface (⌘K + "ask Cue" pill) to this client,
+      // so an unnamed recall query resolves against this client. Deferred to a
+      // post-frame to avoid notifyListeners() during the overlay's build.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        recallAssistantController.setFocusedClient(_clientId, _clientName);
+      });
+    }
+    _startLoad();
   }
 
-  void _fireCompactHold() {
-    // Respect the SLP's active session — don't override EXPANDED or any
-    // already-engaged Hold state. IDLE / COMPACT are fair game.
-    final c = cueHoldController;
-    if (c.state == CueHoldState.expanded ||
-        c.state == CueHoldState.fullActivity ||
-        c.state == CueHoldState.thinking ||
-        c.state == CueHoldState.listening) {
-      return;
-    }
-    final firstName = NameFormatter.firstNameForGreeting(
-            (_client['name'] as String?) ?? '') ??
-        '';
-    final label =
-        firstName.isEmpty ? 'Cue · reading chart' : 'Cue · reading $firstName';
-    c.toCompact(label);
-    _holdCompactTimer?.cancel();
-    _holdCompactTimer = Timer(const Duration(seconds: 3), () {
-      // Only revert if no one else has changed state since.
-      if (cueHoldController.state == CueHoldState.compact &&
-          cueHoldController.contextLabel == label) {
-        cueHoldController.toIdle();
+  void _startLoad() {
+    _future = _load();
+    _future.then((d) {
+      if (mounted) _kickAi(d);
+    }).catchError((Object _) {});
+  }
+
+  /// Fire this load's AI calls: one narrator call (using the initial focus) and
+  /// lazy headline generation for the top sessions. Both degrade to null until
+  /// the proxy endpoints deploy; the widgets fall back.
+  void _kickAi(_ChartData d) {
+    setState(() {
+      _narratorLoading = true;
+      _narratorText = null;
+      _headlineOverrides.clear();
+    });
+
+    ShortTermGoal? focus;
+    for (final stg in d.activeStgs) {
+      if (stg.id == d.initialFocusId) {
+        focus = stg;
+        break;
       }
-    });
-  }
-
-  @override
-  void dispose() {
-    _holdCompactTimer?.cancel();
-    // If we're still showing this chart's COMPACT label when the screen
-    // unmounts (chart→non-chart navigation), revert the Hold so the
-    // label doesn't linger on the next screen.
-    final c = cueHoldController;
-    final firstName = NameFormatter.firstNameForGreeting(
-            (_client['name'] as String?) ?? '') ??
-        '';
-    final ourLabel =
-        firstName.isEmpty ? 'Cue · reading chart' : 'Cue · reading $firstName';
-    if (c.state == CueHoldState.compact && c.contextLabel == ourLabel) {
-      c.toIdle();
     }
-    // Clear the chart-attached client context (no-op when the EXPANDED
-    // chat is open against this client).
-    c.clearClientContext();
-    super.dispose();
+    focus ??= d.activeStgs.isNotEmpty ? d.activeStgs.first : null;
+
+    ChartNarratorService().narrate(
+      clientId: _clientId,
+      clientName: _clientName,
+      clientState: {
+        'ltg_count': d.state.ltgCount,
+        'active_stg_count': d.state.activeStgCount,
+        'total_session_count': d.state.totalSessionCount,
+        'last_session_date': d.state.lastSessionDate?.toIso8601String(),
+        'undocumented_session_count': d.state.undocumentedSessionCount,
+        'last_next_session_focus': d.state.lastNextSessionFocus,
+        'caregiver_present': d.state.caregiverPresent,
+        'substrate_cell_count': d.state.substrateCellCount,
+      },
+      focusedStg: focus == null
+          ? null
+          : {
+              'id': focus.id,
+              'number': d.stgNumbers[focus.id],
+              'body': focus.specific,
+              'domain': focus.domain?.toJson(),
+              'week': focus.totalSessionsWorked,
+              'total_weeks': focus.timeBoundSessions,
+            },
+    ).then((text) {
+      if (!mounted) return;
+      setState(() {
+        _narratorLoading = false;
+        _narratorText = text;
+      });
+    });
+
+    final headlines = SessionHeadlineService();
+    for (final s in d.sessions.take(8)) {
+      if (s.aiHeadline?.trim().isNotEmpty ?? false) continue;
+      headlines.headlineFor(s).then((text) {
+        if (!mounted || text == null) return;
+        setState(() => _headlineOverrides[s.id] = text);
+      });
+    }
   }
 
-  // ── Data fetchers ────────────────────────────────────────────────────────
-
-  Future<_SpineData> _fetchSpine() async {
-    final clientId = _client['id'].toString();
-    final ltgsRaw = await _supabase
-        .from('long_term_goals')
-        .select()
-        .eq('client_id', clientId)
-        .order('sequence_num', ascending: true);
-    final stgsRaw = await _supabase
-        .from('short_term_goals')
-        .select()
-        .eq('client_id', clientId)
-        .order('sequence_num', ascending: true);
-    return _SpineData(
-      ltgs: List<Map<String, dynamic>>.from(ltgsRaw),
-      stgs: List<Map<String, dynamic>>.from(stgsRaw),
-    );
-  }
-
-  Future<List<Map<String, dynamic>>> _fetchSessions() async {
-    final response = await _supabase
-        .from('sessions')
-        .select()
-        .eq('client_id', _client['id'])
-        .isFilter('deleted_at', null)
-        .order('date', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
-  }
-
-  Future<_ReadyData> _makeReadyFuture() =>
-      Future.wait<dynamic>([_spineFuture, _sessionsFuture]).then((r) {
-        final spine = r[0] as _SpineData;
-        final sessions = r[1] as List<Map<String, dynamic>>;
-        final entries = <TimelineEntry>[];
-
-        for (final s in sessions) {
-          final dateStr = s['date'] as String?;
-          if (dateStr == null) continue;
-          DateTime? dt;
-          try {
-            dt = DateTime.parse(dateStr);
-          } catch (_) {
-            continue;
-          }
-          entries.add(TimelineEntry(
-            date: dt,
-            type: TimelineEntryType.session,
-            title: dateStr,
-            subtitle: null,
-            referenceId: s['id']?.toString(),
-            rawData: s,
-          ));
-        }
-
-        for (final ltg in spine.ltgs) {
-          final createdAt = ltg['created_at'] as String?;
-          if (createdAt != null) {
-            final dt = DateTime.tryParse(createdAt);
-            if (dt != null) {
-              entries.add(TimelineEntry(
-                date: dt,
-                type: TimelineEntryType.goalSet,
-                title: 'Goal set · ${(ltg['domain'] as String?) ?? 'General'}',
-                subtitle: ltg['goal_text'] as String?,
-                referenceId: ltg['id']?.toString(),
-              ));
-            }
-          }
-          final achievedAt = ltg['achieved_at'] as String?;
-          if (achievedAt != null) {
-            final dt = DateTime.tryParse(achievedAt);
-            if (dt != null) {
-              entries.add(TimelineEntry(
-                date: dt,
-                type: TimelineEntryType.goalAchieved,
-                title: 'Goal achieved · ${(ltg['domain'] as String?) ?? 'General'}',
-                subtitle: ltg['goal_text'] as String?,
-                referenceId: ltg['id']?.toString(),
-              ));
-            }
-          }
-        }
-
-        entries.sort((a, b) => b.date.compareTo(a.date));
-        return _ReadyData(spine: spine, sessions: sessions, timeline: entries);
+  void _retry() => setState(() {
+        _focusedStgId = null;
+        _startLoad();
       });
 
-  void _refreshChart() {
-    setState(() {
-      _spineFuture = _fetchSpine();
-      _sessionsFuture = _fetchSessions();
-      _readyFuture = _makeReadyFuture();
-      _chartContextFuture = buildChartContext(
-        _client['id'].toString(),
-        _client,
+  Future<_ChartData> _load() async {
+    final results = await Future.wait([
+      ClientChartStateRepository().loadForClient(_clientId),
+      StgRepository().listForClient(_clientId),
+      SessionsRepository().loadForClient(_clientId),
+      LtgRepository().listForClient(_clientId),
+      CitationsRepository().loadCitationsForClient(_clientId),
+      StgRepository().loadFocusedStgForClient(_clientId),
+    ]);
+
+    final state = (results[0] as ClientChartState?) ?? _fallbackState();
+    final allStgs = results[1] as List<ShortTermGoal>;
+    final sessions = results[2] as List<Session>;
+    final ltgs = results[3] as List<Map<String, dynamic>>;
+    final citations = results[4] as List<Citation>;
+    final focused = results[5] as ShortTermGoal?;
+
+    // Active STGs, ordered by sequence for display.
+    final activeStgs =
+        allStgs.where((s) => s.status == StgStatus.active).toList()
+          ..sort((a, b) =>
+              (a.sequenceNum ?? 1 << 30).compareTo(b.sequenceNum ?? 1 << 30));
+
+    // Group citations by STG (compact-row counts + the focus card's ladder).
+    final citationsByStg = <String, List<Citation>>{};
+    for (final c in citations) {
+      (citationsByStg[c.stgId] ??= <Citation>[]).add(c);
+    }
+
+    // Display numbers ("1.A") for every active STG.
+    final stgNumbers = {
+      for (final s in activeStgs) s.id: stgNumber(s, allStgs, ltgs),
+    };
+
+    // Preload sparkline metrics for every active STG so focus shifts are
+    // synchronous (active STG counts are small in practice).
+    final metricsByStg = <String, List<StgSessionMetric>>{};
+    if (activeStgs.isNotEmpty) {
+      final lists = await Future.wait(
+        activeStgs.map((s) => StgMetricsRepository().loadMetricsForStg(s.id)),
       );
-    });
-    _refreshClientRow();
-  }
-
-  Future<void> _refreshClientRow() async {
-    final id = _client['id']?.toString();
-    if (id == null || id.isEmpty) return;
-    try {
-      final row = await _supabase
-          .from('clients')
-          .select()
-          .eq('id', id)
-          .isFilter('deleted_at', null)
-          .single();
-      if (mounted) {
-        setState(() => _client = Map<String, dynamic>.from(row));
+      for (var i = 0; i < activeStgs.length; i++) {
+        metricsByStg[activeStgs[i].id] = lists[i];
       }
-    } catch (_) {/* keep stale data on transient failure */}
-  }
+    }
 
-  // ── Navigation ───────────────────────────────────────────────────────────
+    // Initial focus: the recency-based STG when it's active, else first active.
+    String? initialFocusId;
+    if (focused != null && activeStgs.any((s) => s.id == focused.id)) {
+      initialFocusId = focused.id;
+    } else if (activeStgs.isNotEmpty) {
+      initialFocusId = activeStgs.first.id;
+    }
 
-  Future<void> _openAddSession() async {
-    final added = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddSessionScreen(
-          clientId: _client['id'].toString(),
-          clientName: _client['name'].toString(),
-        ),
-      ),
-    );
-    if (added == true && mounted) _refreshChart();
-  }
+    // Earliest session date drives the trajectory window + the eyebrow.
+    DateTime? earliest;
+    for (final s in sessions) {
+      final d = s.date ?? s.createdAt;
+      if (earliest == null || d.isBefore(earliest)) earliest = d;
+    }
+    final sessionToday = sessions.any((s) => isToday(s.date));
 
-  Future<void> _openGoalAuthoring() async {
-    final clientId = _client['id'].toString();
-    final clientName = _client['name'] as String? ?? '';
-    final sessionCount = _client['total_sessions'] as int? ?? 0;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => GoalAuthoringScreen(
-          clientId: clientId,
-          clientName: clientName,
-          sessionCount: sessionCount,
-        ),
-      ),
-    );
-    if (mounted) _refreshChart();
-  }
-
-  Future<void> _openEditClient() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AddClientScreen(existingClient: _client),
-      ),
-    );
-    if (mounted) _refreshChart();
-  }
-
-  Future<void> _openFullTimeline(_ReadyData? data) async {
-    if (data == null) return;
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => TimelineRoute(
-          clientId: _client['id'].toString(),
-          clientName: (_client['name'] as String?) ?? '',
-          entries: data.timeline,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _confirmArchive() async {
-    final clientName = (_client['name'] as String?)?.trim() ?? 'this client';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Archive this client?'),
-        content: Text(
-          '$clientName will be moved to the archive and removed from your '
-          "active roster. You can restore them from Settings later.",
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Archive'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    try {
-      await _supabase
-          .from('clients')
-          .update({'status': 'archived'})
-          .eq('id', _client['id']);
-    } catch (_) {/* status column may not exist yet — treat as best-effort */}
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$clientName archived.')),
-    );
-    Navigator.pop(context, true);
-  }
-
-  Future<void> _confirmDeleteClient() async {
-    final clientName = (_client['name'] as String?)?.trim() ?? 'this client';
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete this client?'),
-        content: Text(
-          '$clientName will be removed from your roster. '
-          'You can contact support to recover this record.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: CueColors.coral),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    try {
-      await _supabase
-          .from('clients')
-          .update({'deleted_at': DateTime.now().toUtc().toIso8601String()})
-          .eq('id', _client['id']);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not delete: $e')),
-        );
+    // Primary LTG display fields (anchor). Horizon is approximate.
+    final ltg = ltgs.isNotEmpty ? ltgs.first : null;
+    final ltgText = (ltg?['goal_text'] as String?) ??
+        (ltg?['original_text'] as String?);
+    final ltgSeq = (ltg?['sequence_num'] as num?)?.toInt();
+    int? monthsTotal;
+    int? currentMonth;
+    final weeks = (ltg?['time_frame_weeks'] as num?)?.toInt();
+    if (weeks != null && weeks > 0) {
+      monthsTotal = (weeks / 4.345).round();
+      final created = DateTime.tryParse(ltg?['created_at']?.toString() ?? '');
+      if (created != null && monthsTotal > 0) {
+        final elapsed =
+            (DateTime.now().difference(created).inDays / 30.44).floor() + 1;
+        currentMonth = elapsed.clamp(1, monthsTotal);
       }
+    }
+
+    return _ChartData(
+      state: state,
+      activeStgs: activeStgs,
+      citationsByStg: citationsByStg,
+      metricsByStg: metricsByStg,
+      stgNumbers: stgNumbers,
+      initialFocusId: initialFocusId,
+      sessions: sessions,
+      earliestSessionDate: earliest,
+      firstSessionDate: earliest,
+      sessionToday: sessionToday,
+      ltgText: ltgText,
+      ltgSeq: ltgSeq,
+      ltgMonthsTotal: monthsTotal,
+      ltgCurrentMonth: currentMonth,
+      ltgAuthoredDate:
+          DateTime.tryParse(ltg?['created_at']?.toString() ?? ''),
+    );
+  }
+
+  ClientChartState _fallbackState() => ClientChartState(
+        clientId: _clientId,
+        clientName: _clientName,
+        age: (widget.client['age'] as num?)?.toInt() ?? 0,
+        diagnosis: widget.client['diagnosis'] as String?,
+      );
+
+  String get _firstName {
+    final cleaned = _clientName.replaceAll(RegExp(r'\(.*\)'), '').trim();
+    return cleaned.split(RegExp(r'\s+')).first;
+  }
+
+  void _openSubstrate() =>
+      ChartNavigation.openSubstrate(context, clientId: _clientId);
+
+  void _reload() {
+    if (mounted) setState(_startLoad);
+  }
+
+  void _openRecall() {
+    recallAssistantController
+      ..setFocusedClient(_clientId, _clientName)
+      ..open();
+  }
+
+  void _onChip(String id, _ChartData d) {
+    switch (id) {
+      case 'primary':
+        _onPrimary(d);
+        return;
+      case 'open_substrate':
+        _openSubstrate();
+        return;
+      case 'review_last_session':
+        if (d.sessions.isNotEmpty) {
+          _historyKey.currentState?.revealSession(d.sessions.first.id);
+        }
+        return;
+      case 'new_stg':
+        ChartNavigation.newStg(
+          context,
+          clientId: _clientId,
+          clientName: _clientName,
+          sessionCount: d.state.totalSessionCount,
+        ).then((_) => _reload());
+        return;
+    }
+  }
+
+  void _onPrimary(_ChartData d) {
+    switch (resolvePrimaryAction(d.state, sessionToday: d.sessionToday)) {
+      case ChartPrimaryAction.authorLtg:
+        ChartNavigation.authorLtg(
+          context,
+          clientId: _clientId,
+          clientName: _clientName,
+          sessionCount: d.state.totalSessionCount,
+        ).then((_) => _reload());
+        return;
+      case ChartPrimaryAction.documentLastSession:
+        _documentLastSession(d);
+        return;
+      case ChartPrimaryAction.planTodaySession:
+      case ChartPrimaryAction.planNextSession:
+        ChartNavigation.planSession(
+          context,
+          clientId: _clientId,
+          clientName: _clientName,
+          seedFocus: d.state.lastNextSessionFocus,
+        ).then((_) => _reload());
+        return;
+    }
+  }
+
+  void _documentLastSession(_ChartData d) {
+    Session? target;
+    for (final s in d.sessions) {
+      // sessions are newest-first; first un-attested = most recent undocumented.
+      if (s.clinicianAttested != true) {
+        target = s;
+        break;
+      }
+    }
+    if (target == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All sessions documented.')),
+      );
       return;
     }
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$clientName removed.')),
-    );
-    Navigator.pop(context, true);
+    ChartNavigation.documentSession(
+      context,
+      clientId: _clientId,
+      sessionId: target.id,
+    ).then((_) => _reload());
   }
-
-  // ── Popup helpers ────────────────────────────────────────────────────────
-
-  void _toggleCuePopup() {
-    setState(() {
-      _cuePopupOpen = !_cuePopupOpen;
-      if (_cuePopupOpen) {
-        // ⌘K opens the popup client-scoped (no goal anchor).
-        _cuePopupStgId = null;
-        _cuePopupLtgId = null;
-      }
-    });
-  }
-
-  void _closeCuePopupIfOpen() {
-    if (!_cuePopupOpen) return;
-    setState(() => _cuePopupOpen = false);
-  }
-
-  /// Phase 4.1.4 — fires from the focused STG's "Think with Cue" pill.
-  /// Opens the global Hold's EXPANDED chat surface (Tier 3 intro copy)
-  /// with the STG anchor pre-loaded so AskCueService picks up the
-  /// goal-scoped thread. The chart-local CuePopup (bottom-right) is no
-  /// longer the destination for this pill — that surface stays available
-  /// via ⌘K for backward compat but isn't part of the Phase 4.1.4 flow.
-  void _openCueForStg(Map<String, dynamic> stg) {
-    final stgId = stg['id']?.toString();
-    if (stgId == null || stgId.isEmpty) return;
-    final ltgId = stg['long_term_goal_id']?.toString() ??
-        stg['ltg_id']?.toString();
-    final body = ((stg['target_behavior'] as String?) ??
-            (stg['specific'] as String?) ??
-            (stg['goal_text'] as String?) ??
-            (stg['target'] as String?) ??
-            '')
-        .trim();
-    cueHoldController.expand(
-      clientId: _client['id'].toString(),
-      clientName: (_client['name'] as String?) ?? '',
-      stgId: stgId,
-      ltgId: ltgId,
-      stgBodyText: body.isEmpty ? null : body,
-    );
-  }
-
-  // ── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final clientId = _client['id'].toString();
-    final clientName = (_client['name'] as String?) ?? '';
-
     return AppLayout(
-      title: clientName,
+      title: _clientName,
       activeRoute: 'roster',
-      body: CallbackShortcuts(
-        bindings: <ShortcutActivator, VoidCallback>{
-          const SingleActivator(LogicalKeyboardKey.keyK, meta: true):
-              _toggleCuePopup,
-          const SingleActivator(LogicalKeyboardKey.keyK, control: true):
-              _toggleCuePopup,
-          const SingleActivator(LogicalKeyboardKey.escape):
-              _closeCuePopupIfOpen,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final tokens = CueChartTokens.of(context);
+          final isCompact = constraints.maxWidth < 768;
+          return ColoredBox(
+            color: tokens.bgCanvas,
+            child: FutureBuilder<_ChartData>(
+              future: _future,
+              builder: (context, snap) {
+                if (snap.hasError) {
+                  return _ChartError(
+                    message: '${snap.error}',
+                    onRetry: _retry,
+                  );
+                }
+                if (!snap.hasData) {
+                  return _ChartSkeleton(isCompact: isCompact);
+                }
+                return _body(snap.data!, isCompact);
+              },
+            ),
+          );
         },
-        child: Focus(
-          autofocus: true,
-          child: LayoutBuilder(
-            builder: (ctx, constraints) {
-              final lc = CueColorsResolved.of(ctx);
-              final hPad = constraints.maxWidth > 500 ? 24.0 : 16.0;
-              final isMobile = constraints.maxWidth < 768;
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  Positioned.fill(
-                    child: ColoredBox(
-                      color: lc.bgCanvas,
-                      child: Align(
-                        alignment: Alignment.topCenter,
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1280),
-                          child: FutureBuilder<_ReadyData>(
-                            future: _readyFuture,
-                            builder: (ctx2, snap) {
-                              final data = snap.data;
-                              final ltgs =
-                                  data?.spine.ltgs ?? const <Map<String, dynamic>>[];
-                              final stgs =
-                                  data?.spine.stgs ?? const <Map<String, dynamic>>[];
-                              final sessions =
-                                  data?.sessions ?? const <Map<String, dynamic>>[];
-                              return _buildScrollBody(
-                                clientId: clientId,
-                                clientName: clientName,
-                                hPad: hPad,
-                                isMobile: isMobile,
-                                ltgs: ltgs,
-                                stgs: stgs,
-                                sessions: sessions,
-                                readyData: data,
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // ── Floating action bar ──────────────────────────────────
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 32,
-                    child: Center(
-                      child: ChartActionBar(
-                        onAddSession: _openAddSession,
-                        onEditClient: _openEditClient,
-                        onArchive: _confirmArchive,
-                        onDelete: _confirmDeleteClient,
-                      ),
-                    ),
-                  ),
-                  // ── Cue popup (⌘K summon) ────────────────────────────────
-                  if (_cuePopupOpen)
-                    Positioned(
-                      right: 24,
-                      bottom: 110,
-                      child: CuePopup(
-                        clientId: clientId,
-                        clientName: clientName,
-                        ltgId: _cuePopupLtgId,
-                        stgId: _cuePopupStgId,
-                        onMinimize: _closeCuePopupIfOpen,
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-        ),
       ),
     );
   }
 
-  Widget _buildScrollBody({
-    required String clientId,
-    required String clientName,
-    required double hPad,
-    required bool isMobile,
-    required List<Map<String, dynamic>> ltgs,
-    required List<Map<String, dynamic>> stgs,
-    required List<Map<String, dynamic>> sessions,
-    required _ReadyData? readyData,
-  }) {
-    return CustomScrollView(
-      slivers: [
-        // ── 1. Masthead ──────────────────────────────────────────────────
-        SliverToBoxAdapter(
+  Widget _body(_ChartData d, bool isCompact) {
+    final hPad = isCompact ? 16.0 : 24.0;
+    final s = d.state;
+
+    // Derive the in-focus STG from local tap state (falls back to the loaded
+    // initialFocusId, then to the first active STG).
+    final focusId = _focusedStgId ?? d.initialFocusId;
+    final ShortTermGoal? focus = d.activeStgs.isEmpty
+        ? null
+        : d.activeStgs.firstWhere((stg) => stg.id == focusId,
+            orElse: () => d.activeStgs.first);
+    final compact = focus == null
+        ? const <ShortTermGoal>[]
+        : d.activeStgs.where((stg) => stg.id != focus.id).toList();
+    final focusCitations = focus == null
+        ? const <Citation>[]
+        : (List<Citation>.from(d.citationsByStg[focus.id] ?? const <Citation>[])
+          ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder)));
+    final focusMetrics = focus == null
+        ? const <StgSessionMetric>[]
+        : (d.metricsByStg[focus.id] ?? const <StgSessionMetric>[]);
+    final focusHasToday = focus != null &&
+        d.sessions
+            .any((x) => x.shortTermGoalId == focus.id && isToday(x.date));
+    final evidenceCount = {
+      for (final e in d.citationsByStg.entries) e.key: e.value.length,
+    };
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+
+    return SingleChildScrollView(
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1080),
           child: Padding(
-            padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 0),
-            child: ChartMasthead(
-              client: _client,
-              sessions: sessions,
-              onEditClient: _openEditClient,
-              onBuildWithCue: _openGoalAuthoring,
-              onAddCaregiverDetails: _openEditClient,
+            padding: EdgeInsets.fromLTRB(hPad, 12, hPad, 96),
+            // Cards on canvas — 16px between every card.
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Breadcrumb(),
+                const SizedBox(height: 12),
+                ChartHeader(
+                  state: s,
+                  firstSessionDate: d.firstSessionDate,
+                  sessionToday: d.sessionToday,
+                  isCompact: isCompact,
+                  onRecallTap: _openRecall,
+                ),
+                const SizedBox(height: 16),
+                ChartNarrator(
+                  state: s,
+                  clientName: _firstName,
+                  aiText: _narratorText,
+                  loading: _narratorLoading,
+                ),
+                const SizedBox(height: 16),
+                ChartActionChips(
+                  state: s,
+                  sessionToday: d.sessionToday,
+                  clientName: _firstName,
+                  onChipTap: (id) => _onChip(id, d),
+                ),
+                const SizedBox(height: 16),
+                ChartLtgAnchor(
+                  ltgText: d.ltgText,
+                  ltgSeq: d.ltgSeq,
+                  monthsTotal: d.ltgMonthsTotal,
+                  currentMonth: d.ltgCurrentMonth,
+                  substrateCellCount: s.substrateCellCount,
+                  authoredDate: d.ltgAuthoredDate,
+                  onEditLtg: d.ltgText == null
+                      ? null
+                      : () => ChartNavigation.authorLtg(
+                            context,
+                            clientId: _clientId,
+                            clientName: _clientName,
+                            sessionCount: s.totalSessionCount,
+                          ).then((_) => _reload()),
+                ),
+                if (d.activeStgs.isNotEmpty && focus != null) ...[
+                  const SizedBox(height: 16),
+                  ChartStgSection(
+                    activeCount: d.activeStgs.length,
+                    onNewStg: () => _onChip('new_stg', d),
+                    focus: AnimatedSwitcher(
+                      duration: Duration(milliseconds: reduceMotion ? 0 : 200),
+                      child: ChartStgFocus(
+                        key: ValueKey(focus.id),
+                        stg: focus,
+                        stgNumber: d.stgNumbers[focus.id] ??
+                            'STG ${focus.sequenceNum ?? '—'}',
+                        metrics: focusMetrics,
+                        citations: focusCitations,
+                        hasSessionToday: focusHasToday,
+                        isCompact: isCompact,
+                      ),
+                    ),
+                    compact: compact.isEmpty
+                        ? null
+                        : ChartStgCompact(
+                            stgs: compact,
+                            evidenceCountByStg: evidenceCount,
+                            stgNumbers: d.stgNumbers,
+                            onTapStg: (id) =>
+                                setState(() => _focusedStgId = id),
+                          ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                ChartTrajectoryStrip(
+                  activeStgs: d.activeStgs,
+                  sessions: d.sessions,
+                  earliestSessionDate: d.earliestSessionDate,
+                  stgNumbers: d.stgNumbers,
+                  onTickTap: (id) =>
+                      _historyKey.currentState?.revealSession(id),
+                ),
+                const SizedBox(height: 16),
+                ChartSessionHistory(
+                  key: _historyKey,
+                  sessions: d.sessions,
+                  clientName: _clientName,
+                  headlineOverrides: _headlineOverrides,
+                  onShowAll: () => ChartNavigation.openAllSessions(
+                    context,
+                    clientId: _clientId,
+                    clientName: _clientName,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ChartSubstrateLinkStrip(
+                  substrateCellCount: s.substrateCellCount,
+                  onOpenSubstrate: _openSubstrate,
+                ),
+                const SizedBox(height: 16),
+                ChartFooterMeta(state: s, sessionToday: d.sessionToday),
+              ],
             ),
           ),
         ),
-        const SliverToBoxAdapter(child: SizedBox(height: 32)),
-
-        // ── 2. Cue editorial ─────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: _capped(
-            Padding(
-              padding: EdgeInsets.fromLTRB(hPad, 24, hPad, 0),
-              child: _buildCueEditorial(clientName, ltgs, sessions),
-            ),
-            760,
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 56)),
-
-        // ── 3. Goal ladder ───────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: hPad),
-            child: ChartGoalLadder(
-              clientId: clientId,
-              ltgs: ltgs,
-              stgs: stgs,
-              onThinkWithCue: _openCueForStg,
-            ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 48)),
-
-        // ── 4. Session history ───────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: hPad),
-            child: ChartSessionHistory(
-              clientId: clientId,
-              clientName: clientName,
-              sessions: sessions,
-              onShowAll: () => _openFullTimeline(readyData),
-            ),
-          ),
-        ),
-
-        // Tail padding so the floating action bar never occludes content.
-        const SliverToBoxAdapter(child: SizedBox(height: 120)),
-      ],
-    );
-  }
-
-  Widget _buildCueEditorial(
-    String clientName,
-    List<Map<String, dynamic>> ltgs,
-    List<Map<String, dynamic>> sessions,
-  ) {
-    return FutureBuilder<_ReadyData>(
-      future: _readyFuture,
-      builder: (ctx, readySnap) {
-        if (!readySnap.hasData) {
-          // Show loading skeleton via empty-context construction — the
-          // widget itself renders skeleton bars while _loading.
-          return const ChartCueEditorial(chartContext: '');
-        }
-        final hasSessions = readySnap.data!.sessions.isNotEmpty;
-        final hasActiveLtgs =
-            readySnap.data!.spine.ltgs.where(_isLtgActive).isNotEmpty;
-        if (!hasSessions && !hasActiveLtgs) {
-          final firstName =
-              NameFormatter.firstNameForGreeting(clientName);
-          final emptyThought =
-              firstName != null && firstName.isNotEmpty
-                  ? "$firstName's story starts here."
-                  : 'Their story starts here.';
-          return ChartCueEditorial(
-            chartContext: '',
-            overrideThought: emptyThought,
-            overrideHighlight: 'story starts here',
-          );
-        }
-        return FutureBuilder<String>(
-          future: _chartContextFuture,
-          builder: (ctx2, ctxSnap) {
-            if (!ctxSnap.hasData) {
-              return const ChartCueEditorial(chartContext: '');
-            }
-            return ChartCueEditorial(chartContext: ctxSnap.data!);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _capped(Widget child, double maxWidth) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: child,
       ),
     );
   }
 }
 
-// ── Top-level helpers ────────────────────────────────────────────────────────
+// ── Breadcrumb ───────────────────────────────────────────────────────────────
 
-bool _isLtgActive(Map<String, dynamic> ltg) {
-  final status = ltg['status'] as String?;
-  // Phase 4.0.7.23c-deploy — pending_attestation LTGs are v2 drafts that
-  // live in Build with Cue until the SLP signs the plan; not "active".
-  return status != 'discontinued' &&
-      status != 'met' &&
-      status != 'achieved' &&
-      status != 'pending_attestation';
+class _Breadcrumb extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final t = CueChartTokens.of(context);
+    final ty = CueChartType.of(context);
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: InkWell(
+        onTap: () => Navigator.pushNamedAndRemoveUntil(
+          context,
+          '/clients',
+          (route) => false,
+        ),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 40),
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.arrow_back_rounded, size: 15, color: t.textSecondary),
+              const SizedBox(width: 6),
+              Text('All clients', style: ty.button(t.textSecondary)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Loading + error states ───────────────────────────────────────────────────
+
+class _ChartSkeleton extends StatelessWidget {
+  final bool isCompact;
+  const _ChartSkeleton({required this.isCompact});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = CueChartTokens.of(context);
+    final hPad = isCompact ? 16.0 : 24.0;
+    Widget bar(double w, double h) => Container(
+          width: w,
+          height: h,
+          margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(
+            color: t.borderInset,
+            borderRadius: BorderRadius.circular(6),
+          ),
+        );
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 760),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(hPad, 32, hPad, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              bar(220, 40),
+              bar(160, 14),
+              const SizedBox(height: 16),
+              bar(420, 14),
+              bar(360, 14),
+              const SizedBox(height: 16),
+              bar(double.infinity, 44),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChartError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ChartError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = CueChartTokens.of(context);
+    final ty = CueChartType.of(context);
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_outlined, size: 28, color: t.textSecondary),
+            const SizedBox(height: 12),
+            Text(
+              "This chart didn't load.",
+              style: ty.stgBody,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: ty.sessionHeadline.copyWith(color: t.textTertiary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: onRetry,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: t.accent,
+                side: BorderSide(color: t.borderCard),
+              ),
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -27,6 +27,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/today_widgets_service.dart';
+import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_type_v3.dart';
 import 'cue_cuttlefish.dart';
@@ -35,10 +36,10 @@ const double _kWidgetRadius   = 14.0; // editorial register, between cards (6)
                                       // and pills (20)
 const double _kWidgetMinHeight = 130;
 
-BoxDecoration _widgetSurface() => BoxDecoration(
-      color:        kCueSurfaceWhite,
+BoxDecoration _widgetSurface(CueColorsResolved cue) => BoxDecoration(
+      color:        cue.bgCard,
       borderRadius: BorderRadius.circular(_kWidgetRadius),
-      border:       Border.all(color: kCueBorder, width: kCueCardBorderW),
+      border:       Border.all(color: cue.border, width: kCueCardBorderW),
     );
 
 // ── This week pulse ──────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ class ThisWeekWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cue = CueColorsResolved.of(context);
     final todayWeekday = DateTime.now().weekday; // 1..7
 
     int sessionsTotal   = 0;
@@ -64,11 +66,12 @@ class ThisWeekWidget extends StatelessWidget {
     return Container(
       padding:   const EdgeInsets.fromLTRB(18, 16, 18, 16),
       constraints: const BoxConstraints(minHeight: _kWidgetMinHeight),
-      decoration: _widgetSurface(),
+      decoration: _widgetSurface(cue),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('This week', style: CueTypeV3.widgetTitle()),
+          Text('This week',
+              style: CueTypeV3.widgetTitle(color: cue.textPrimary)),
           const SizedBox(height: 14),
           // Bar chart row.
           SizedBox(
@@ -77,7 +80,7 @@ class ThisWeekWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 for (var i = 0; i < weekData.length; i++) ...[
-                  Expanded(child: _bar(weekData[i], todayWeekday, maxBar)),
+                  Expanded(child: _bar(weekData[i], todayWeekday, maxBar, cue)),
                   if (i < weekData.length - 1) const SizedBox(width: 6),
                 ],
               ],
@@ -94,8 +97,8 @@ class ThisWeekWidget extends StatelessWidget {
                       _dayName(weekData[i].weekday),
                       style: CueTypeV3.widgetLabel(
                         color: weekData[i].weekday == todayWeekday
-                            ? kCueAmber
-                            : kCueInkTertiary,
+                            ? cue.amber
+                            : cue.textMuted,
                       ),
                     ),
                   ),
@@ -112,6 +115,7 @@ class ThisWeekWidget extends StatelessWidget {
                 child: _stat(
                   number: '$sessionsTotal',
                   label:  'Sessions',
+                  cue:    cue,
                 ),
               ),
               const SizedBox(width: 12),
@@ -119,6 +123,7 @@ class ThisWeekWidget extends StatelessWidget {
                 child: _stat(
                   number: '$documentedTotal',
                   label:  'Documented',
+                  cue:    cue,
                 ),
               ),
             ],
@@ -128,10 +133,11 @@ class ThisWeekWidget extends StatelessWidget {
     );
   }
 
-  Widget _bar(DailyPulse d, int todayWeekday, int maxBar) {
+  Widget _bar(DailyPulse d, int todayWeekday, int maxBar,
+      CueColorsResolved cue) {
     final pct = maxBar == 0 ? 0.0 : d.sessionCount / maxBar;
     final isToday = d.weekday == todayWeekday;
-    final color = isToday ? kCueAmber : kCueOlive;
+    final color = isToday ? cue.amber : cue.olive;
     return Align(
       alignment: Alignment.bottomCenter,
       child: Container(
@@ -144,13 +150,18 @@ class ThisWeekWidget extends StatelessWidget {
     );
   }
 
-  Widget _stat({required String number, required String label}) {
+  Widget _stat({
+    required String number,
+    required String label,
+    required CueColorsResolved cue,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(number, style: CueTypeV3.numericDisplay(size: 22)),
+        Text(number,
+            style: CueTypeV3.numericDisplay(size: 22, color: cue.textPrimary)),
         const SizedBox(height: 2),
-        Text(label, style: CueTypeV3.widgetLabel()),
+        Text(label, style: CueTypeV3.widgetLabel(color: cue.textSecondary)),
       ],
     );
   }
@@ -175,31 +186,34 @@ class PendingNotesWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cue = CueColorsResolved.of(context);
     return Container(
       padding:   const EdgeInsets.fromLTRB(18, 16, 18, 16),
       constraints: const BoxConstraints(minHeight: _kWidgetMinHeight),
-      decoration: _widgetSurface(),
+      decoration: _widgetSurface(cue),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Pending notes', style: CueTypeV3.widgetTitle()),
+          Text('Pending notes',
+              style: CueTypeV3.widgetTitle(color: cue.textPrimary)),
           const SizedBox(height: 12),
           // Big amber numeric — Iowan editorial register.
           Text(
             '${pending.length}',
-            style: CueTypeV3.numericDisplay(size: 38, color: kCueAmber),
+            style: CueTypeV3.numericDisplay(size: 38, color: cue.amber),
           ),
           const SizedBox(height: 6),
           // Date + time specifics — Inter sentence-case for date words,
           // mono for times. Text.rich.
           if (pending.isNotEmpty)
             Text.rich(
-              _buildLabelSpans(pending),
+              _buildLabelSpans(pending, cue),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             )
           else
-            Text('All caught up.', style: CueTypeV3.widgetLabel()),
+            Text('All caught up.',
+                style: CueTypeV3.widgetLabel(color: cue.textSecondary)),
           const Spacer(),
           if (pending.isNotEmpty && onCatchUp != null)
             GestureDetector(
@@ -208,7 +222,7 @@ class PendingNotesWidget extends StatelessWidget {
                 'Catch up →',
                 style: CueTypeV3.clinicalLabel(
                   emphasis: 'strong',
-                  color:    kCueAmber,
+                  color:    cue.amber,
                 ),
               ),
             ),
@@ -217,27 +231,27 @@ class PendingNotesWidget extends StatelessWidget {
     );
   }
 
-  TextSpan _buildLabelSpans(List<PendingSession> pending) {
+  TextSpan _buildLabelSpans(List<PendingSession> pending, CueColorsResolved cue) {
     final spans = <InlineSpan>[];
     for (var i = 0; i < pending.length; i++) {
       if (i > 0) {
         spans.add(TextSpan(
           text:  ' · ',
-          style: CueTypeV3.widgetLabel(color: kCueInkTertiary),
+          style: CueTypeV3.widgetLabel(color: cue.textMuted),
         ));
       }
       final p = pending[i];
       spans.add(TextSpan(
         text:  '${p.dayLabel} ',
-        style: CueTypeV3.widgetLabel(),
+        style: CueTypeV3.widgetLabel(color: cue.textSecondary),
       ));
       spans.add(TextSpan(
         text:  p.timeLabel,
-        style: CueTypeV3.dataMono(color: kCueInkSecondary),
+        style: CueTypeV3.dataMono(color: cue.textSecondary),
       ));
       spans.add(TextSpan(
         text:  ' · ${p.clientName}',
-        style: CueTypeV3.widgetLabel(),
+        style: CueTypeV3.widgetLabel(color: cue.textSecondary),
       ));
     }
     return TextSpan(children: spans);
@@ -262,10 +276,11 @@ class CueNoticedWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cue = CueColorsResolved.of(context);
     return Container(
       padding:   const EdgeInsets.fromLTRB(18, 18, 18, 16),
       constraints: const BoxConstraints(minHeight: _kWidgetMinHeight),
-      decoration: _widgetSurface(),
+      decoration: _widgetSurface(cue),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -282,7 +297,8 @@ class CueNoticedWidget extends StatelessWidget {
               children: [
                 Text(
                   'Cue noticed',
-                  style: CueTypeV3.clinicalLabel(emphasis: 'strong'),
+                  style: CueTypeV3.clinicalLabel(
+                      emphasis: 'strong', color: cue.textSecondary),
                 ),
                 const SizedBox(height: 6),
                 // Iowan body — editorial moment per Rule 2 carve-out.
@@ -298,7 +314,7 @@ class CueNoticedWidget extends StatelessWidget {
                     fontWeight:         FontWeight.w400,
                     letterSpacing:      -0.0775, // -0.005em × 15.5
                     height:             1.45,
-                    color:              kCueInkSecondary,
+                    color:              cue.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -307,12 +323,12 @@ class CueNoticedWidget extends StatelessWidget {
                   runSpacing: 6,
                   children: [
                     if (onShareWithFamily != null)
-                      _action('Share with family', onShareWithFamily!),
+                      _action('Share with family', onShareWithFamily!, cue),
                     if (onAddToNextSession != null)
-                      _action('Add to next session', onAddToNextSession!),
+                      _action('Add to next session', onAddToNextSession!, cue),
                     if (onDismiss != null)
-                      _action('Dismiss', onDismiss!,
-                          color: kCueInkTertiary),
+                      _action('Dismiss', onDismiss!, cue,
+                          color: cue.textMuted),
                   ],
                 ),
               ],
@@ -323,17 +339,18 @@ class CueNoticedWidget extends StatelessWidget {
     );
   }
 
-  Widget _action(String label, VoidCallback onTap, {Color? color}) {
+  Widget _action(String label, VoidCallback onTap, CueColorsResolved cue,
+      {Color? color}) {
     return GestureDetector(
       onTap: onTap,
       child: Text(
         label,
         style: CueTypeV3.clinicalLabel(
           emphasis: 'strong',
-          color:    color ?? kCueOlive,
+          color:    color ?? cue.olive,
         ).copyWith(
           decoration:          TextDecoration.underline,
-          decorationColor:     (color ?? kCueOlive).withValues(alpha: 0.45),
+          decorationColor:     (color ?? cue.olive).withValues(alpha: 0.45),
           decorationThickness: 0.5,
         ),
       ),
@@ -350,23 +367,26 @@ class ActiveGoalsWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cue = CueColorsResolved.of(context);
     return Container(
       padding:   const EdgeInsets.fromLTRB(18, 16, 18, 16),
       constraints: const BoxConstraints(minHeight: _kWidgetMinHeight),
-      decoration: _widgetSurface(),
+      decoration: _widgetSurface(cue),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Active goals', style: CueTypeV3.widgetTitle()),
+          Text('Active goals',
+              style: CueTypeV3.widgetTitle(color: cue.textPrimary)),
           const SizedBox(height: 10),
           if (goals.isEmpty)
-            Text('No active goals.', style: CueTypeV3.widgetLabel())
+            Text('No active goals.',
+                style: CueTypeV3.widgetLabel(color: cue.textSecondary))
           else
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (var i = 0; i < goals.length; i++) ...[
-                  _goalRow(goals[i]),
+                  _goalRow(goals[i], cue),
                   if (i < goals.length - 1) const SizedBox(height: 8),
                 ],
               ],
@@ -376,7 +396,7 @@ class ActiveGoalsWidget extends StatelessWidget {
     );
   }
 
-  Widget _goalRow(ActiveGoal g) {
+  Widget _goalRow(ActiveGoal g, CueColorsResolved cue) {
     final progress = _formatProgress(g);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -392,12 +412,12 @@ class ActiveGoalsWidget extends StatelessWidget {
               fontSize:           12.5,
               fontWeight:         FontWeight.w500,
               letterSpacing:      -0.0625,
-              color:              kCueInk,
+              color:              cue.textPrimary,
             ),
           ),
         ),
         const SizedBox(width: 8),
-        Text(progress, style: CueTypeV3.dataMono(color: kCueOlive)),
+        Text(progress, style: CueTypeV3.dataMono(color: cue.olive)),
       ],
     );
   }
@@ -423,54 +443,57 @@ class TomorrowWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cue = CueColorsResolved.of(context);
     return Container(
       padding:   const EdgeInsets.fromLTRB(18, 16, 18, 16),
       constraints: const BoxConstraints(minHeight: _kWidgetMinHeight),
-      decoration: _widgetSurface(),
+      decoration: _widgetSurface(cue),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Tomorrow', style: CueTypeV3.widgetTitle()),
+          Text('Tomorrow',
+              style: CueTypeV3.widgetTitle(color: cue.textPrimary)),
           const SizedBox(height: 10),
           // Iowan numeric in olive — calm forward-looking register.
           Text(
             '${tomorrow.sessionCount}',
-            style: CueTypeV3.numericDisplay(size: 36, color: kCueOlive),
+            style: CueTypeV3.numericDisplay(size: 36, color: cue.olive),
           ),
           const SizedBox(height: 4),
           Text(
             tomorrow.sessionCount == 1 ? 'Session' : 'Sessions',
-            style: CueTypeV3.widgetLabel(),
+            style: CueTypeV3.widgetLabel(color: cue.textSecondary),
           ),
           const Spacer(),
           if (tomorrow.firstClientName != null)
-            _firstSessionPreview()
+            _firstSessionPreview(cue)
           else if (tomorrow.sessionCount == 0)
             Text('No sessions on the calendar.',
-                style: CueTypeV3.widgetLabel(color: kCueInkTertiary)),
+                style: CueTypeV3.widgetLabel(color: cue.textMuted)),
         ],
       ),
     );
   }
 
-  Widget _firstSessionPreview() {
+  Widget _firstSessionPreview(CueColorsResolved cue) {
     final time = tomorrow.firstTimeLabel;
     final spans = <InlineSpan>[
-      TextSpan(text: 'Starts ', style: CueTypeV3.widgetLabel()),
+      TextSpan(text: 'Starts ',
+          style: CueTypeV3.widgetLabel(color: cue.textSecondary)),
     ];
     if (time != null && time.isNotEmpty) {
       spans.add(TextSpan(
         text:  time,
-        style: CueTypeV3.dataMono(color: kCueInkSecondary),
+        style: CueTypeV3.dataMono(color: cue.textSecondary),
       ));
       spans.add(TextSpan(
         text:  ' — ${tomorrow.firstClientName}',
-        style: CueTypeV3.widgetLabel(),
+        style: CueTypeV3.widgetLabel(color: cue.textSecondary),
       ));
     } else {
       spans.add(TextSpan(
         text:  tomorrow.firstClientName,
-        style: CueTypeV3.widgetLabel(),
+        style: CueTypeV3.widgetLabel(color: cue.textSecondary),
       ));
     }
     return Text.rich(TextSpan(children: spans),

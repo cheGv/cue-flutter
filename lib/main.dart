@@ -7,6 +7,7 @@ import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/client_roster_screen.dart';
 import 'screens/client_profile_screen.dart';
+import 'screens/client_sessions_screen.dart';
 import 'screens/assessing_screen.dart';
 // Phase 4.1.7 — standalone Narrator destination removed. The narrate
 // capability still lives inside the session-documentation flow via
@@ -24,6 +25,10 @@ import 'screens/settings/settings_shell.dart';
 // the kDebugMode-gated '/debug/recall-test' route below; tree-shaken out
 // of release builds.
 import 'screens/recall_resolver_test_screen.dart';
+// Debug-only Phase A substrate verification harness. Referenced solely from
+// the kDebugMode-gated '/debug/substrate/:clientId' route below; tree-shaken
+// out of release builds.
+import 'screens/substrate_route.dart';
 // Recall wiring (composition root). main.dart constructs the concrete
 // DirectTableCardSource + roster query and injects them into the dedicated
 // recall assistant controller; the recall_assistant_*.dart files stay free
@@ -474,6 +479,20 @@ class CueApp extends StatelessWidget {
             );
           }
 
+          // Phase A substrate render verification (debug-only). Reach via
+          // /debug/substrate/<clientId> — e.g. seed Aarav, then navigate to
+          // /debug/substrate/<aarav-uuid> to confirm the read path renders.
+          if (kDebugMode &&
+              uri.pathSegments.length == 3 &&
+              uri.pathSegments[0] == 'debug' &&
+              uri.pathSegments[1] == 'substrate') {
+            final clientId = uri.pathSegments[2];
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => SubstrateRoute(clientId: clientId),
+            );
+          }
+
           // ── Auth surfaces ───────────────────────────────────────────
           if (uri.path == '/login') {
             final returnTo = uri.queryParameters['return'];
@@ -556,6 +575,16 @@ class CueApp extends StatelessWidget {
           // (Cue Study retired). Hard refresh on an old /study URL falls
           // through to the catch-all return null below; the unknown-route
           // path lands the SLP back on /today via main.dart's default.
+          // /clients/:clientId/sessions  →  ClientSessionsScreen (full timeline)
+          if (uri.pathSegments.length == 3 &&
+              uri.pathSegments[0] == 'clients' &&
+              uri.pathSegments[2] == 'sessions') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) =>
+                  ClientSessionsScreen(clientId: uri.pathSegments[1]),
+            );
+          }
           // /clients/:clientId  →  ClientProfileScreen
           if (uri.pathSegments.length == 2 &&
               uri.pathSegments[0] == 'clients') {

@@ -15,6 +15,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'cue_color_scheme.dart' show CueChartTokens;
+
 /// The six locked text roles for the Clients screen. Resolve once per
 /// build with [CueTextStyles.of] — it carries both the dark/light and
 /// the desktop/mobile axes.
@@ -456,4 +458,460 @@ class CueChartPalette {
   //     present; defaults to olive when the field is absent) ──────────────
   Color get tickProgress => const Color(0xFF97C459);
   Color get tickRevised => const Color(0xFFF5C778);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase B — Reading Room chart register (design locked 2026-05-22).
+//
+// The Phase B chart rebuild uses a distinct typographic register from the
+// Phase 4.1 CueChartTextStyles above: Playfair Display italic for every
+// clinical-commitment moment (name, narrator, LTG/STG bodies, week markers),
+// Syne for tracked small-caps labels, DM Sans for prose. Colors are the
+// locked Reading Room register; widgets that need non-text colors (sienna,
+// trajectory ticks, paper) resolve them through CueColorsResolved.
+//
+// Added as a parallel class so the Clients and Phase-4.1 tokens stay untouched.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class CueReadingRoom {
+  final bool isDark;
+  final bool isCompact;
+
+  const CueReadingRoom._(this.isDark, this.isCompact);
+
+  factory CueReadingRoom.of(BuildContext context, {required bool isCompact}) {
+    return CueReadingRoom._(
+      Theme.of(context).brightness == Brightness.dark,
+      isCompact,
+    );
+  }
+
+  Color get _primary =>
+      isDark ? const Color(0xFFEEE9DC) : const Color(0xFF2C2C2A);
+  Color get _secondary =>
+      isDark ? const Color(0xFFB0ACA3) : const Color(0xFF6B6862);
+  static const Color _muted = Color(0xFF888780);
+  Color get _sienna =>
+      isDark ? const Color(0xFFE89968) : const Color(0xFFB8542C);
+
+  // ── Eyebrow + header ───────────────────────────────────────────────────
+  TextStyle get eyebrow => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 12,
+        letterSpacing: 12 * 0.04,
+        color: _muted,
+      );
+
+  TextStyle get name => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: isCompact ? 28 : 36,
+        height: 1.05,
+        color: _primary,
+      );
+
+  TextStyle get metaLine => GoogleFonts.syne(
+        fontWeight: FontWeight.w500,
+        fontSize: 11,
+        letterSpacing: 11 * 0.08,
+        color: _secondary,
+      );
+
+  TextStyle get recallPill => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w500,
+        fontSize: 11,
+        color: _secondary,
+      );
+
+  // ── Narrator ─────────────────────────────────────────────────────────────
+  TextStyle get narrator => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 14,
+        height: 1.5,
+        color: _secondary,
+      );
+
+  // ── Action chips ───────────────────────────────────────────────────────
+  TextStyle chip(Color color) => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w500,
+        fontSize: 12,
+        color: color,
+      );
+
+  // ── Section + ladder labels ──────────────────────────────────────────────
+  TextStyle get sectionLabel => GoogleFonts.syne(
+        fontWeight: FontWeight.w600,
+        fontSize: 10,
+        letterSpacing: 10 * 0.22,
+        color: _muted,
+      );
+
+  TextStyle get ladderLabel => GoogleFonts.syne(
+        fontWeight: FontWeight.w500,
+        fontSize: 10,
+        letterSpacing: 10 * 0.14,
+        color: _secondary,
+      );
+
+  TextStyle get horizon => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 12,
+        color: _secondary,
+      );
+
+  TextStyle get ltgBody => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 16,
+        height: 1.5,
+        color: _secondary,
+      );
+
+  TextStyle get emptyItalic => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        height: 1.5,
+        color: _muted,
+      );
+
+  // ── In-focus STG card ──────────────────────────────────────────────────
+  TextStyle get focusId => GoogleFonts.syne(
+        fontWeight: FontWeight.w600,
+        fontSize: 10,
+        letterSpacing: 10 * 0.16,
+        color: _sienna,
+      );
+
+  TextStyle get domainChip => GoogleFonts.syne(
+        fontWeight: FontWeight.w500,
+        fontSize: 10,
+        letterSpacing: 10 * 0.14,
+        color: _muted,
+      );
+
+  TextStyle get weekIndicator => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 12,
+        color: _secondary,
+      );
+
+  TextStyle get stgBody => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 18,
+        height: 1.45,
+        color: _primary,
+      );
+
+  TextStyle get metricLabel => GoogleFonts.syne(
+        fontWeight: FontWeight.w600,
+        fontSize: 10,
+        letterSpacing: 10 * 0.16,
+        color: _secondary,
+      );
+
+  TextStyle get sparkReadout => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 12,
+        color: _secondary,
+      );
+
+  // ── Evidence ladder ──────────────────────────────────────────────────────
+  TextStyle get romanNumeral => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        color: _sienna,
+      );
+
+  TextStyle tierChip(Color color) => GoogleFonts.syne(
+        fontWeight: FontWeight.w600,
+        fontSize: 9,
+        letterSpacing: 9 * 0.16,
+        color: color,
+      );
+
+  TextStyle get finding => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        height: 1.4,
+        color: _primary,
+      );
+
+  TextStyle get authorYear => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 11,
+        color: _muted,
+      );
+
+  // ── Compact STG rows ───────────────────────────────────────────────────
+  TextStyle get compactId => GoogleFonts.syne(
+        fontWeight: FontWeight.w500,
+        fontSize: 10,
+        letterSpacing: 10 * 0.14,
+        color: _muted,
+      );
+
+  TextStyle get compactDomain => GoogleFonts.syne(
+        fontWeight: FontWeight.w500,
+        fontSize: 9,
+        letterSpacing: 9 * 0.14,
+        color: _muted,
+      );
+
+  TextStyle get compactText => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        color: _primary,
+      );
+
+  TextStyle get compactCount => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 11,
+        color: _muted,
+      );
+
+  // ── Trajectory ───────────────────────────────────────────────────────────
+  TextStyle get trajectoryHead => GoogleFonts.syne(
+        fontWeight: FontWeight.w600,
+        fontSize: 10,
+        letterSpacing: 10 * 0.16,
+        color: _secondary,
+      );
+
+  TextStyle get legendLabel => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w400,
+        fontSize: 11,
+        color: _secondary,
+      );
+
+  TextStyle get axisLabel => GoogleFonts.syne(
+        fontWeight: FontWeight.w500,
+        fontSize: 9,
+        letterSpacing: 9 * 0.14,
+        color: _muted,
+      );
+
+  TextStyle get trajectoryRowLabel => GoogleFonts.syne(
+        fontWeight: FontWeight.w500,
+        fontSize: 9,
+        letterSpacing: 9 * 0.12,
+        color: _muted,
+      );
+
+  // ── Session history ──────────────────────────────────────────────────────
+  TextStyle get historyHeader => GoogleFonts.syne(
+        fontWeight: FontWeight.w600,
+        fontSize: 10,
+        letterSpacing: 10 * 0.16,
+        color: _secondary,
+      );
+
+  TextStyle get historyLink => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w500,
+        fontSize: 12,
+        color: _sienna,
+      );
+
+  TextStyle get historyDate => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w700,
+        fontSize: 12,
+        color: _primary,
+      );
+
+  TextStyle get historyMeta => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w400,
+        fontSize: 11,
+        color: _muted,
+      );
+
+  TextStyle get historyHeadline => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        height: 1.5,
+        color: _secondary,
+      );
+
+  TextStyle get blockLabel => GoogleFonts.syne(
+        fontWeight: FontWeight.w600,
+        fontSize: 10,
+        letterSpacing: 10 * 0.16,
+        color: _sienna,
+      );
+
+  TextStyle get blockBody => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        height: 1.55,
+        color: _primary,
+      );
+
+  TextStyle get blockPlaceholder => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        height: 1.5,
+        color: _muted,
+      );
+
+  // ── Substrate link + footer ──────────────────────────────────────────────
+  TextStyle get substrateText => GoogleFonts.playfairDisplay(
+        fontStyle: FontStyle.italic,
+        fontWeight: FontWeight.w400,
+        fontSize: 13,
+        color: _secondary,
+      );
+
+  TextStyle get substrateLink => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w500,
+        fontSize: 12,
+        color: _sienna,
+      );
+
+  TextStyle footerItem({bool sienna = false}) => GoogleFonts.dmSans(
+        fontWeight: FontWeight.w400,
+        fontSize: 11,
+        color: sienna ? _sienna : _secondary,
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase B-revised — cards-on-canvas chart typography (locked 2026-05-23).
+//
+// Inter for EVERYTHING; IBM Plex Mono ONLY for true codes/readouts: STG number
+// codes (focus pill, compact num, trajectory row label), evidence roman
+// numerals, the sparkline data readout ("L5 → L2"), and the ⌘K kbd hint. Sizes
+// / weights / letter-spacing copied from docs/decisions/phase-b-chart-visual.html
+// (PART D3). CSS letter-spacing is in em; here it is fontSize * em (logical px).
+// Colors resolve through CueChartTokens. Replaces CueReadingRoom for the chart
+// surface only; CueReadingRoom stays intact for client_sessions / session_planning.
+// ─────────────────────────────────────────────────────────────────────────────
+class CueChartType {
+  final CueChartTokens _t;
+  const CueChartType._(this._t);
+
+  factory CueChartType.of(BuildContext context) =>
+      CueChartType._(CueChartTokens.of(context));
+
+  // Inter / IBM Plex Mono builders. `em` is the CSS em letter-spacing value.
+  TextStyle _i(double size, FontWeight w, Color c,
+          {double? h, double em = 0}) =>
+      GoogleFonts.inter(
+        fontSize: size,
+        fontWeight: w,
+        color: c,
+        height: h,
+        letterSpacing: em == 0 ? null : size * em,
+      );
+
+  TextStyle _m(double size, FontWeight w, Color c, {double em = 0}) =>
+      GoogleFonts.ibmPlexMono(
+        fontSize: size,
+        fontWeight: w,
+        color: c,
+        letterSpacing: em == 0 ? null : size * em,
+      );
+
+  // ── Header ───────────────────────────────────────────────────────────────
+  TextStyle get eyebrow => _i(13, FontWeight.w400, _t.textTertiary);
+  TextStyle get hero =>
+      _i(30, FontWeight.w700, _t.textPrimary, h: 1.1, em: -0.02);
+  TextStyle get meta => _i(13, FontWeight.w500, _t.textSecondary);
+  TextStyle get metaStrong => _i(13, FontWeight.w600, _t.textPrimary);
+  TextStyle get recallBtn => _i(13, FontWeight.w500, _t.btnPrimaryText);
+  TextStyle get kbd =>
+      _m(10, FontWeight.w500, _t.btnPrimaryText.withValues(alpha: 0.7));
+
+  // ── Narrator ───────────────────────────────────────────────────────────────
+  TextStyle get narratorBody =>
+      _i(14, FontWeight.w400, _t.textBody, h: 1.55);
+  TextStyle get narratorStrong => _i(14, FontWeight.w600, _t.textPrimary);
+
+  // ── Buttons ──────────────────────────────────────────────────────────────
+  TextStyle button(Color c) => _i(13, FontWeight.w500, c);
+  TextStyle buttonSmall(Color c) => _i(12, FontWeight.w500, c);
+
+  // ── Card-head section labels ───────────────────────────────────────────────
+  TextStyle get sectionLabel =>
+      _i(11, FontWeight.w700, _t.textSecondary, em: 0.08);
+  TextStyle get sectionCount =>
+      _i(11, FontWeight.w600, _t.textMuted, em: 0.08);
+
+  // ── LTG ────────────────────────────────────────────────────────────────────
+  TextStyle get ltgBody => _i(16, FontWeight.w400, _t.textPrimary, h: 1.6);
+  TextStyle get ltgMeta => _i(12, FontWeight.w400, _t.textTertiary);
+  TextStyle get infoBadge => _i(11, FontWeight.w600, _t.infoBadgeText);
+
+  // ── STG focus ──────────────────────────────────────────────────────────────
+  TextStyle get stgNum => _m(13, FontWeight.w600, _t.accent);
+  TextStyle get stgFocusBadge =>
+      _i(10, FontWeight.w700, _t.accent, em: 0.08); // caller uppercases
+  TextStyle get stgWeek => _i(13, FontWeight.w500, _t.textSecondary);
+  TextStyle get stgWeekAccent => _i(13, FontWeight.w600, _t.textPrimary);
+  TextStyle get stgBody => _i(15, FontWeight.w400, _t.textPrimary, h: 1.6);
+
+  // ── Sparkline ──────────────────────────────────────────────────────────────
+  TextStyle get sparklineLabel =>
+      _i(11, FontWeight.w700, _t.textSecondary, em: 0.06); // caller uppercases
+  TextStyle get sparklineReadout =>
+      _m(12, FontWeight.w400, _t.textSecondary);
+
+  // ── Evidence ladder ──────────────────────────────────────────────────────
+  TextStyle get evidenceHeaderLabel =>
+      _i(11, FontWeight.w700, _t.textSecondary, em: 0.06); // caller uppercases
+  TextStyle get roman => _m(12, FontWeight.w600, _t.textMuted);
+  TextStyle tierChip(Color c) =>
+      _i(10, FontWeight.w700, c, em: 0.05); // caller uppercases
+  TextStyle get evidenceFinding =>
+      _i(13, FontWeight.w400, _t.textPrimary, h: 1.5);
+  TextStyle get evidenceCite => _i(11, FontWeight.w500, _t.textTertiary);
+
+  // ── Compact STG rows ───────────────────────────────────────────────────────
+  TextStyle get compactNum => _m(12, FontWeight.w600, _t.textSecondary);
+  TextStyle get compactDomain =>
+      _i(10, FontWeight.w700, _t.textSecondary, em: 0.05); // caller uppercases
+  TextStyle get compactBody =>
+      _i(13, FontWeight.w400, _t.textPrimary, h: 1.4);
+  TextStyle get compactCites => _m(11, FontWeight.w400, _t.textMuted);
+
+  // ── Trajectory ───────────────────────────────────────────────────────────
+  TextStyle get trajSummaryLabel =>
+      _i(10, FontWeight.w700, _t.textTertiary, em: 0.08); // caller uppercases
+  TextStyle get trajStatBig => GoogleFonts.inter(
+        fontSize: 28,
+        fontWeight: FontWeight.w700,
+        color: _t.textPrimary,
+        height: 1,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+  TextStyle get trajStatSmall => _i(13, FontWeight.w400, _t.textTertiary);
+  TextStyle get trajSummaryDesc =>
+      _i(12, FontWeight.w400, _t.textSecondary, h: 1.45);
+  TextStyle outcomePill(Color c) => _i(11, FontWeight.w600, c);
+  TextStyle get trajStgLabel => _m(12, FontWeight.w600, _t.textBody);
+  TextStyle get trajStgSub =>
+      _i(10, FontWeight.w500, _t.textMuted, em: 0.02);
+  TextStyle get trajWeek => _i(11, FontWeight.w500, _t.textTertiary);
+
+  // ── Session history ──────────────────────────────────────────────────────
+  TextStyle get sessionDay =>
+      _i(15, FontWeight.w600, _t.textPrimary, em: -0.01);
+  TextStyle get sessionSub => _i(11, FontWeight.w500, _t.textTertiary);
+  TextStyle get sessionHeadline =>
+      _i(13, FontWeight.w400, _t.textBody, h: 1.4);
+  TextStyle outcomeTag(Color c) =>
+      _i(10, FontWeight.w700, c, em: 0.05); // caller uppercases
+
+  // ── Substrate + footer ─────────────────────────────────────────────────────
+  TextStyle get substrateLabel => _i(13, FontWeight.w400, _t.textSecondary);
+  TextStyle get substrateStrong => _i(13, FontWeight.w600, _t.textPrimary);
+  TextStyle get footerItem => _i(12, FontWeight.w500, _t.textTertiary);
 }
