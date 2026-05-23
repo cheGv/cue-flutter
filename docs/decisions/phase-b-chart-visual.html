@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cue chart — light + dark</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: #0a0a0a;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  padding: 32px;
+}
+
+.wrap { max-width: 1100px; margin: 0 auto; }
+
+.intro { margin-bottom: 24px; }
+.intro h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.intro p { font-size: 13px; color: #888; line-height: 1.5; max-width: 700px; }
+
+.label-bar {
+  margin-top: 60px;
+  margin-bottom: 20px;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+/* ===================== SHARED LIGHT THEME ===================== */
+.chart-light {
+  --bg-canvas: #f1f5f9;
+  --bg-card: #ffffff;
+  --bg-card-head: #f8fafc;
+  --bg-inset: #f8fafc;
+  --bg-stg-section: #f8fafc;
+  --bg-narrator: #f8fafc;
+  --bg-narrator-rail: #0f172a;
+  --border-card: #e2e8f0;
+  --border-inset: #e2e8f0;
+  --border-divider: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-body: #1e293b;
+  --text-secondary: #475569;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
+  --text-faint: #cbd5e1;
+  --accent: #ea580c;
+  --accent-soft-bg: #fff7ed;
+  --accent-pulse: rgba(234, 88, 12, 0.2);
+  --accent-pulse-2: rgba(234, 88, 12, 0.08);
+  --accent-shadow: rgba(234, 88, 12, 0.06);
+  --btn-primary-bg: #0f172a;
+  --btn-primary-hover: #1e293b;
+  --tier-1-bg: #dcfce7; --tier-1-text: #14532d;
+  --tier-2-bg: #dbeafe; --tier-2-text: #1e3a8a;
+  --tier-3-bg: #fed7aa; --tier-3-text: #9a3412;
+  --tier-practice-bg: #f1f5f9; --tier-practice-text: #475569;
+  --outcome-progress-bg: #dcfce7; --outcome-progress-text: #14532d; --outcome-progress-mark: #16a34a;
+  --outcome-revised-bg: #ffedd5; --outcome-revised-text: #9a3412; --outcome-revised-mark: #ea580c;
+  --outcome-holding-bg: #f1f5f9; --outcome-holding-text: #475569; --outcome-holding-mark: #64748b;
+  --info-badge-bg: #e0f2fe; --info-badge-text: #075985;
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-focus: 0 2px 6px rgba(234, 88, 12, 0.06), 0 1px 3px rgba(15, 23, 42, 0.04);
+  --hatch-from: #f8fafc;
+  --hatch-to: #f1f5f9;
+}
+
+/* ===================== SHARED DARK THEME ===================== */
+.chart-dark {
+  --bg-canvas: #14110d;
+  --bg-card: #1f1c17;
+  --bg-card-head: #2a2620;
+  --bg-inset: #28241f;
+  --bg-stg-section: #2a2620;
+  --bg-narrator: #28241f;
+  --bg-narrator-rail: #fef3c7;
+  --border-card: #3a342c;
+  --border-inset: #3a342c;
+  --border-divider: #2a2620;
+  --text-primary: #fefce8;
+  --text-body: #f5f0e3;
+  --text-secondary: #d1c7b3;
+  --text-tertiary: #a39685;
+  --text-muted: #7a6f5e;
+  --text-faint: #4d4438;
+  --accent: #fb923c;
+  --accent-soft-bg: rgba(251, 146, 60, 0.12);
+  --accent-pulse: rgba(251, 146, 60, 0.3);
+  --accent-pulse-2: rgba(251, 146, 60, 0.1);
+  --accent-shadow: rgba(251, 146, 60, 0.15);
+  --btn-primary-bg: #fef3c7;
+  --btn-primary-hover: #fde68a;
+  --tier-1-bg: rgba(34, 197, 94, 0.15); --tier-1-text: #86efac;
+  --tier-2-bg: rgba(96, 165, 250, 0.15); --tier-2-text: #93c5fd;
+  --tier-3-bg: rgba(251, 146, 60, 0.15); --tier-3-text: #fdba74;
+  --tier-practice-bg: rgba(255, 255, 255, 0.06); --tier-practice-text: #a39685;
+  --outcome-progress-bg: rgba(34, 197, 94, 0.15); --outcome-progress-text: #86efac; --outcome-progress-mark: #22c55e;
+  --outcome-revised-bg: rgba(251, 146, 60, 0.15); --outcome-revised-text: #fdba74; --outcome-revised-mark: #fb923c;
+  --outcome-holding-bg: rgba(255,255,255,0.06); --outcome-holding-text: #a39685; --outcome-holding-mark: #78716c;
+  --info-badge-bg: rgba(56, 189, 248, 0.15); --info-badge-text: #7dd3fc;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-focus: 0 2px 8px rgba(251, 146, 60, 0.12), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --hatch-from: #28241f;
+  --hatch-to: #2e2a23;
+}
+.chart-dark .btn.primary { color: #14110d; }
+.chart-dark .recall-btn { color: #14110d; }
+
+/* ===================== STRUCTURE ===================== */
+.chart {
+  background: var(--bg-canvas);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #2a2a2a;
+  color: var(--text-primary);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: var(--bg-card);
+  border-radius: 10px;
+  border: 1px solid var(--border-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.card.header {
+  padding: 24px 28px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+/* refined eyebrow — no longer uppercase small caps */
+.header-left .eyebrow {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+  letter-spacing: 0;
+}
+.header-left .eyebrow .sep { color: var(--text-faint); margin: 0 8px; }
+.header-left .hero {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.1;
+  margin-bottom: 10px;
+}
+.header-left .meta {
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.header-left .meta strong { color: var(--text-primary); font-weight: 600; }
+.header-left .meta .sep { color: var(--text-faint); }
+.header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+.recall-btn {
+  background: var(--btn-primary-bg);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.recall-btn:hover { background: var(--btn-primary-hover); }
+.recall-btn .kbd {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  opacity: 0.7;
+  padding: 2px 5px;
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+}
+.chart-dark .recall-btn .kbd { background: rgba(0,0,0,0.2); }
+
+.card.narrator {
+  padding: 16px 24px 16px 21px;
+  background: var(--bg-narrator);
+  border-left: 4px solid var(--bg-narrator-rail);
+  font-size: 14px;
+  color: var(--text-body);
+  line-height: 1.55;
+}
+.card.narrator strong { color: var(--text-primary); font-weight: 600; }
+
+.card.chips {
+  padding: 14px 20px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 9px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border-card);
+  background: var(--bg-card);
+  color: var(--text-body);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover { background: var(--bg-card-head); }
+.btn.primary {
+  background: var(--btn-primary-bg);
+  color: #fff;
+  border-color: var(--btn-primary-bg);
+}
+.btn.primary:hover { background: var(--btn-primary-hover); }
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+.btn.ghost:hover { background: var(--bg-card-head); color: var(--text-primary); }
+.btn.small { font-size: 12px; padding: 6px 10px; }
+.btn .icon { font-size: 14px; }
+
+.card-head {
+  padding: 14px 24px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+  border-bottom: 1px solid var(--border-card);
+  background: var(--bg-card-head);
+}
+.card-head .section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.card-head .section-label .count {
+  color: var(--text-muted);
+  font-weight: 600;
+  margin-left: 8px;
+}
+.card-head .section-action { display: flex; gap: 8px; }
+.card-body { padding: 20px 24px; }
+
+.card.ltg .ltg-body {
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  max-width: 820px;
+}
+.card.ltg .ltg-meta {
+  display: flex;
+  gap: 14px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.card.ltg .ltg-meta .badge {
+  background: var(--info-badge-bg);
+  color: var(--info-badge-text);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.card.ltg .ltg-meta .sep { color: var(--text-faint); }
+
+.card.stg-section .card-body {
+  background: var(--bg-stg-section);
+  padding: 16px 20px 20px 20px;
+}
+
+.stg-focus {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  padding: 22px 26px;
+  margin-bottom: 12px;
+  position: relative;
+  box-shadow: var(--shadow-focus);
+}
+.stg-focus::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 22px;
+  bottom: 22px;
+  width: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.stg-focus-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.stg-focus-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stg-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft-bg);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+.stg-focus-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.stg-week {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.stg-week .accent { color: var(--text-primary); font-weight: 600; }
+.stg-body {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.sparkline-box {
+  background: var(--bg-inset);
+  border: 1px solid var(--border-inset);
+  border-radius: 6px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 90px 1fr 180px;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.sparkline-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.sparkline-svg { width: 100%; height: 36px; }
+.sparkline-readout {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: 'IBM Plex Mono', monospace;
+  text-align: right;
+}
+
+.evidence-block { margin-top: 8px; }
+.evidence-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.evidence-header-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.evidence-row {
+  display: grid;
+  grid-template-columns: 32px 90px 1fr auto;
+  gap: 12px;
+  padding: 12px 0;
+  font-size: 13px;
+  border-top: 1px solid var(--border-divider);
+  align-items: start;
+}
+.evidence-row .roman {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding-top: 2px;
+}
+.evidence-tier {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  text-align: center;
+  height: fit-content;
+  margin-top: 1px;
+}
+.evidence-tier.lvl-1 { background: var(--tier-1-bg); color: var(--tier-1-text); }
+.evidence-tier.lvl-2 { background: var(--tier-2-bg); color: var(--tier-2-text); }
+.evidence-tier.lvl-3 { background: var(--tier-3-bg); color: var(--tier-3-text); }
+.evidence-tier.practice { background: var(--tier-practice-bg); color: var(--tier-practice-text); }
+.evidence-finding {
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+.evidence-cite {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+  font-weight: 500;
+}
+.btn.icon-only {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: var(--border-card);
+  color: var(--text-tertiary);
+}
+.btn.icon-only:hover { background: var(--bg-card-head); color: var(--text-primary); }
+
+.stg-compact {
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 6px;
+  display: grid;
+  grid-template-columns: 60px 80px 1fr 80px 32px;
+  gap: 14px;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+}
+.stg-compact:hover { background: var(--bg-card-head); }
+.stg-compact .num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.stg-compact .domain-pill {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: center;
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+}
+.stg-compact .body { font-size: 13px; color: var(--text-primary); line-height: 1.4; }
+.stg-compact .cites {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: right;
+}
+.stg-compact .arrow {
+  color: var(--text-muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.card.trajectory .card-body {
+  padding: 24px 28px;
+}
+.trajectory-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 28px;
+}
+.trajectory-summary {
+  background: var(--bg-inset);
+  border-radius: 8px;
+  padding: 18px;
+  border: 1px solid var(--border-inset);
+}
+.trajectory-summary-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+}
+.trajectory-stat-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.trajectory-stat-row .big {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.trajectory-stat-row .small {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+.trajectory-summary-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-inset);
+}
+.outcome-pills {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.outcome-pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.outcome-pill .swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.outcome-pill.progress { background: var(--outcome-progress-bg); color: var(--outcome-progress-text); }
+.outcome-pill.progress .swatch { background: var(--outcome-progress-mark); }
+.outcome-pill.plan_revised { background: var(--outcome-revised-bg); color: var(--outcome-revised-text); }
+.outcome-pill.plan_revised .swatch { background: var(--outcome-revised-mark); }
+.outcome-pill.holding { background: var(--outcome-holding-bg); color: var(--outcome-holding-text); }
+.outcome-pill.holding .swatch { background: var(--outcome-holding-mark); }
+
+.trajectory-viz {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.trajectory-stg-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+.trajectory-stg-row .stg-label {
+  font-size: 12px;
+  color: var(--text-body);
+  font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.trajectory-stg-row .stg-label .sub {
+  display: block;
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 2px;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.02em;
+}
+.trajectory-track {
+  background: var(--bg-inset);
+  border-radius: 4px;
+  border: 1px solid var(--border-inset);
+  height: 36px;
+  position: relative;
+}
+.trajectory-track.empty {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--hatch-from),
+    var(--hatch-from) 6px,
+    var(--hatch-to) 6px,
+    var(--hatch-to) 12px
+  );
+}
+.trajectory-track .grid-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-inset);
+}
+.tick {
+  position: absolute;
+  width: 14px;
+  height: 24px;
+  border-radius: 3px;
+  top: 6px;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.tick:hover { transform: scale(1.1); z-index: 2; }
+.tick.progress { background: var(--outcome-progress-mark); }
+.tick.plan_revised { background: var(--outcome-revised-mark); }
+.tick.holding { background: var(--outcome-holding-mark); }
+.tick.today {
+  animation: pulse 2.4s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--accent-pulse);
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--accent-pulse); }
+  50% { box-shadow: 0 0 0 6px var(--accent-pulse-2); }
+}
+.trajectory-axis {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 16px;
+  margin-top: 6px;
+}
+.trajectory-weeks {
+  display: flex;
+  justify-content: space-between;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  padding: 0 4px;
+}
+
+/* SESSION HISTORY — typography refined: all Inter sans */
+.card.history .session-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 90px 14px;
+  gap: 20px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-divider);
+  align-items: center;
+  font-size: 13px;
+  cursor: pointer;
+}
+.card.history .session-row:last-child { border-bottom: none; }
+.card.history .session-row:hover { background: var(--bg-card-head); }
+
+/* date block: day name + sub-line both in Inter sans */
+.card.history .session-row .date-block .day {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  font-family: 'Inter', sans-serif;
+}
+.card.history .session-row .date-block .sub {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  margin-top: 3px;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0;
+}
+.card.history .session-row .headline {
+  color: var(--text-body);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+}
+.card.history .session-row .outcome-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-align: center;
+}
+.card.history .session-row .outcome-tag.progress { background: var(--outcome-progress-bg); color: var(--outcome-progress-text); }
+.card.history .session-row .outcome-tag.plan_revised { background: var(--outcome-revised-bg); color: var(--outcome-revised-text); }
+.card.history .session-row .arrow { color: var(--text-muted); font-size: 14px; }
+
+.card.substrate {
+  padding: 16px 24px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: center;
+}
+.card.substrate .label { font-size: 13px; color: var(--text-secondary); }
+.card.substrate .label strong { color: var(--text-primary); font-weight: 600; }
+
+.card.footer {
+  padding: 14px 24px;
+  display: flex;
+  gap: 20px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 500;
+  background: var(--bg-card-head);
+}
+.card.footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="intro">
+  <h2>Cue chart — typography refined, light + dark</h2>
+  <p>Eyebrow drops the all-caps treatment. Session-history dates use Inter sans throughout (no more monospace for weekdays). Trajectory week labels also moved to Inter. Monospace reserved only for true codes (STG numbers, evidence roman numerals, L5→L2 readouts). Dark mode mirrors the architecture with a warm-tinted near-black surface (#14110d) and amber accent (#fb923c).</p>
+</div>
+
+<div class="label-bar">Light mode</div>
+
+<div class="chart chart-light">
+
+  <div class="card header">
+    <div class="header-left">
+      <div class="eyebrow">In care since 3 weeks <span class="sep">·</span> Last seen 2 days ago</div>
+      <div class="hero">Aarav</div>
+      <div class="meta">
+        <span><strong>3 years</strong> · ASD, minimally verbal</span>
+        <span class="sep">·</span>
+        <span><strong>4</strong> sessions</span>
+        <span class="sep">·</span>
+        <span><strong>18</strong> substrate cells</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="recall-btn">
+        <span>✦</span>
+        <span>Ask Cue</span>
+        <span class="kbd">⌘K</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card narrator">
+    <strong>Status —</strong> Aarav's last session worked on the active care plan. 3 STGs in motion. Co-regulation strategy introduced May 21; next session focuses on bath-to-bed transition with expectant-pause overlay.
+  </div>
+
+  <div class="card chips">
+    <button class="btn primary"><span class="icon">📅</span><span>Plan next session</span></button>
+    <button class="btn"><span class="icon">📖</span><span>Review last session</span></button>
+    <button class="btn"><span class="icon">＋</span><span>New STG</span></button>
+    <button class="btn ghost"><span class="icon">📂</span><span>Substrate</span></button>
+  </div>
+
+  <div class="card ltg">
+    <div class="card-head">
+      <div class="section-label">Long-term goal <span class="count">· LTG 1</span></div>
+      <div class="section-action">
+        <button class="btn small ghost">Edit LTG</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="ltg-body">
+        Aarav will use a multimodal communication system (gesture + AAC + emerging vocalizations) to express needs, refuse, and request across his three primary daily routines — mealtime, bath, and bedtime — with caregiver scaffolding reducing from full physical support to indirect verbal cueing over the year.
+      </div>
+      <div class="ltg-meta">
+        <span class="badge">12 months</span>
+        <span>Month 1 of 12</span>
+        <span class="sep">·</span>
+        <span>Authored Apr 30</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card stg-section">
+    <div class="card-head">
+      <div class="section-label">Short-term goals <span class="count">· 3 active</span></div>
+      <div class="section-action">
+        <button class="btn small">＋ New STG</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="stg-focus">
+        <div class="stg-focus-header">
+          <div class="stg-focus-header-left">
+            <span class="stg-num">1.A</span>
+            <span class="stg-focus-badge">In focus</span>
+          </div>
+          <span class="stg-week">Week <span class="accent">1</span> of 4</span>
+        </div>
+        <div class="stg-body">
+          Aarav will participate in three structured transitions per day (bath-to-bed, snack-to-play, play-to-caregiver-routine) using the co-regulation strategy modeled by caregiver, with prompting reducing from hand-over-hand to indirect verbal across four weeks.
+        </div>
+        <div class="sparkline-box">
+          <div class="sparkline-label">Prompting</div>
+          <svg class="sparkline-svg" viewBox="0 0 400 36" preserveAspectRatio="none">
+            <line x1="0" y1="28" x2="400" y2="28" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="2 4"/>
+            <polyline points="20,6 140,14 260,22 380,30" fill="none" stroke="#ea580c" stroke-width="2"/>
+            <circle cx="20" cy="6" r="4" fill="#ea580c"/>
+            <circle cx="140" cy="14" r="4" fill="#ea580c"/>
+            <circle cx="260" cy="22" r="4" fill="#ea580c"/>
+            <circle cx="380" cy="30" r="4" fill="#ea580c" stroke="#fff" stroke-width="2"/>
+          </svg>
+          <div class="sparkline-readout">L5 → L2 · descending</div>
+        </div>
+        <div class="evidence-block">
+          <div class="evidence-header">
+            <div class="evidence-header-label">Evidence base · 4 sources</div>
+            <button class="btn small ghost">＋ Add evidence</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">i</span>
+            <span class="evidence-tier lvl-1">Level I</span>
+            <div>
+              <div class="evidence-finding">Polyvagal-informed therapeutic relationships reduce dysregulation episodes in early intervention.</div>
+              <div class="evidence-cite">Porges · 2011</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">ii</span>
+            <span class="evidence-tier lvl-2">Level II</span>
+            <div>
+              <div class="evidence-finding">Co-regulation routines embedded in caregiver routines extend therapeutic gains.</div>
+              <div class="evidence-cite">Garcia · 2023</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">iii</span>
+            <span class="evidence-tier lvl-3">Level III</span>
+            <div>
+              <div class="evidence-finding">Caregiver coaching efficacy across Indian household contexts.</div>
+              <div class="evidence-cite">Patel · 2024</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">iv</span>
+            <span class="evidence-tier practice">Practice</span>
+            <div>
+              <div class="evidence-finding">SCERTS regulation framework — adapted for Indian early-intervention settings.</div>
+              <div class="evidence-cite">Prizant · 2014</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+        </div>
+      </div>
+      <div class="stg-compact">
+        <span class="num">1.B</span>
+        <span class="domain-pill">AAC</span>
+        <span class="body">Aarav will initiate two communicative bids per day using his AAC device across two routines (mealtime, play).</span>
+        <span class="cites">0 cited</span>
+        <span class="arrow">›</span>
+      </div>
+      <div class="stg-compact">
+        <span class="num">1.C</span>
+        <span class="domain-pill">Family</span>
+        <span class="body">Caregiver will use the expectant pause technique across five daily interactions per day.</span>
+        <span class="cites">0 cited</span>
+        <span class="arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card trajectory">
+    <div class="card-head">
+      <div class="section-label">Trajectory <span class="count">· 4 sessions over 3 weeks</span></div>
+      <div class="section-action">
+        <button class="btn small ghost">Export</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="trajectory-grid">
+        <div class="trajectory-summary">
+          <div class="trajectory-summary-label">Overall · 4 sessions</div>
+          <div class="trajectory-stat-row">
+            <span class="big">75%</span>
+            <span class="small">progress sessions</span>
+          </div>
+          <div class="outcome-pills">
+            <div class="outcome-pill progress"><span class="swatch"></span><span>3 progress</span></div>
+            <div class="outcome-pill plan_revised"><span class="swatch"></span><span>1 revised</span></div>
+          </div>
+          <div class="trajectory-summary-desc">
+            Co-regulation strategy holds. Caregiver mirrored on session 3 without prompting — strong signal.
+          </div>
+        </div>
+        <div class="trajectory-viz">
+          <div class="trajectory-stg-row">
+            <div class="stg-label">STG 1.A<span class="sub">Regulation</span></div>
+            <div class="trajectory-track">
+              <div class="grid-line" style="left: 12.5%"></div>
+              <div class="grid-line" style="left: 25%"></div>
+              <div class="grid-line" style="left: 37.5%"></div>
+              <div class="grid-line" style="left: 50%"></div>
+              <div class="grid-line" style="left: 62.5%"></div>
+              <div class="grid-line" style="left: 75%"></div>
+              <div class="grid-line" style="left: 87.5%"></div>
+              <div class="tick progress" style="left: 8%"></div>
+              <div class="tick plan_revised" style="left: 30%"></div>
+              <div class="tick progress" style="left: 52%"></div>
+              <div class="tick progress today" style="left: 74%"></div>
+            </div>
+          </div>
+          <div class="trajectory-stg-row">
+            <div class="stg-label">STG 1.B<span class="sub">AAC</span></div>
+            <div class="trajectory-track empty"></div>
+          </div>
+          <div class="trajectory-stg-row">
+            <div class="stg-label">STG 1.C<span class="sub">Family</span></div>
+            <div class="trajectory-track empty"></div>
+          </div>
+          <div class="trajectory-axis">
+            <span></span>
+            <div class="trajectory-weeks">
+              <span>Week 1</span><span>Week 2</span><span>Week 3</span><span>Week 4</span><span>Week 5</span><span>Week 6</span><span>Week 7</span><span>Week 8</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card history">
+    <div class="card-head">
+      <div class="section-label">Session history <span class="count">· 4 sessions</span></div>
+      <div class="section-action">
+        <button class="btn small">Open all sessions →</button>
+      </div>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">May 21</div>
+        <div class="sub">Thursday · 45 min</div>
+      </div>
+      <span class="headline">Co-regulation strategy introduced — caregiver mirrored on third transition without prompting.</span>
+      <span class="outcome-tag progress">Progress</span>
+      <span class="arrow">›</span>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">May 14</div>
+        <div class="sub">Thursday · 45 min</div>
+      </div>
+      <span class="headline">AAC stimulability re-attempted — Aarav initiated two communicative bids unprompted.</span>
+      <span class="outcome-tag progress">Progress</span>
+      <span class="arrow">›</span>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">May 7</div>
+        <div class="sub">Thursday · 40 min</div>
+      </div>
+      <span class="headline">Plan revised — initial regulation strategy too high-demand, scaled to caregiver-led co-regulation.</span>
+      <span class="outcome-tag plan_revised">Revised</span>
+      <span class="arrow">›</span>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">Apr 30</div>
+        <div class="sub">Thursday · 60 min</div>
+      </div>
+      <span class="headline">Baseline assessment session — three primary clinical concerns identified across regulation, AAC, family.</span>
+      <span class="outcome-tag progress">Progress</span>
+      <span class="arrow">›</span>
+    </div>
+  </div>
+
+  <div class="card substrate">
+    <div class="label">
+      <strong>Substrate</strong> · 18 cells across six layers · Last updated 3 weeks ago
+    </div>
+    <button class="btn small">Open substrate →</button>
+  </div>
+
+  <div class="card footer">
+    <span>🕐 Last seen 2 days ago</span>
+    <span>👤 Caregiver unverified</span>
+    <span>📈 4 sessions · stable trajectory</span>
+  </div>
+
+</div>
+
+<div class="label-bar">Dark mode (warm-tinted near-black with amber accent)</div>
+
+<div class="chart chart-dark">
+
+  <div class="card header">
+    <div class="header-left">
+      <div class="eyebrow">In care since 3 weeks <span class="sep">·</span> Last seen 2 days ago</div>
+      <div class="hero">Aarav</div>
+      <div class="meta">
+        <span><strong>3 years</strong> · ASD, minimally verbal</span>
+        <span class="sep">·</span>
+        <span><strong>4</strong> sessions</span>
+        <span class="sep">·</span>
+        <span><strong>18</strong> substrate cells</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="recall-btn">
+        <span>✦</span>
+        <span>Ask Cue</span>
+        <span class="kbd">⌘K</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card narrator">
+    <strong>Status —</strong> Aarav's last session worked on the active care plan. 3 STGs in motion. Co-regulation strategy introduced May 21; next session focuses on bath-to-bed transition with expectant-pause overlay.
+  </div>
+
+  <div class="card chips">
+    <button class="btn primary"><span class="icon">📅</span><span>Plan next session</span></button>
+    <button class="btn"><span class="icon">📖</span><span>Review last session</span></button>
+    <button class="btn"><span class="icon">＋</span><span>New STG</span></button>
+    <button class="btn ghost"><span class="icon">📂</span><span>Substrate</span></button>
+  </div>
+
+  <div class="card ltg">
+    <div class="card-head">
+      <div class="section-label">Long-term goal <span class="count">· LTG 1</span></div>
+      <div class="section-action">
+        <button class="btn small ghost">Edit LTG</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="ltg-body">
+        Aarav will use a multimodal communication system (gesture + AAC + emerging vocalizations) to express needs, refuse, and request across his three primary daily routines — mealtime, bath, and bedtime — with caregiver scaffolding reducing from full physical support to indirect verbal cueing over the year.
+      </div>
+      <div class="ltg-meta">
+        <span class="badge">12 months</span>
+        <span>Month 1 of 12</span>
+        <span class="sep">·</span>
+        <span>Authored Apr 30</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card stg-section">
+    <div class="card-head">
+      <div class="section-label">Short-term goals <span class="count">· 3 active</span></div>
+      <div class="section-action">
+        <button class="btn small">＋ New STG</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="stg-focus">
+        <div class="stg-focus-header">
+          <div class="stg-focus-header-left">
+            <span class="stg-num">1.A</span>
+            <span class="stg-focus-badge">In focus</span>
+          </div>
+          <span class="stg-week">Week <span class="accent">1</span> of 4</span>
+        </div>
+        <div class="stg-body">
+          Aarav will participate in three structured transitions per day (bath-to-bed, snack-to-play, play-to-caregiver-routine) using the co-regulation strategy modeled by caregiver, with prompting reducing from hand-over-hand to indirect verbal across four weeks.
+        </div>
+        <div class="sparkline-box">
+          <div class="sparkline-label">Prompting</div>
+          <svg class="sparkline-svg" viewBox="0 0 400 36" preserveAspectRatio="none">
+            <line x1="0" y1="28" x2="400" y2="28" stroke="#3a342c" stroke-width="1" stroke-dasharray="2 4"/>
+            <polyline points="20,6 140,14 260,22 380,30" fill="none" stroke="#fb923c" stroke-width="2"/>
+            <circle cx="20" cy="6" r="4" fill="#fb923c"/>
+            <circle cx="140" cy="14" r="4" fill="#fb923c"/>
+            <circle cx="260" cy="22" r="4" fill="#fb923c"/>
+            <circle cx="380" cy="30" r="4" fill="#fb923c" stroke="#1f1c17" stroke-width="2"/>
+          </svg>
+          <div class="sparkline-readout">L5 → L2 · descending</div>
+        </div>
+        <div class="evidence-block">
+          <div class="evidence-header">
+            <div class="evidence-header-label">Evidence base · 4 sources</div>
+            <button class="btn small ghost">＋ Add evidence</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">i</span>
+            <span class="evidence-tier lvl-1">Level I</span>
+            <div>
+              <div class="evidence-finding">Polyvagal-informed therapeutic relationships reduce dysregulation episodes in early intervention.</div>
+              <div class="evidence-cite">Porges · 2011</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">ii</span>
+            <span class="evidence-tier lvl-2">Level II</span>
+            <div>
+              <div class="evidence-finding">Co-regulation routines embedded in caregiver routines extend therapeutic gains.</div>
+              <div class="evidence-cite">Garcia · 2023</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">iii</span>
+            <span class="evidence-tier lvl-3">Level III</span>
+            <div>
+              <div class="evidence-finding">Caregiver coaching efficacy across Indian household contexts.</div>
+              <div class="evidence-cite">Patel · 2024</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+          <div class="evidence-row">
+            <span class="roman">iv</span>
+            <span class="evidence-tier practice">Practice</span>
+            <div>
+              <div class="evidence-finding">SCERTS regulation framework — adapted for Indian early-intervention settings.</div>
+              <div class="evidence-cite">Prizant · 2014</div>
+            </div>
+            <button class="btn icon-only" title="Open source">↗</button>
+          </div>
+        </div>
+      </div>
+      <div class="stg-compact">
+        <span class="num">1.B</span>
+        <span class="domain-pill">AAC</span>
+        <span class="body">Aarav will initiate two communicative bids per day using his AAC device across two routines (mealtime, play).</span>
+        <span class="cites">0 cited</span>
+        <span class="arrow">›</span>
+      </div>
+      <div class="stg-compact">
+        <span class="num">1.C</span>
+        <span class="domain-pill">Family</span>
+        <span class="body">Caregiver will use the expectant pause technique across five daily interactions per day.</span>
+        <span class="cites">0 cited</span>
+        <span class="arrow">›</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card trajectory">
+    <div class="card-head">
+      <div class="section-label">Trajectory <span class="count">· 4 sessions over 3 weeks</span></div>
+      <div class="section-action">
+        <button class="btn small ghost">Export</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="trajectory-grid">
+        <div class="trajectory-summary">
+          <div class="trajectory-summary-label">Overall · 4 sessions</div>
+          <div class="trajectory-stat-row">
+            <span class="big">75%</span>
+            <span class="small">progress sessions</span>
+          </div>
+          <div class="outcome-pills">
+            <div class="outcome-pill progress"><span class="swatch"></span><span>3 progress</span></div>
+            <div class="outcome-pill plan_revised"><span class="swatch"></span><span>1 revised</span></div>
+          </div>
+          <div class="trajectory-summary-desc">
+            Co-regulation strategy holds. Caregiver mirrored on session 3 without prompting — strong signal.
+          </div>
+        </div>
+        <div class="trajectory-viz">
+          <div class="trajectory-stg-row">
+            <div class="stg-label">STG 1.A<span class="sub">Regulation</span></div>
+            <div class="trajectory-track">
+              <div class="grid-line" style="left: 12.5%"></div>
+              <div class="grid-line" style="left: 25%"></div>
+              <div class="grid-line" style="left: 37.5%"></div>
+              <div class="grid-line" style="left: 50%"></div>
+              <div class="grid-line" style="left: 62.5%"></div>
+              <div class="grid-line" style="left: 75%"></div>
+              <div class="grid-line" style="left: 87.5%"></div>
+              <div class="tick progress" style="left: 8%"></div>
+              <div class="tick plan_revised" style="left: 30%"></div>
+              <div class="tick progress" style="left: 52%"></div>
+              <div class="tick progress today" style="left: 74%"></div>
+            </div>
+          </div>
+          <div class="trajectory-stg-row">
+            <div class="stg-label">STG 1.B<span class="sub">AAC</span></div>
+            <div class="trajectory-track empty"></div>
+          </div>
+          <div class="trajectory-stg-row">
+            <div class="stg-label">STG 1.C<span class="sub">Family</span></div>
+            <div class="trajectory-track empty"></div>
+          </div>
+          <div class="trajectory-axis">
+            <span></span>
+            <div class="trajectory-weeks">
+              <span>Week 1</span><span>Week 2</span><span>Week 3</span><span>Week 4</span><span>Week 5</span><span>Week 6</span><span>Week 7</span><span>Week 8</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card history">
+    <div class="card-head">
+      <div class="section-label">Session history <span class="count">· 4 sessions</span></div>
+      <div class="section-action">
+        <button class="btn small">Open all sessions →</button>
+      </div>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">May 21</div>
+        <div class="sub">Thursday · 45 min</div>
+      </div>
+      <span class="headline">Co-regulation strategy introduced — caregiver mirrored on third transition without prompting.</span>
+      <span class="outcome-tag progress">Progress</span>
+      <span class="arrow">›</span>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">May 14</div>
+        <div class="sub">Thursday · 45 min</div>
+      </div>
+      <span class="headline">AAC stimulability re-attempted — Aarav initiated two communicative bids unprompted.</span>
+      <span class="outcome-tag progress">Progress</span>
+      <span class="arrow">›</span>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">May 7</div>
+        <div class="sub">Thursday · 40 min</div>
+      </div>
+      <span class="headline">Plan revised — initial regulation strategy too high-demand, scaled to caregiver-led co-regulation.</span>
+      <span class="outcome-tag plan_revised">Revised</span>
+      <span class="arrow">›</span>
+    </div>
+    <div class="session-row">
+      <div class="date-block">
+        <div class="day">Apr 30</div>
+        <div class="sub">Thursday · 60 min</div>
+      </div>
+      <span class="headline">Baseline assessment session — three primary clinical concerns identified across regulation, AAC, family.</span>
+      <span class="outcome-tag progress">Progress</span>
+      <span class="arrow">›</span>
+    </div>
+  </div>
+
+  <div class="card substrate">
+    <div class="label">
+      <strong>Substrate</strong> · 18 cells across six layers · Last updated 3 weeks ago
+    </div>
+    <button class="btn small">Open substrate →</button>
+  </div>
+
+  <div class="card footer">
+    <span>🕐 Last seen 2 days ago</span>
+    <span>👤 Caregiver unverified</span>
+    <span>📈 4 sessions · stable trajectory</span>
+  </div>
+
+</div>
+
+</div>
+</body>
+</html>
