@@ -33,6 +33,11 @@ class ChartActionChips extends StatelessWidget {
         children: [
           CueChartButton(
             style: CueChartButtonStyle.primary,
+            icon: Icons.add,
+            label: 'Capture session',
+            onTap: () => onChipTap?.call('capture_session'),
+          ),
+          CueChartButton(
             icon: _primaryIcon(primary),
             label: primaryActionLabel(primary, clientName),
             onTap: () => onChipTap?.call('primary'),

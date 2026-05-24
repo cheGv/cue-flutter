@@ -19,10 +19,17 @@ class SettingsNavItem {
   final String key;
   final String label;
   final SettingsGroup group;
+
+  /// When set, tapping this item navigates to the named route instead of
+  /// swapping the in-shell pane — used by surfaces that live at their own
+  /// route (e.g. Report formats → /settings/formats).
+  final String? route;
+
   const SettingsNavItem({
     required this.key,
     required this.label,
     required this.group,
+    this.route,
   });
 }
 
@@ -32,6 +39,7 @@ const List<SettingsNavItem> kSettingsNavItems = [
   SettingsNavItem(key: 'ai',            label: 'AI Behavior',              group: SettingsGroup.howIPractice),
   SettingsNavItem(key: 'practice',      label: 'Practice Setup',           group: SettingsGroup.howIPractice),
   SettingsNavItem(key: 'notifications', label: 'Notifications',            group: SettingsGroup.howIPractice),
+  SettingsNavItem(key: 'formats',       label: 'Report formats',           group: SettingsGroup.howIPractice, route: '/settings/formats'),
   SettingsNavItem(key: 'privacy',       label: 'Privacy & Consent',        group: SettingsGroup.whatsProtected),
   SettingsNavItem(key: 'security',      label: 'Security',                 group: SettingsGroup.whatsProtected),
   SettingsNavItem(key: 'audit',         label: 'Audit Log',                group: SettingsGroup.whatsProtected),

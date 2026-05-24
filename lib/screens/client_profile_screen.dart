@@ -23,6 +23,7 @@ import '../models/short_term_goal.dart';
 import '../models/stg_session_metric.dart';
 import '../repositories/citations_repository.dart';
 import '../repositories/client_chart_state_repository.dart';
+import '../repositories/format_templates_repository.dart';
 import '../repositories/ltg_repository.dart';
 import '../repositories/sessions_repository.dart';
 import '../repositories/stg_metrics_repository.dart';
@@ -35,6 +36,7 @@ import '../utils/chart_navigation.dart';
 import '../utils/stg_numbering.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/chart/chart_action_chips.dart';
+import '../widgets/chart/chart_card.dart';
 import '../widgets/chart/chart_footer_meta.dart';
 import '../widgets/chart/chart_format.dart';
 import '../widgets/chart/chart_header.dart';
@@ -107,6 +109,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   late Future<_ChartData> _future;
 
+  // Phase C — Cue Mirror, Component Two. Whether the SLP has ≥1 confirmed
+  // format template; gates the "Generate report" chip (disabled with a hint
+  // when none exist). Loaded once; never blocks the chart's own load.
+  Future<bool> _hasConfirmedTemplate = Future<bool>.value(false);
+
   // Locally-held in-focus STG. Null until the first compact-row tap, after
   // which it overrides the loaded initialFocusId. Reset on retry/reload.
   String? _focusedStgId;
@@ -134,6 +141,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
         if (!mounted) return;
         recallAssistantController.setFocusedClient(_clientId, _clientName);
       });
+      // Phase C — does this clinician have a confirmed format to draft in?
+      _hasConfirmedTemplate = FormatTemplatesRepository()
+          .listForUser()
+          .then((all) => all.any((t) => t.isConfirmed))
+          .catchError((Object _) => false);
     }
     _startLoad();
   }
@@ -337,6 +349,13 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
   void _onChip(String id, _ChartData d) {
     switch (id) {
+      case 'capture_session':
+        ChartNavigation.captureSession(
+          context,
+          clientId: _clientId,
+          clientName: _clientName,
+        ).then((_) => _reload());
+        return;
       case 'primary':
         _onPrimary(d);
         return;
@@ -502,6 +521,14 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   onChipTap: (id) => _onChip(id, d),
                 ),
                 const SizedBox(height: 16),
+                _GenerateReportChip(
+                  hasConfirmedTemplate: _hasConfirmedTemplate,
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    '/clients/$_clientId/draft-report',
+                  ),
+                ),
+                const SizedBox(height: 16),
                 ChartLtgAnchor(
                   ltgText: d.ltgText,
                   ltgSeq: d.ltgSeq,
@@ -580,6 +607,56 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ── Generate report chip (Phase C — Cue Mirror, Component Two) ───────────────
+//
+// A single action chip living on the chart, between the action-chips card and
+// the LTG anchor. Enabled only when the clinician has ≥1 confirmed format to
+// draft in; otherwise it renders disabled with a subtle hint. It does not alter
+// anything else on the chart.
+
+class _GenerateReportChip extends StatelessWidget {
+  final Future<bool> hasConfirmedTemplate;
+  final VoidCallback onTap;
+
+  const _GenerateReportChip({
+    required this.hasConfirmedTemplate,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = CueChartTokens.of(context);
+    final ty = CueChartType.of(context);
+    return FutureBuilder<bool>(
+      future: hasConfirmedTemplate,
+      builder: (context, snap) {
+        final ready = snap.data ?? false;
+        return CueChartCard(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          child: Row(
+            children: [
+              CueChartButton(
+                icon: Icons.description_outlined,
+                label: 'Generate report',
+                enabled: ready,
+                onTap: ready ? onTap : null,
+              ),
+              const SizedBox(width: 12),
+              if (!ready)
+                Expanded(
+                  child: Text(
+                    'Add a confirmed format to draft reports in your style.',
+                    style: ty.sessionHeadline.copyWith(color: t.textTertiary),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

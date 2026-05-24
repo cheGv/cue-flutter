@@ -21,6 +21,11 @@ import 'screens/new_assessment_case_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/session_capture_screen.dart';
 import 'screens/settings/settings_shell.dart';
+import 'screens/format_templates_list_screen.dart';
+import 'screens/format_template_upload_screen.dart';
+import 'screens/format_draft_initiate_screen.dart';
+import 'screens/format_lexicon_defaults_screen.dart';
+import 'screens/format_draft_view_screen.dart';
 // Debug-only recall resolver verification harness. Referenced solely from
 // the kDebugMode-gated '/debug/recall-test' route below; tree-shaken out
 // of release builds.
@@ -546,6 +551,21 @@ class CueApp extends StatelessWidget {
               builder: (_) => SettingsShell(initialScreen: screen),
             );
           }
+          // ── Phase C — report-format adaptation (Component One) ───────
+          if (uri.path == '/settings/formats' && uri.pathSegments.length == 2) {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const FormatTemplatesListScreen(),
+            );
+          }
+          if (uri.path == '/settings/formats/new') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => FormatTemplateUploadScreen(
+                templateId: uri.queryParameters['id'],
+              ),
+            );
+          }
           if (uri.path == '/profile') {
             return MaterialPageRoute(
               settings: settings,
@@ -575,6 +595,76 @@ class CueApp extends StatelessWidget {
           // (Cue Study retired). Hard refresh on an old /study URL falls
           // through to the catch-all return null below; the unknown-route
           // path lands the SLP back on /today via main.dart's default.
+
+          // ── Phase C — Cue Mirror, Component Two (Format Drafter) ─────
+          // These deep paths must precede the generic /clients/:clientId
+          // (2-segment) matcher below. Generate-mode args (templateId,
+          // preset, custom dates) ride on RouteSettings.arguments as a Map.
+          // /clients/:clientId/draft-report/view/:draftId → load a stored draft
+          if (uri.pathSegments.length == 5 &&
+              uri.pathSegments[0] == 'clients' &&
+              uri.pathSegments[2] == 'draft-report' &&
+              uri.pathSegments[3] == 'view') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => FormatDraftViewScreen(
+                clientId: uri.pathSegments[1],
+                draftId: uri.pathSegments[4],
+              ),
+            );
+          }
+          // /clients/:clientId/draft-report/view → generate mode (args)
+          if (uri.pathSegments.length == 4 &&
+              uri.pathSegments[0] == 'clients' &&
+              uri.pathSegments[2] == 'draft-report' &&
+              uri.pathSegments[3] == 'view') {
+            final args = settings.arguments;
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => FormatDraftViewScreen(
+                clientId: uri.pathSegments[1],
+                genArgs: args is Map<String, dynamic> ? args : null,
+              ),
+            );
+          }
+          // /clients/:clientId/draft-report/lexicon → once-per-template lexicon
+          if (uri.pathSegments.length == 4 &&
+              uri.pathSegments[0] == 'clients' &&
+              uri.pathSegments[2] == 'draft-report' &&
+              uri.pathSegments[3] == 'lexicon') {
+            final args = settings.arguments;
+            if (args is! Map<String, dynamic> ||
+                args['templateId'] is! String) {
+              // Lexicon step is only reachable mid-flow with its args; a bare
+              // hit falls back to the initiate screen.
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) =>
+                    FormatDraftInitiateScreen(clientId: uri.pathSegments[1]),
+              );
+            }
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => FormatLexiconDefaultsScreen(
+                clientId: uri.pathSegments[1],
+                templateId: args['templateId'] as String,
+                preset: args['preset'] as String? ?? 'all_sessions',
+                customStart: args['customStart'] as DateTime?,
+                customEnd: args['customEnd'] as DateTime?,
+              ),
+            );
+          }
+          // /clients/:clientId/draft-report → pick a format + date range
+          if (uri.pathSegments.length == 3 &&
+              uri.pathSegments[0] == 'clients' &&
+              uri.pathSegments[2] == 'draft-report') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) =>
+                  FormatDraftInitiateScreen(clientId: uri.pathSegments[1]),
+            );
+          }
+
           // /clients/:clientId/sessions  →  ClientSessionsScreen (full timeline)
           if (uri.pathSegments.length == 3 &&
               uri.pathSegments[0] == 'clients' &&

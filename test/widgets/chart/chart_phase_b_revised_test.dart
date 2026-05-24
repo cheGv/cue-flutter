@@ -11,7 +11,6 @@ import 'package:cue/widgets/chart/chart_stg_section.dart';
 import 'package:cue/widgets/chart/chart_trajectory_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 Future<void> _pump(WidgetTester t, Widget child,
     {Brightness b = Brightness.dark}) async {

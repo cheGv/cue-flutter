@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../screens/add_session_screen.dart';
 import '../screens/client_sessions_screen.dart';
 import '../screens/goal_authoring_screen.dart';
 import '../screens/session_planning_screen.dart';
@@ -70,6 +71,23 @@ class ChartNavigation {
         clientId: clientId,
         clientName: clientName,
         seedFocus: seedFocus,
+      ),
+    ));
+  }
+
+  /// Opens the two-mode (Narrate / Type) new-session capture entry.
+  /// AddSessionScreen routes onward to NarrateSessionScreen or
+  /// SessionCaptureScreen; both return to the chart on save.
+  static Future<void> captureSession(
+    BuildContext context, {
+    required String clientId,
+    required String clientName,
+  }) async {
+    if (!_ensureAuth(context, clientId)) return;
+    await Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => AddSessionScreen(
+        clientId: clientId,
+        clientName: clientName,
       ),
     ));
   }

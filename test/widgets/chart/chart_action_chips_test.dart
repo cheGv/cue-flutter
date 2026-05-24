@@ -84,6 +84,17 @@ void main() {
     expect(find.text('New STG'), findsOneWidget);
   });
 
+  testWidgets('Capture session chip is always present (not gated)', (t) async {
+    const s = ClientChartState(
+        clientId: 'c', clientName: 'Aarav', ltgCount: 0, totalSessionCount: 0);
+    await _pump(
+      t,
+      const ChartActionChips(
+          state: s, sessionToday: false, clientName: 'Aarav'),
+    );
+    expect(find.text('Capture session'), findsOneWidget);
+  });
+
   testWidgets('New STG + Review are disabled (opacity 0.4) for an empty client',
       (t) async {
     const s = ClientChartState(
@@ -121,12 +132,18 @@ void main() {
         onChipTap: taps.add,
       ),
     );
-    await t.tap(find.text('Plan next session')); // primary
+    await t.tap(find.text('Capture session')); // always-present first chip
+    await t.tap(find.text('Plan next session')); // contextual primary
     await t.tap(find.text('Substrate'));
     await t.tap(find.text('Review last session'));
     await t.tap(find.text('New STG'));
     await t.pump();
-    expect(
-        taps, ['primary', 'open_substrate', 'review_last_session', 'new_stg']);
+    expect(taps, [
+      'capture_session',
+      'primary',
+      'open_substrate',
+      'review_last_session',
+      'new_stg',
+    ]);
   });
 }

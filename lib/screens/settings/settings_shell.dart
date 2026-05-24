@@ -193,8 +193,10 @@ class _SettingsNavList extends StatelessWidget {
           for (final item in entry.value)
             _NavRow(
               label: item.label,
-              isActive: item.key == activeKey,
-              onTap: () => onSelect(item.key),
+              isActive: item.route == null && item.key == activeKey,
+              onTap: item.route != null
+                  ? () => Navigator.of(context).pushNamed(item.route!)
+                  : () => onSelect(item.key),
             ),
         ],
       ],
