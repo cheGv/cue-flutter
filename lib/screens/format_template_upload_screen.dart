@@ -201,7 +201,26 @@ class _FormatTemplateUploadScreenState
         sourceDocuments: docs,
       );
       _adoptTemplate(result.template);
-      _warnings = result.warnings;
+      var warnings = result.warnings;
+
+      // Phase D wk2 — also capture the deterministic visual geometry (Cue
+      // Mirror engine) so the format can later be reproduced exactly. Additive
+      // and best-effort: a geometry hiccup must never block the semantic
+      // confirm flow that the drafter depends on.
+      try {
+        await _service.requestGeometryExtraction(
+          templateId: tpl.id,
+          sourceDocuments: docs,
+        );
+      } catch (_) {
+        warnings = [
+          ...warnings,
+          'Visual geometry was not captured — exact-format mirroring will be '
+              'unavailable for this template until it is re-uploaded.',
+        ];
+      }
+
+      _warnings = warnings;
       setState(() {
         _step = _Step.confirm;
         _busy = false;

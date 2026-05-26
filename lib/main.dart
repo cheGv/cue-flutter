@@ -30,6 +30,10 @@ import 'screens/format_draft_view_screen.dart';
 // the kDebugMode-gated '/debug/recall-test' route below; tree-shaken out
 // of release builds.
 import 'screens/recall_resolver_test_screen.dart';
+// Debug-only Cue Mirror format-mirroring test harness. Referenced solely from
+// the kDebugMode-gated '/debug/mirror-test' route below; tree-shaken out of
+// release builds.
+import 'screens/format_mirror_test_screen.dart';
 // Debug-only Phase A substrate verification harness. Referenced solely from
 // the kDebugMode-gated '/debug/substrate/:clientId' route below; tree-shaken
 // out of release builds.
@@ -481,6 +485,17 @@ class CueApp extends StatelessWidget {
             return MaterialPageRoute(
               settings: settings,
               builder: (_) => const RecallResolverTestScreen(),
+            );
+          }
+
+          // ── Debug-only Cue Mirror format-mirroring test harness ─────
+          // Sandbox-gated inside the screen; reachable ONLY in debug builds.
+          // Pick a template → regenerate a verbatim .docx → download → compare
+          // against the original in Word.
+          if (kDebugMode && uri.path == '/debug/mirror-test') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const FormatMirrorTestScreen(),
             );
           }
 

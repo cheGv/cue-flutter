@@ -158,6 +158,101 @@ class FormatExtractorService {
     return ts == null ? null : DateTime.tryParse(ts);
   }
 
+  /// Phase D wk2 — deterministic geometry extraction (Cue Mirror format-
+  /// mirroring engine). Signs the .docx source(s) and POSTs to
+  /// /format-extract-v2, which parses the OOXML into the exact visual geometry
+  /// (page setup, tables, runs, numbering, media) and stores it server-side in
+  /// format_templates.format_geometry — a SEPARATE column from the semantic
+  /// extracted_template (which this client round-trips). The LLM never sees
+  /// format. Additive + best-effort: callers should not block the semantic
+  /// confirm flow on a geometry hiccup.
+  Future<GeometryExtractionResult> requestGeometryExtraction({
+    required String templateId,
+    required List<SourceDocument> sourceDocuments,
+  }) async {
+    final signer = _signedUrlProvider ?? _defaultSignedUrl;
+    final files = <Map<String, dynamic>>[];
+    for (final d in sourceDocuments) {
+      if (d.fileType != 'docx') continue; // geometry requires a .docx source
+      final signed = await signer(d.storagePath);
+      files.add({
+        'filename': d.filename,
+        'file_type': d.fileType,
+        'storage_path': d.storagePath,
+        'signed_url': signed,
+      });
+    }
+    if (files.isEmpty) {
+      throw FormatExtractorException('Visual mirroring needs a .docx source.');
+    }
+
+    final token = await _tokenProvider();
+    if (token == null) throw FormatExtractorException('You are not signed in.');
+
+    final resp = await _client
+        .post(
+          Uri.parse('$_base/format-extract-v2'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'template_id': templateId, 'files': files}),
+        )
+        .timeout(_extractTimeout);
+
+    if (resp.statusCode != 200) {
+      throw FormatExtractorException(_errorMessage(resp));
+    }
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return GeometryExtractionResult.fromJson(
+      body['geometry'] is Map
+          ? Map<String, dynamic>.from(body['geometry'] as Map)
+          : const {},
+    );
+  }
+
+  /// Phase D wk2 — Mirror test render (sandbox debug surface). POSTs to
+  /// /format-mirror-render, which verbatim-reconstructs the stored geometry and
+  /// returns a short-lived signed download URL + a structural summary. The
+  /// optional client-name swap demonstrates that content can differ while the
+  /// format stays byte-identical.
+  Future<MirrorRenderResult> renderMirrorTest({
+    required String templateId,
+    String? swapFrom,
+    String? swapTo,
+  }) async {
+    final token = await _tokenProvider();
+    if (token == null) throw FormatExtractorException('You are not signed in.');
+
+    final payload = <String, dynamic>{'template_id': templateId};
+    if (swapFrom != null && swapTo != null && swapFrom.isNotEmpty) {
+      payload['client_name_swap'] = {'from': swapFrom, 'to': swapTo};
+    }
+
+    final resp = await _client
+        .post(
+          Uri.parse('$_base/format-mirror-render'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode(payload),
+        )
+        .timeout(_extractTimeout);
+
+    if (resp.statusCode != 200) {
+      throw FormatExtractorException(_errorMessage(resp));
+    }
+    final body = jsonDecode(resp.body) as Map<String, dynamic>;
+    return MirrorRenderResult(
+      signedUrl: (body['signed_url'] as String?) ?? '',
+      filename: (body['filename'] as String?) ?? 'mirror.docx',
+      summary: body['geometry_summary'] is Map
+          ? Map<String, dynamic>.from(body['geometry_summary'] as Map)
+          : const {},
+    );
+  }
+
   String _errorMessage(http.Response resp) {
     try {
       final b = jsonDecode(resp.body) as Map<String, dynamic>;
@@ -172,6 +267,57 @@ class FormatExtractionResult {
   final ExtractedTemplate template;
   final List<String> warnings;
   const FormatExtractionResult({required this.template, required this.warnings});
+}
+
+/// Summary returned by /format-extract-v2 (the stored geometry's headline
+/// numbers + page setup) — enough for the upload flow + Mirror screen to
+/// confirm a successful geometry capture without shipping the full structure.
+class GeometryExtractionResult {
+  final Map<String, dynamic> pageSetup;
+  final Map<String, dynamic> defaultFont;
+  final int tables;
+  final int images;
+  final int mainTableColumns;
+
+  const GeometryExtractionResult({
+    this.pageSetup = const {},
+    this.defaultFont = const {},
+    this.tables = 0,
+    this.images = 0,
+    this.mainTableColumns = 0,
+  });
+
+  String get orientation => (pageSetup['orientation'] as String?) ?? 'unknown';
+
+  factory GeometryExtractionResult.fromJson(Map<String, dynamic> json) {
+    final counts = json['counts'] is Map
+        ? Map<String, dynamic>.from(json['counts'] as Map)
+        : const {};
+    return GeometryExtractionResult(
+      pageSetup: json['page_setup'] is Map
+          ? Map<String, dynamic>.from(json['page_setup'] as Map)
+          : const {},
+      defaultFont: json['default_font'] is Map
+          ? Map<String, dynamic>.from(json['default_font'] as Map)
+          : const {},
+      tables: (counts['tables'] as num?)?.toInt() ?? 0,
+      images: (counts['images'] as num?)?.toInt() ?? 0,
+      mainTableColumns: (counts['main_table_columns'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
+/// Result of /format-mirror-render — a signed download URL for the regenerated
+/// .docx + the structural summary the Mirror screen shows.
+class MirrorRenderResult {
+  final String signedUrl;
+  final String filename;
+  final Map<String, dynamic> summary;
+  const MirrorRenderResult({
+    required this.signedUrl,
+    required this.filename,
+    this.summary = const {},
+  });
 }
 
 class FormatExtractorException implements Exception {

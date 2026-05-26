@@ -99,3 +99,85 @@ Phase D week one verified end-to-end 2026-05-27.
 - Markdown table rendering in Word export (discovered today)
 
 **Bucket one operational gate scheduled at week five.**
+
+---
+
+## 2026-05-27 — Phase D week two: Cue Mirror format-mirroring engine
+
+The defensible core — extract an uploaded `.docx`'s exact visual format as
+structured data, reproduce it deterministically on export, with content the
+only variable. Proven end-to-end against Vrishin's real lesson plan + PT report.
+
+**Deterministic geometry extractor** (`proxy/lib/extractGeometry.js`, pure /
+unit-tested). `jszip` + `@xmldom/xmldom` parse of document/styles/numbering/
+theme/rels → `page_setup` (size, orientation, margins), `default_font`, ordered
+`structure` (paragraphs with per-run font/size/bold/italic/underline/colour/
+highlight + indent/spacing/numbering; tables with `tblGrid`, `gridSpan`,
+`vMerge`, borders, shading, nested tables), `numbering_definitions`, and `media`
+(raw bytes + EMU anchor + wrap mode, scanning body + header/footer parts). **No
+LLM** — the LLM never sees format (Mirror C2).
+
+**Deterministic renderer** (`proxy/lib/buildReportDocxV2.js`, pure /
+unit-tested). docx-js reconstruction: exact `pgSz` (landscape short/long-edge
+swap handled), margins, ordered structure, tables (`columnWidths` +
+`gridSpan`→columnSpan + `vMerge`→rowSpan grid reconstruction, borders, shading,
+nested), per-run formatting (unicode/IPA preserved verbatim), numbering configs
+built from the source's `numbering.xml`, floating/inline images at EMU anchors.
+
+**Endpoints** (`server.js`, additive; env chosen by token issuer → sandbox):
+- `POST /format-extract-v2` — parse → upload media bytes to
+  `format_template_media` → store geometry in
+  `format_templates.format_geometry`. No LLM.
+- `POST /format-mirror-render` — verbatim re-render of stored geometry for the
+  Mirror test surface; optional `client_name_swap` proves content can differ
+  while format stays byte-identical; output → `format_draft_exports/mirror-test/`.
+
+**Migration (sandbox `uuqhusmgoiaxdvtgbmwh` only):** `20260527130000` —
+`format_geometry jsonb` column (deliberately SEPARATE from `extracted_template`,
+which the Flutter model round-trips and would strip on `/format-confirm`) +
+private per-user `format_template_media` bucket with RLS. Prod
+`cgnjbjbargkxtcnafxaa` untouched.
+
+**Flutter:** `FormatExtractorService.requestGeometryExtraction` (wired into the
+upload flow, best-effort after the semantic extract) + `renderMirrorTest`;
+sandbox-gated `/debug/mirror-test` screen (pick template → structural breakdown
+→ regenerate `.docx` → download → compare in Word).
+
+**Programmatic gate (E2 automated XML round-trip) — 28/28:**
+- Vrishin LP: landscape 16839×11907, margins 270/180/180/99, 2 tables, 9-col
+  main grid (widths within 5%), Cambria default, 0 images, IPA U+025B preserved.
+- Vrishin PT: portrait 11909×16834, Arial default, 1 image with `behindDoc`
+  anchor x/y preserved exactly, w/h within 10%.
+- `node --test` 12/12 (5 mirror + 7 auth); `flutter analyze` 0 new issues (18
+  pre-existing baseline); `flutter test` 249 passed (243 baseline + 6 new), 38
+  skipped; forbidden-word grep clean on all new code.
+
+**Deferred — backfill `format_geometry` for pre-Phase-D-week-2 templates.** New
+uploads run both `/format-extract` (semantic, for drafting) and
+`/format-extract-v2` (geometric, for rendering). Existing templates (the AIISH
+PT already extracted) have no geometry and keep rendering through the V1
+renderer until explicitly re-extracted.
+
+**Phase E — URGENT: build a real MCP sandbox-only guardrail.** The Supabase MCP
+token reaches BOTH prod and sandbox; sandbox-only is currently enforced by
+discipline alone (every call types `project_id="uuqhusmgoiaxdvtgbmwh"`).
+Options: scoped Supabase access token, wrapper script, or a proxy with a
+hardcoded project_id.
+
+**Deviations from the week-2 spec (recon-confirmed):**
+- Vrishin's LP has NO embedded image and 2 tables (one nested), not "4 nested
+  tables" — E1 invariants were re-set accordingly (Decision 1); the image
+  pipeline is instead proven against the PT (the AIISH logo).
+- `/format-draft-export` still uses the V1 (semantic) renderer. Wiring
+  per-client substrate content INTO the geometric cells — the content-slot
+  bridge between the semantic drafter and the geometric template — is the next
+  piece. The engine currently reproduces a template verbatim (+ optional name
+  swap): the "regenerate for Asha in Vrishin's format" wow is **format-proven**;
+  content-fill is the follow-on.
+- No Python/LibreOffice on the box → automated docx→image visual diff
+  unavailable; side-by-side comparison in Word stays user-driven (Decision 3).
+  Real Vrishin fixtures are NOT committed (PII — the PT is a child's report);
+  tests resolve them via `MIRROR_FIXTURES_DIR` and skip cleanly when absent.
+
+**Status:** Sandbox only. Local commits in both repos; NOT pushed. Proxy push +
+deploy gated on the user's side-by-side Word smoke test.
