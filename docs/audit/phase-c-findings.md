@@ -341,9 +341,56 @@ features.
 - The LP template `d6085cad` was slot-mapped before the comprehensive-static
   prompt; under `content_fill` a column header or two may blank. Re-running its
   slot-ID with the new prompt restores full LP fidelity (the PT is unaffected).
+  **[RESOLVED 2026-05-27 — FALSE ALARM: the re-slot found the pre-existing map
+  already structurally complete (dept header + column-header row were already
+  static); 0 header cells were blanking. See "LP `d6085cad` re-slot" section
+  below.]**
 - Slot-ID completeness is the fidelity floor (not a safety risk — unclassified
   blanks): re-extract templates if headings go missing.
 
 **Status:** Sandbox only. Slot map stored for `8a04fd1e`. Local commits in both
 repos; NOT pushed. Proxy push + deploy gated on the user's side-by-side Word
 smoke test of Asha + the AIISH PT (`8a04fd1e`).
+
+## 2026-05-27 — LP `d6085cad` re-slot: false-alarm regression + slot_id-rename breakage
+
+Re-ran slot identification on LP template `d6085cad` with the comprehensive
+static-text prompt (`identifySlots.js` @ f5cb000) and replaced the stored map
+via a single atomic UPDATE (sandbox `uuqhusmgoiaxdvtgbmwh`, prod untouched). New
+map verified: 17 slots, 6 static_text (dept header + `S.N`/`SKILLS`/`GOALS`/
+`ACTIVITIES` column-header row), local checksum `{slots:17, static:6,
+mini_cells:0, block_sum:118}` matched the stored jsonb byte-for-byte on the
+counts, and a header-cell diagnostic confirmed **0 header cells would blank**
+under `content_fill`.
+
+### Finding — old map was already structurally complete (false alarm)
+Today's re-slot of LP template d6085cad found the old map (12:55Z) was already
+structurally complete with comprehensive static_text labeling. The header-drop
+regression risk flagged earlier was a false alarm. The slot identifier was
+producing comprehensive static_text labeling before today's prompt extension.
+The extension reinforced existing behavior rather than fundamentally changing
+it. Future re-slot work should first compare structural deltas before assuming
+regeneration is needed.
+
+### Slot_id renames are silent breaking changes for stored drafts (open item)
+Slot_id renames in `format_templates.format_slot_map` are silent breaking
+changes for stored drafts in `format_drafts.slot_content`. Today's d6085cad
+re-slot renamed `date_of_admission` → `date_of_assessment` and
+`session_attended_allotted` → `sessions_attended_allotted`. One existing LP
+draft (`baf62ad6`) has stored content under the old keys that will render
+label-only on re-render. The value is preserved in the row, just unmatched.
+Architectural decisions to consider: (a) stabilize slot_ids across
+re-identifications via deterministic generation, (b) build a slot_id migration
+helper, or (c) treat slot_id changes as breaking and require manual
+regeneration. Open audit item.
+
+### Case study — unrequested side-effect verification caught orphan-risk (positive)
+Claude Code performed unrequested side-effect verification after the rename,
+surfacing the orphaned draft before it caused silent data-loss on re-render.
+Demonstrates value of partner-mode discipline beyond literal task scope.
+
+**Status:** Sandbox only (`uuqhusmgoiaxdvtgbmwh`); prod `cgnjbjbargkxtcnafxaa`
+untouched. New map stored on `d6085cad` (atomic). Orphaned draft `baf62ad6`
+left as-is per user decision (no clinical-content writes tonight). No code
+commits; only the throwaway re-slot harness was touched. Audit doc updated
+(uncommitted).
