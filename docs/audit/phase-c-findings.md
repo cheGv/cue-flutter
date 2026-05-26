@@ -3,6 +3,13 @@
 Findings logged as Phase C (Cue Mirror, format adaptation) components are
 built and proven. Newest entries appended at the end.
 
+> **TOP-TIER ARCHITECTURAL PRINCIPLE — format ingestion (logged 2026-05-27).**
+> Cue accepts any format the clinician shares. PDF, .docx, Pages export,
+> scanned document, anything. If we cannot ingest a real-world clinical format,
+> that is an architectural gap on our side, not a clinician problem to solve.
+> The product law "Cue adapts to the clinician's format" applies at the **upload
+> boundary**, not just at the render boundary.
+
 ---
 
 ## 2026-05-25 — Proxy issuer-aware auth refactor closes two bugs
@@ -394,3 +401,13 @@ untouched. New map stored on `d6085cad` (atomic). Orphaned draft `baf62ad6`
 left as-is per user decision (no clinical-content writes tonight). No code
 commits; only the throwaway re-slot harness was touched. Audit doc updated
 (uncommitted).
+
+## 2026-05-27 — Correction: ".docx end-to-end" is NOT "architecturally complete"
+
+Today's smoke test verified Cue Mirror works end-to-end for .docx input. Earlier
+framing that called this "architecturally complete" was premature. PDF native
+ingestion (Phase E) is the architectural completion. The moat is incomplete
+until any format a clinician shares can be ingested natively. Capturing this
+correction explicitly to prevent overclaiming in future product communications.
+
+See the top-tier format-ingestion principle at the head of this document.
