@@ -3,7 +3,29 @@
 Findings logged as Phase C (Cue Mirror, format adaptation) components are
 built and proven. Newest entries appended at the end.
 
-> **TOP-TIER ARCHITECTURAL PRINCIPLE — format ingestion (logged 2026-05-27).**
+## CUE PRODUCT LAW — UNIVERSAL INGESTION
+
+The SLP shares what she has. Cue accepts it. Whatever format — PDF (digital or
+scanned), image (PNG/JPG/photo from phone), Excel spreadsheet, scanned document,
+.docx, Pages export, photograph of a printed report — Cue ingests natively and
+produces .docx output mirroring the source format byte-faithfully with client
+substrate filled in.
+
+The clinician never adapts her workflow to Cue's input requirements. Cue absorbs
+all format friction.
+
+This is constitutional, not optional. The healthcare system imposes cognitive and
+physical load on SLPs at every interaction with documentation. Cue's purpose is to
+remove that load entirely. Format ingestion is the first point of friction;
+eliminating it is the first promise.
+
+Timeline secondary. Architectural integrity primary. If absorbing universal
+ingestion takes 3 months instead of 1, the 3-month version is the right version.
+
+This principle supersedes any short-term FCP timeline pressure. Founding Clinician
+outreach happens AFTER Phase E (Universal Ingestion) lands, not before.
+
+> **Corollary to the Product Law — format adaptation at the upload boundary (logged 2026-05-27).**
 > Cue accepts any format the clinician shares. PDF, .docx, Pages export,
 > scanned document, anything. If we cannot ingest a real-world clinical format,
 > that is an architectural gap on our side, not a clinician problem to solve.
