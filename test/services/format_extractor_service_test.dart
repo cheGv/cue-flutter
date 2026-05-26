@@ -260,6 +260,34 @@ void main() {
     });
   });
 
+  group('requestSlotIdentification', () {
+    test('posts {template_id} to /format-identify-slots; resolves on 200', () async {
+      Map<String, dynamic>? sent;
+      String? url;
+      final svc = _svc(MockClient((req) async {
+        url = req.url.toString();
+        sent = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({'template_id': 'tpl-1', 'slot_map': {'slot_count': 5, 'slots': []}}),
+          200,
+        );
+      }));
+      await svc.requestSlotIdentification(templateId: 'tpl-1');
+      expect(url, endsWith('/format-identify-slots'));
+      expect(sent!['template_id'], 'tpl-1');
+    });
+
+    test('non-200 surfaces the server error (not swallowed)', () async {
+      final svc = _svc(MockClient((req) async => http.Response(
+          jsonEncode({'error': 'Slot identification failed: model overloaded'}), 502)));
+      expect(
+        () => svc.requestSlotIdentification(templateId: 'tpl-1'),
+        throwsA(isA<FormatExtractorException>().having(
+            (e) => e.message, 'message', contains('Slot identification failed'))),
+      );
+    });
+  });
+
   group('storage upload (requires live Supabase)', () {
     test('uploadSourceDocument writes to {uid}/{templateId}/{filename}',
         () async {}, skip: 'integration');

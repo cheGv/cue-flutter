@@ -253,6 +253,30 @@ class FormatExtractorService {
     );
   }
 
+  /// Phase D wk3 — content-slot identification (Cue Mirror content-fill). POSTs
+  /// to /format-identify-slots, which runs LLM-aided slot identification over the
+  /// template's stored geometry and writes format_slot_map. MUST run AFTER
+  /// geometry. On failure the error is THROWN so the caller can surface it; the
+  /// template keeps format_slot_map='{}', so the renderer falls back to V1 and
+  /// the template is never silently marked "ready for content-fill".
+  Future<void> requestSlotIdentification({required String templateId}) async {
+    final token = await _tokenProvider();
+    if (token == null) throw FormatExtractorException('You are not signed in.');
+    final resp = await _client
+        .post(
+          Uri.parse('$_base/format-identify-slots'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'template_id': templateId}),
+        )
+        .timeout(_extractTimeout);
+    if (resp.statusCode != 200) {
+      throw FormatExtractorException(_errorMessage(resp));
+    }
+  }
+
   String _errorMessage(http.Response resp) {
     try {
       final b = jsonDecode(resp.body) as Map<String, dynamic>;

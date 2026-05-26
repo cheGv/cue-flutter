@@ -181,3 +181,91 @@ hardcoded project_id.
 
 **Status:** Sandbox only. Local commits in both repos; NOT pushed. Proxy push +
 deploy gated on the user's side-by-side Word smoke test.
+
+---
+
+## 2026-05-27 — Phase D week three: content-slot bridge (content-fill mirroring)
+
+The final piece — a new client's substrate, rendered into an uploaded SLP's
+EXACT format. Templates now carry THREE artifacts: `extracted_template` (V1
+semantic), `format_geometry` (V2 geometric), and **`format_slot_map` (wk3,
+which cells/paragraphs are content slots vs static labels, their semantic role,
+and which rows repeat per skill domain)**.
+
+**Migration (sandbox `uuqhusmgoiaxdvtgbmwh` only):** `20260527140000` —
+`format_templates.format_slot_map jsonb` (`{}` = not yet identified → renderer
+falls back to V1; populated = ready) + `format_drafts.slot_content jsonb`. Prod
+untouched.
+
+**Slot identification** (`proxy/lib/identifySlots.js` + `POST
+/format-identify-slots`): LLM (opus-4-5) over the structured geometry → slot map
+`{ slots[{slot_id, location, semantic_label, repeatable_per_skill_domain,
+notes}], static_text[], repeatable_table }`. No rendered image used (none on
+host). Errors throw (no silent catch); on failure `format_slot_map` stays `{}`
+(template not marked ready). Backfilled `d6085cad` ("lesson plan 2"): **17
+slots**, repeatable `template_row 5`, 6 static (1.4K in / 1.7K out).
+
+**Drafter dual-output** (`/format-draft` + `lib/draftSlotAddendum.js`): the
+proxy loads the slot map by `template_id` server-side (Flutter generate-report
+call unchanged); when present, the system prompt gains the addendum and the LLM
+emits ONE object `{ sections[], slot_content{} }` — V1 `draft_sections`
+(Component Three / corpus, unchanged) AND V2 `slot_content` (slot_id → string,
+or index-aligned arrays for repeatable slots). All §discipline (source
+grounding, lexicon, voice, length) carries forward. Verified on Ratnadeep: 3
+aligned domains (SOVT/`/m/`, VFE, vocal-load), MPT progression, neutral register
+("area for support"), no invented header fields.
+
+**Renderer content-fill** (`buildReportDocxV2`): `{ geometry, slotMap,
+contentMap }`. Label-prefix header slots keep the captured label + append the
+new value (template's old value dropped — no "Vrishin Ratnadeep"); body slots
+replace; the repeatable `template_row` expands once per domain; the cell's font
+is preserved (Times New Roman where the source used it); static/images/page
+verbatim. `/format-draft-export` branches to V2 when geometry + slot map +
+`slot_content` all present, else V1 with a warning (`render_path` returned).
+Local validation (Ratnadeep slot_content → LP geometry): **15/15** — landscape
+16839×11907, body 1→3 rows, name/diagnosis/skills/MPT/`/m/` in the right cells,
+"Vrishin" gone, static headers preserved.
+
+**Flutter:** `requestSlotIdentification` runs sequentially after geometry on
+upload (error SURFACED, not swallowed); `exportDraft` logs the `render_path`
+(sandbox/debug-only). Generate-report UI unchanged.
+
+**Verification:** proxy `node --test` 16/16 (4 new wk3 deterministic + wk2 +
+auth); `flutter analyze` 0 new issues (18 baseline); `flutter test` 251 passed
+(249 + 2), 38 skipped; forbidden-word grep clean on all new code.
+
+### Audit items captured this build (non-blocking)
+
+1. **Slot-ID quality could improve with LibreOffice on the proxy** for
+   rendered-image generation. Slot ID is currently **structure-only** (the
+   geometry's text + layout). Acceptable for explicit-text templates (the LP's
+   `S.N/SKILLS/GOALS` headers are unambiguous); may matter more for
+   visually-driven formats where labels are implicit.
+
+2. **Local `.env` points at PROD with no `_SANDBOX` variants AND a UTF-8 BOM on
+   the first line** corrupting dotenv's first var name. Anyone running the proxy
+   locally hits production; the Anthropic key silently fails to load via dotenv.
+   Fix: add `SUPABASE_*_SANDBOX` variants locally, strip the BOM, and document
+   the local-run convention in CLAUDE.md. Footgun. (This build used the MCP for
+   ALL sandbox I/O and only the Anthropic key locally — never a `.env` Supabase
+   client.)
+
+3. **Voice-register adaptation is now explicit** in `lib/draftSlotAddendum.js`:
+   the template's voice register is a SOFT default — when the template's
+   intended population differs from the client's profile (pediatric template ⇄
+   adult client), pronouns/client references adapt ("the child" → name/"the
+   patient") while verb constructions, sentence patterns, and technique style
+   are preserved. Previously emergent; now intentional design.
+
+4. **Ratnadeep session count is 5, not 6** (built against 5 per the locked
+   decision). If a 6th session exists in a non-counted state, that is a separate
+   audit item — not a blocker for this build.
+
+5. **Pre-existing `catch (_)` on `format_template_upload_screen.dart`** (the wk2
+   geometry call) remains — logged for a future sprint, deliberately NOT fixed
+   this build. No new code replicates the pattern: the wk3 slot-ID call and all
+   new proxy handlers surface the real error.
+
+**Status:** Sandbox only. Local commits in both repos; NOT pushed. Proxy push +
+deploy gated on the user's side-by-side Word smoke test of Ratnadeep + the AIISH
+LP.

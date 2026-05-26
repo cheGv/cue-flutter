@@ -203,21 +203,38 @@ class _FormatTemplateUploadScreenState
       _adoptTemplate(result.template);
       var warnings = result.warnings;
 
-      // Phase D wk2 — also capture the deterministic visual geometry (Cue
-      // Mirror engine) so the format can later be reproduced exactly. Additive
-      // and best-effort: a geometry hiccup must never block the semantic
-      // confirm flow that the drafter depends on.
+      // Phase D wk2 — capture the deterministic visual geometry (Cue Mirror
+      // engine) so the format can later be reproduced exactly. Best-effort: a
+      // geometry hiccup must never block the semantic confirm flow.
+      var geometryOk = false;
       try {
         await _service.requestGeometryExtraction(
           templateId: tpl.id,
           sourceDocuments: docs,
         );
+        geometryOk = true;
       } catch (_) {
         warnings = [
           ...warnings,
           'Visual geometry was not captured — exact-format mirroring will be '
               'unavailable for this template until it is re-uploaded.',
         ];
+      }
+
+      // Phase D wk3 — identify content slots over the stored geometry (sequential
+      // — slots depend on geometry). The error is SURFACED (not swallowed): on
+      // error the template keeps an empty slot map and the export falls back to
+      // the basic renderer.
+      if (geometryOk) {
+        try {
+          await _service.requestSlotIdentification(templateId: tpl.id);
+        } catch (e) {
+          warnings = [
+            ...warnings,
+            'Content-slot identification did not complete, so this template will '
+                'use the basic renderer until re-uploaded. ($e)',
+          ];
+        }
       }
 
       _warnings = warnings;

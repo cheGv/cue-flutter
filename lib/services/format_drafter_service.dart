@@ -11,6 +11,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 
@@ -315,6 +316,15 @@ class FormatDrafterService {
     }
 
     final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
+    // Phase D wk3 (E3) — sandbox/debug-only indicator of which renderer path the
+    // proxy took (v2_content_fill | v1_no_geometry | v1_no_slots | v1_no_content).
+    // assert() body runs in debug builds only; stripped from release.
+    assert(() {
+      final rp = decoded['render_path'];
+      final w = decoded['warning'];
+      debugPrint('[Cue Mirror] export render_path=$rp${w != null ? '  warning=$w' : ''}');
+      return true;
+    }());
     final url = (decoded['signed_url'] as String?) ?? '';
     if (url.isEmpty) {
       throw FormatDrafterException('The export did not return a download link.');
