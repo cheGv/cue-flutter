@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'package:cue/models/citation.dart';
 import 'package:cue/models/client_chart_state.dart';
 import 'package:cue/models/format_draft.dart';
+import 'package:cue/models/format_draft_sentence.dart';
 import 'package:cue/models/format_template.dart';
 import 'package:cue/models/format_template_lexicon_default.dart';
 import 'package:cue/models/session.dart';
@@ -20,6 +21,7 @@ import 'package:cue/models/stg_session_metric.dart';
 import 'package:cue/models/substrate.dart';
 import 'package:cue/repositories/citations_repository.dart';
 import 'package:cue/repositories/client_chart_state_repository.dart';
+import 'package:cue/repositories/format_draft_sentences_repository.dart';
 import 'package:cue/repositories/format_drafts_repository.dart';
 import 'package:cue/repositories/format_template_lexicon_defaults_repository.dart';
 import 'package:cue/repositories/format_templates_repository.dart';
@@ -89,6 +91,66 @@ class _FakeDraftsRepo implements FormatDraftsRepository {
       'status': status,
     });
   }
+
+  Map<String, dynamic>? capturedUpdate;
+
+  @override
+  Future<FormatDraft?> get(String id) async => FormatDraft.fromJson({
+        'id': id,
+        'user_id': 'u1',
+        'client_id': 'c1',
+        'template_id': 't1',
+        'draft_sections': [
+          {
+            'section_name': 'Summary',
+            'content': 'orig',
+            'source_claims': [],
+            'lexicon_swaps': [],
+          }
+        ],
+        'generation_metadata': {'model': 'claude-opus-4-5'},
+        'status': 'draft',
+      });
+
+  @override
+  Future<FormatDraft> update(String id, Map<String, dynamic> fields) async {
+    capturedUpdate = fields;
+    return (await get(id))!;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
+}
+
+class _FakeSentencesRepo implements FormatDraftSentencesRepository {
+  String? capturedUpdateId;
+  Map<String, dynamic>? capturedUpdateFields;
+  List<FormatDraftSentence> sectionSentences = [];
+
+  @override
+  Future<FormatDraftSentence> update(
+      String id, Map<String, dynamic> fields) async {
+    capturedUpdateId = id;
+    capturedUpdateFields = fields;
+    return FormatDraftSentence.fromJson({
+      'id': id,
+      'draft_id': 'd1',
+      'section_name': 'Summary',
+      'sentence_order': 0,
+      'text': fields['text'] ?? 'orig',
+      'text_original': 'orig',
+      'status': fields['status'] ?? 'cue_drafted',
+    });
+  }
+
+  @override
+  Future<List<FormatDraftSentence>> listForSection(
+          String draftId, String sectionName) async =>
+      sectionSentences;
+
+  @override
+  Future<List<FormatDraftSentence>> listForDraft(String draftId) async =>
+      sectionSentences;
 
   @override
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
@@ -200,6 +262,7 @@ class _FakeChartStateRepo implements ClientChartStateRepository {
 FormatDrafterService _svc(
   http.Client client, {
   _FakeDraftsRepo? drafts,
+  _FakeSentencesRepo? sentences,
   _FakeSessionsRepo? sessions,
   _FakeSubstrateRepo? substrate,
   _FakeLtgRepo? ltg,
@@ -213,6 +276,7 @@ FormatDrafterService _svc(
       baseUrl: 'https://proxy.test',
       templatesRepository: _FakeTemplatesRepo(),
       draftsRepository: drafts ?? _FakeDraftsRepo(),
+      sentencesRepository: sentences ?? _FakeSentencesRepo(),
       lexiconRepository: _FakeLexiconRepo(),
       sessionsRepository: sessions ?? _FakeSessionsRepo(),
       substrateRepository: substrate ?? _FakeSubstrateRepo(),
@@ -225,7 +289,7 @@ FormatDrafterService _svc(
 
 void main() {
   test(
-      'requestDraft posts the locked template + canonical data with NO prompt (§13), parses + persists',
+      'requestDraft posts the locked template + canonical data with NO prompt (§13), reads the proxy-persisted draft by id',
       () async {
     late Map<String, dynamic> sentBody;
     late String sentPath;
@@ -234,13 +298,13 @@ void main() {
       sentBody = jsonDecode(req.body) as Map<String, dynamic>;
       return http.Response(
         jsonEncode({
+          // Phase D — the proxy is the authoritative writer and returns draft_id.
+          'draft_id': 'persisted-1',
           'draft_sections': [
             {
               'section_name': 'Summary',
               'content': 'The child demonstrates emerging skills.',
-              'source_claims': [
-                {'claim_text': 'demonstrates emerging skills', 'source_type': 'session', 'source_id': '1', 'source_excerpt': 'x'}
-              ],
+              'source_claims': [],
               'lexicon_swaps': [],
             }
           ],
@@ -255,8 +319,7 @@ void main() {
       );
     });
 
-    final drafts = _FakeDraftsRepo();
-    final draft = await _svc(mock, drafts: drafts).requestDraft(
+    final draft = await _svc(mock).requestDraft(
       templateId: 't1',
       clientId: 'c1',
       preset: 'all_sessions',
@@ -275,18 +338,20 @@ void main() {
     expect(sentBody['lexicon_defaults'], isA<List>());
     expect((sentBody['lexicon_defaults'] as List).first['forbidden_term'], 'delay');
     expect(sentBody['canonical_data'], isA<Map>());
-    // locked_template carries the extractor schema's keys.
     expect((sentBody['locked_template'] as Map)['format_name'], 'AIISH PT');
 
-    // Response parsed into the persisted draft.
+    // requestDraft reads the proxy-persisted draft back by the returned id.
     expect(draft.id, 'persisted-1');
-    expect(draft.draftSections.single.sectionName, 'Summary');
-    expect(draft.generationMetadata.model, 'claude-opus-4-5');
-    // Persisted with the proxy's sections + metadata + preset.
-    expect(drafts.capturedClientId, 'c1');
-    expect(drafts.capturedPreset, 'all_sessions');
-    expect(drafts.capturedSections, isNotNull);
-    expect(drafts.capturedMeta?['model'], 'claude-opus-4-5');
+  });
+
+  test('requestDraft throws when the proxy omits draft_id', () async {
+    final mock = MockClient((req) async => http.Response(
+        jsonEncode({'draft_sections': [], 'generation_metadata': {}}), 200));
+    expect(
+      () => _svc(mock).requestDraft(
+          templateId: 't1', clientId: 'c1', preset: 'all_sessions'),
+      throwsA(isA<FormatDrafterException>()),
+    );
   });
 
   test('assembleCanonicalContext pulls from every canonical repository', () async {
@@ -390,5 +455,77 @@ void main() {
       () => _svc(mock).exportDraft(draftId: 'd1'),
       throwsA(isA<FormatDrafterException>()),
     );
+  });
+
+  test('commitSentenceEdit promotes the edit and syncs the section to export',
+      () async {
+    final mock = MockClient((req) async => http.Response('{}', 200));
+    final sentences = _FakeSentencesRepo();
+    // The committed sentence the sync will rebuild draft_sections.content from.
+    sentences.sectionSentences = [
+      FormatDraftSentence.fromJson({
+        'id': 's1',
+        'draft_id': 'd1',
+        'section_name': 'Summary',
+        'sentence_order': 0,
+        'text': 'Clinician edited text.',
+        'text_original': 'orig',
+        'status': 'clinician_edited',
+      }),
+    ];
+    final drafts = _FakeDraftsRepo();
+    await _svc(mock, drafts: drafts, sentences: sentences).commitSentenceEdit(
+      draftId: 'd1',
+      sentenceId: 's1',
+      sectionName: 'Summary',
+      newText: 'Clinician edited text.',
+      status: 'clinician_edited',
+      sourceClaims: null,
+    );
+    // The sentence row was promoted (text + status) and text_in_progress cleared.
+    expect(sentences.capturedUpdateId, 's1');
+    expect(sentences.capturedUpdateFields?['text'], 'Clinician edited text.');
+    expect(sentences.capturedUpdateFields?['status'], 'clinician_edited');
+    expect(sentences.capturedUpdateFields?['text_in_progress'], isNull);
+    // The parent draft's Summary content was rebuilt from committed sentences.
+    final synced = drafts.capturedUpdate?['draft_sections'] as List?;
+    expect(synced, isNotNull);
+    final summary = synced!
+        .cast<Map<String, dynamic>>()
+        .firstWhere((m) => m['section_name'] == 'Summary');
+    expect(summary['content'], 'Clinician edited text.');
+  });
+
+  test('autosaveSentence writes text_in_progress and does NOT sync to export',
+      () async {
+    final mock = MockClient((req) async => http.Response('{}', 200));
+    final sentences = _FakeSentencesRepo();
+    final drafts = _FakeDraftsRepo();
+    await _svc(mock, drafts: drafts, sentences: sentences)
+        .autosaveSentence('s1', 'half-typed edit');
+    expect(sentences.capturedUpdateId, 's1');
+    expect(
+        sentences.capturedUpdateFields?['text_in_progress'], 'half-typed edit');
+    // Autosave must never touch draft_sections.
+    expect(drafts.capturedUpdate, isNull);
+  });
+
+  test('refresh returns the draft + its sentence corpus', () async {
+    final mock = MockClient((req) async => http.Response('{}', 200));
+    final sentences = _FakeSentencesRepo();
+    sentences.sectionSentences = [
+      FormatDraftSentence.fromJson({
+        'id': 's1',
+        'draft_id': 'd1',
+        'section_name': 'Summary',
+        'sentence_order': 0,
+        'text': 'x',
+        'text_original': 'x',
+        'status': 'cue_drafted',
+      }),
+    ];
+    final r = await _svc(mock, sentences: sentences).refresh('d1');
+    expect(r.draft, isNotNull);
+    expect(r.sentences, hasLength(1));
   });
 }

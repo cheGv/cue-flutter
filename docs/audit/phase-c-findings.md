@@ -82,3 +82,20 @@ Session capture wiring restored in the Phase B-revised chart via a dedicated **"
 **Deferred to Phase D — canonical-model nullability sweep.** A draft generation on one client surfaced a transient `type 'Null' is not a subtype of type 'String'` during canonical-data deserialization. The Mirror models (`format_draft`, `format_template`) are defensively null-safe, but the **older canonical models** — `citation` (`finding`/`author_year`), `stg_session_metric` (`metric_label`), `short_term_goal` (date casts), `session` (`client_id`) — still use **hard non-null `as String` casts** that crash on any incomplete row. The failure was not reproducible afterward and the exact field was not pinned (diagnostic instrumentation was added, used, then removed), so **no model was hardened in this pass**. The full canonical-model defensive-nullability sweep (match the Mirror models' `as String? ?? ''` / guarded `DateTime.parse`) is a **Phase D follow-up**.
 
 **Status:** Components One–Four feature-complete for the sandbox beta. Not deployed to production — proxy push + gh-pages deploy are a separate decision.
+
+---
+
+## 2026-05-27 — Phase D week one verified end-to-end
+
+Phase D week one verified end-to-end 2026-05-27.
+
+**Smoke test on Asha:** sentence-level rendering, inline editing, autosave + explicit save, Levenshtein-based status decision, edit-to-export sync (50-word authored sentence propagated verbatim to Word document).
+
+**First real row in corpus** (clinician_authored, source_claims cleared, substrate_snapshot captured).
+
+**Three week-two scope items:**
+- persistent lexicon overrides per template (original scope)
+- LLM-explicit per-sentence source claim attribution (replaces v1 1:1 heuristic)
+- Markdown table rendering in Word export (discovered today)
+
+**Bucket one operational gate scheduled at week five.**

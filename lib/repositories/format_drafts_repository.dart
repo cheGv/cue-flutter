@@ -32,6 +32,12 @@ class FormatDraftsRepository {
     return row == null ? null : FormatDraft.fromJson(row);
   }
 
+  /// DEPRECATED (Phase D): the proxy's `POST /format-draft` is now the
+  /// authoritative writer — it INSERTs format_drafts + format_draft_sentences
+  /// atomically and returns `draft_id`. `FormatDrafterService.requestDraft`
+  /// reads the draft back via [get] instead of calling this. Retained for
+  /// tests/fixtures and back-compat; do NOT use for live draft generation.
+  ///
   /// Persist a freshly generated draft. draftSections + generationMetadata are
   /// the raw JSON returned by /format-draft (stored verbatim as jsonb).
   Future<FormatDraft> create({

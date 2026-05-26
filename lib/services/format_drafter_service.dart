@@ -15,9 +15,11 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 
 import '../models/format_draft.dart';
+import '../models/format_draft_sentence.dart';
 import '../models/substrate.dart';
 import '../repositories/citations_repository.dart';
 import '../repositories/client_chart_state_repository.dart';
+import '../repositories/format_draft_sentences_repository.dart';
 import '../repositories/format_drafts_repository.dart';
 import '../repositories/format_template_lexicon_defaults_repository.dart';
 import '../repositories/format_templates_repository.dart';
@@ -34,6 +36,7 @@ class FormatDrafterService {
     String baseUrl = _defaultBase,
     FormatTemplatesRepository? templatesRepository,
     FormatDraftsRepository? draftsRepository,
+    FormatDraftSentencesRepository? sentencesRepository,
     FormatTemplateLexiconDefaultsRepository? lexiconRepository,
     SessionsRepository? sessionsRepository,
     SubstrateRepository? substrateRepository,
@@ -47,6 +50,8 @@ class FormatDrafterService {
         _base = baseUrl,
         _templatesRepo = templatesRepository ?? FormatTemplatesRepository(),
         _draftsRepo = draftsRepository ?? FormatDraftsRepository(),
+        _sentencesRepo =
+            sentencesRepository ?? FormatDraftSentencesRepository(),
         _lexiconRepo =
             lexiconRepository ?? FormatTemplateLexiconDefaultsRepository(),
         _sessionsRepo = sessionsRepository ?? SessionsRepository(),
@@ -68,6 +73,7 @@ class FormatDrafterService {
   final String _base;
   final FormatTemplatesRepository _templatesRepo;
   final FormatDraftsRepository _draftsRepo;
+  final FormatDraftSentencesRepository _sentencesRepo;
   final FormatTemplateLexiconDefaultsRepository _lexiconRepo;
   final SessionsRepository _sessionsRepo;
   final SubstrateRepository _substrateRepo;
@@ -183,21 +189,101 @@ class FormatDrafterService {
     }
 
     final decoded = jsonDecode(resp.body) as Map<String, dynamic>;
-    final sections = (decoded['draft_sections'] as List?) ?? const [];
-    final meta = decoded['generation_metadata'] is Map
-        ? Map<String, dynamic>.from(decoded['generation_metadata'] as Map)
-        : <String, dynamic>{};
 
-    // Persist ONLY after a successful draft (no partial drafts in the DB).
-    return _draftsRepo.create(
-      clientId: clientId,
+    // Phase D — the proxy is now the authoritative writer: it has already
+    // persisted format_drafts (+ the sentence corpus) atomically and returns
+    // the new draft_id. We read the persisted draft back rather than creating
+    // it client-side (FormatDraftsRepository.create is retained but deprecated).
+    final draftId = (decoded['draft_id'] as String?) ?? '';
+    if (draftId.isEmpty) {
+      throw FormatDrafterException(
+          'The draft was generated but did not return an id. Please try again.');
+    }
+    final draft = await _draftsRepo.get(draftId);
+    if (draft == null) {
+      throw FormatDrafterException(
+          'The generated draft could not be loaded. Please try again.');
+    }
+    return draft;
+  }
+
+  /// Reload a persisted draft + its sentence corpus (after generation or edit).
+  Future<({FormatDraft? draft, List<FormatDraftSentence> sentences})> refresh(
+      String draftId) async {
+    final draft = await _draftsRepo.get(draftId);
+    final sentences = await _sentencesRepo.listForDraft(draftId);
+    return (draft: draft, sentences: sentences);
+  }
+
+  /// Autosave an uncommitted edit to text_in_progress. Does NOT sync to export.
+  Future<FormatDraftSentence> autosaveSentence(
+          String sentenceId, String text) =>
+      _sentencesRepo.update(sentenceId, {
+        'text_in_progress': text,
+        'edited_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+  /// Commit a sentence edit: promote text_in_progress → text with [status]
+  /// (clinician_edited | clinician_authored), then SYNC the parent section's
+  /// content into format_drafts.draft_sections so Component Four's Word export
+  /// reflects exactly what the clinician approved. Autosave never calls this.
+  Future<FormatDraftSentence> commitSentenceEdit({
+    required String draftId,
+    required String sentenceId,
+    required String sectionName,
+    required String newText,
+    required String status,
+    List<dynamic>? sourceClaims, // null when clinician_authored
+  }) async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final updated = await _sentencesRepo.update(sentenceId, {
+      'text': newText,
+      'text_in_progress': null,
+      'status': status,
+      'source_claims': sourceClaims,
+      'saved_at': now,
+      'edited_at': now,
+    });
+    await _syncSectionToExport(draftId, sectionName);
+    return updated;
+  }
+
+  /// Author a static section as a single clinician-authored sentence (Part F),
+  /// then sync it to the export.
+  Future<FormatDraftSentence> authorStaticSection({
+    required String draftId,
+    required String sectionName,
+    required String templateId,
+    required String text,
+  }) async {
+    final created = await _sentencesRepo.create(
+      draftId: draftId,
+      sectionName: sectionName,
+      sentenceOrder: 0,
+      text: text,
       templateId: templateId,
-      dateRangePreset: preset,
-      dateRangeStart: range.start,
-      dateRangeEnd: range.end,
-      draftSections: sections,
-      generationMetadata: meta,
+      status: 'clinician_authored',
     );
+    await _syncSectionToExport(draftId, sectionName);
+    return created;
+  }
+
+  /// Rebuild a section's draft_sections.content from its committed sentences
+  /// (in order) and write it back to format_drafts — the edit→export sync.
+  Future<void> _syncSectionToExport(String draftId, String sectionName) async {
+    final draft = await _draftsRepo.get(draftId);
+    if (draft == null) return;
+    final sentences = await _sentencesRepo.listForSection(draftId, sectionName);
+    final rebuilt = sentences
+        .map((s) => s.text.trim())
+        .where((t) => t.isNotEmpty)
+        .join(' ');
+    final sections = draft.draftSections.map((sec) {
+      final m = sec.toJson();
+      if (sec.sectionName == sectionName) m['content'] = rebuilt;
+      return m;
+    }).toList();
+    await _draftsRepo.update(draftId, {'draft_sections': sections});
   }
 
   /// Export a persisted draft to a downloadable file via the proxy. Sends only
