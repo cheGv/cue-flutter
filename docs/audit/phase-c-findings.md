@@ -269,3 +269,81 @@ auth); `flutter analyze` 0 new issues (18 baseline); `flutter test` 251 passed
 **Status:** Sandbox only. Local commits in both repos; NOT pushed. Proxy push +
 deploy gated on the user's side-by-side Word smoke test of Ratnadeep + the AIISH
 LP.
+
+---
+
+## 2026-05-27 — Phase D week three follow-on: PT content-fill (narrative formats)
+
+Extends the content-slot bridge to narrative, paragraph-indexed templates (the
+AIISH PT: portrait A4, anchored logo, Roman headings, nested sub-sections,
+embedded mini-tables) — and introduces a **render-mode safety boundary** after a
+spec bug was caught at the mid-build gate (see case study below).
+
+**Target correction:** the PT-with-geometry is `8a04fd1e` "TEST PT" (Vrishin's
+PT). The id originally referenced (`b0737041`) is "AIISH LP" — a lesson plan
+with EMPTY geometry. Smoke-test client switched Ratnadeep → **Asha** (7yo
+articulation+fluency — maps more naturally to a pediatric PT).
+
+**Slot identification (`identifySlots.js`):** added `location_type`
+(`cell | paragraph | mini_table_cell`), ~25 PT-aware `semantic_label`s
+(`background_information`, `prenatal_history`, `oro_facial_examination`,
+`vegetative_skills`, `social_pragmatic_skills`, `sensory_assessment`, …),
+narrative + mini-table guidance, `max_tokens`→16384. Backfilled `8a04fd1e`:
+**99 slots** (91 paragraph + 8 mini-table-cell) + 28 static_text, `repeatable_table`
+null. Stored + checksum-verified (block-index sum 7233).
+
+**Drafter (`draftSlotAddendum.js` rule 8):** paragraph + mini-table slots fill as
+one string each; sections with no client data → `""`; never "N/A"/invented
+filler. Asha's first `slot_content`: **10 filled / 89 empty** — name, age, dx,
+summary, 4 recommendations, 2 session-grounded notes filled; all of History +
+most of Assessment correctly `""` (she has 0 substrate cells for them).
+
+**Renderer (`buildReportDocxV2.js`) — render-mode safety boundary:** new
+`renderMode` param, **default `content_fill`**, `verbatim` opt-in.
+- `content_fill`: ONLY `static_text` scaffolding renders verbatim; slots fill
+  (empty → label-only for label:value slots, blank otherwise); **unclassified
+  paragraphs/cells blank**. Structural images (logo) preserved on every path
+  (incl. injected + blanked paragraphs). Used by `/format-draft-export`.
+- `verbatim`: exact mirror incl. all clinical content. Used by
+  `/format-mirror-render` (must pass it explicitly).
+
+**Verification:** proxy `node --test` 18/18 (incl. **F-leak-1** content_fill →
+no Vrishin data leaks, **F-leak-2** verbatim → reproduced); local render gate
+12/12 (Asha into Vrishin's PT: portrait A4 + logo preserved, Asha present,
+static headings kept, **zero Vrishin clinical data** — "3.4 kg", "544039",
+"Spoken Language Disorder", "No significant history", etc. all absent);
+`flutter analyze` 0 new (18 baseline); `flutter test` 251; forbidden-word grep
+clean on new code. Prod untouched.
+
+### Render-mode safety boundary (audit item)
+**Content_fill mode treats the source template's clinical content as off-limits.
+Only structural elements (static_text scaffolding) and filled slots come through;
+everything unclassified blanks. Future renderer changes MUST preserve this
+boundary** — a regression here would leak one client's clinical data into
+another client's report. `verbatim` mode (full reproduction) is reserved for the
+Mirror fidelity path and must remain an explicit opt-in.
+
+### Case study — mid-build gate caught a shipping bug (positive)
+The original spec D3 said "empty slot → render the verbatim template text" (to
+preserve `[To be authored by clinician]` placeholders). Unit tests passed and
+the LP smoke test (placeholder-free) would have passed too. But the **mid-build
+gate artifact review against a REAL clinical template** (Vrishin's PT, which
+contains a real child's assessment data, not placeholders) revealed that D3
+would render **Vrishin's birth weight, diagnosis, and milestones into Asha's
+report** — a wrong-client clinical-data leak across ~89 sections. The fix (empty
+→ label-only/blank; unclassified → blank; `content_fill` default) closed it.
+**Lesson: mid-build artifact review against real client data catches
+shipping-class safety bugs that unit-test coverage and synthetic fixtures do
+not.** Build the review-against-real-data step into future content-generation
+features.
+
+### Deferred / notes
+- The LP template `d6085cad` was slot-mapped before the comprehensive-static
+  prompt; under `content_fill` a column header or two may blank. Re-running its
+  slot-ID with the new prompt restores full LP fidelity (the PT is unaffected).
+- Slot-ID completeness is the fidelity floor (not a safety risk — unclassified
+  blanks): re-extract templates if headings go missing.
+
+**Status:** Sandbox only. Slot map stored for `8a04fd1e`. Local commits in both
+repos; NOT pushed. Proxy push + deploy gated on the user's side-by-side Word
+smoke test of Asha + the AIISH PT (`8a04fd1e`).
