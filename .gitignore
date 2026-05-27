@@ -59,5 +59,8 @@ qc.json
 ac.json
 rc.json
 
+# Phase E sandbox launcher — embeds the sandbox anon key; never commit
+start-cue-web-sandbox.bat
+
 # Supabase CLI local state
 supabase/.temp/

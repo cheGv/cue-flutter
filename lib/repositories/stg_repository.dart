@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/short_term_goal.dart';
 
@@ -60,8 +61,8 @@ class StgRepository {
     try {
       final rows = await _client
           .from('session_goal_data')
-          .select('short_term_goal_id, created_at, sessions!inner(client_id)')
-          .eq('sessions.client_id', clientId)
+          .select('short_term_goal_id, created_at, short_term_goals!inner(client_id)')
+          .eq('short_term_goals.client_id', clientId)
           .not('short_term_goal_id', 'is', null)
           .order('created_at', ascending: false)
           .limit(1);
@@ -74,8 +75,15 @@ class StgRepository {
           if (row != null) return ShortTermGoal.fromJson(row);
         }
       }
-    } catch (_) {
-      // session_goal_data join unavailable — fall through to the fallback.
+    } on PostgrestException catch (e) {
+      // Focused-STG lookup is optional; on a DB/relationship error fall through
+      // to the fallback below — but LOG it so the failure is never silent.
+      debugPrint('[StgRepository.loadFocusedStgForClient] session_goal_data '
+          'lookup failed (PostgREST ${e.code}): ${e.message} — falling back '
+          'to most-recently-created active STG.');
+    } catch (e, st) {
+      debugPrint('[StgRepository.loadFocusedStgForClient] unexpected error: '
+          '$e\n$st — falling back to most-recently-created active STG.');
     }
     final fallback = await _client
         .from(_table)
