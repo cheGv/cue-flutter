@@ -431,3 +431,32 @@ at the deploy gate, not now):
    `format_templates` before deploying.
 3. **Existing PDF traffic.** Confirm no prod workflow currently exercises
    `/format-extract-v2` with PDF input (should be zero — PDF was rejected before).
+
+### Phase E week 1 — push status (2026-05-27)
+
+The **thirteen** unpushed cue-flutter commits (`883a3dc` back through the Phase B
+chart commit; `git log origin/main..HEAD`) and proxy commit **`8411a81`** are
+**held OFF `main`** pending two gates:
+
+- **(a) prod deploy gate — §7 prod-clinical-safety chain.** Pushing cue-flutter
+  `main` auto-deploys via `.github/workflows/deploy.yml` (`on: push: branches:
+  [main]`) to `gh-pages` → **app.cuerehab.in**, built against **PRODUCTION**
+  Supabase (no `--dart-define`). A main push IS a production release; it must not
+  happen until the §7 chain is cleared.
+- **(b) proxy deploy-prep gate.** The three pre-deploy checks logged in the
+  deploy-prep section above (re-identifySlots-on-confirmed search; prod
+  confirmed-template count; prod `/format-extract-v2` PDF-usage check). Pushing
+  the **shared** proxy `main` auto-deploys to Render for BOTH prod and sandbox
+  traffic.
+
+**Recovery snapshots (NOT releases):**
+- cue-flutter: `origin/local-snapshot/phase-e-week1-2026-05-27` @ `883a3dc` —
+  **pushed**; `deploy.yml` is `main`-scoped, so the snapshot push did NOT deploy.
+- cue-ai-proxy: `local-snapshot/phase-e-week1-2026-05-27` — **PENDING / NOT
+  pushed.** The proxy has no in-repo `render.yaml`/CI; its Render auto-deploy
+  branch scope is dashboard-configured and unverified from the working tree. Not
+  pushed until the Render dashboard confirms auto-deploy is scoped to the default
+  branch (main), not all branches.
+
+Snapshot branches exist for **recovery only** and must **NOT be merged to `main`**
+without explicit gate clearance.
