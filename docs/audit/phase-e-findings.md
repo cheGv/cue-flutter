@@ -376,3 +376,58 @@ ambiguous semantic labels (a tiny residual resolved by Cue Mirror's one-time
 clinician confirmation, which locks the map — it is never re-identified once
 confirmed). The general principle for every Phase E entry point: the LLM
 proposes semantics; deterministic code owns identity.
+
+---
+
+## Phase E Week 1 — Closed (2026-05-27)
+
+**Architectural premise VALIDATED.** A Word-exported PDF flows end-to-end through
+the existing pipeline: **PDF input → canonical geometry → slot map → drafted
+.docx** with the AIISH logo, section structure, summary, and demographics
+correctly rendered. The canonical geometry is the contract; the slot identifier
+and renderer consumed PDF-derived geometry unchanged. PDF-digital is the first of
+six Universal-Ingestion entry points.
+
+**Validation artifacts (2026-05-27):** Asha's substrate rendered against **both**
+templates — `e20412d1` (PDF-derived) and `8a04fd1e` (.docx-derived) — produced in
+the sandbox Flutter app and audited side-by-side. Logo embedded, page setup /
+fonts preserved, slot identity bitwise-stable.
+
+**Findings status (E-1 … E-12):**
+| # | Finding | Status |
+|---|---|---|
+| E-1 | Visual fidelity (not byte-equivalence) is the PDF audit standard | **Resolved** — adopted as audit rule |
+| E-2 | Inference engine, not a PDF parser | **Adopted** — guiding principle |
+| E-3 | .docx anchor convention verified (relativeFrom dropped) | **Resolved** + follow-up (system-wide anchor canonicalization before 2nd prod template) |
+| E-4 | 154→133 block deficit = empty/whitespace spacers; 0 content lost | **Resolved** |
+| E-5 | Normalize coordinate + naming frames at the extraction boundary | **Resolved** — in extractPDFGeometry |
+| E-6 | Attach PDF images to a paragraph so the renderer emits them | **Resolved** — verified (logo renders) |
+| E-7 | Declared section headers authoritative for role; temperature 0 | **Resolved** |
+| E-8 | Decouple deterministic slot_id from LLM free-text | **Resolved** — bitwise-stable |
+| E-9 | Table structural-equivalence (PDF-inferred vs .docx-explicit) | **Deferred → week 2** |
+| E-10 | LLM free-text notes load-bearing but not canonicalized | **Deferred → week 2** |
+| E-11 | Section headings must be static_text, not slots | **Deferred → week 2** |
+| E-12 | PDF slot fragmentation lowers drafter fill rate | **Deferred → week 2** |
+
+Resolved: E-1…E-8. Deferred to week 2: E-9, E-10, E-11, E-12. One follow-up (E-3,
+system-wide anchor canonicalization) tracked for before the second prod template.
+
+### Phase E week 1 deploy-prep — PENDING (gate logged; checks NOT run yet)
+
+Proxy commit `8411a81` (extractPDFGeometry + identifySlots E-7/E-8 + temp 0 +
+`/format-extract-v2` PDF dispatch) is **held local-only.** Pushing the proxy
+triggers a Render auto-deploy on the **shared** service — making the identifySlots
+changes (temperature 0, canonicalization, E-7/E-8 rules) and the PDF dispatch
+**live for PRODUCTION traffic.** That is a production deployment, not week-1
+closure. Before any future proxy push, three pre-deploy checks are REQUIRED (run
+at the deploy gate, not now):
+
+1. **Re-identify-on-confirmed search.** Search prod code paths for any that re-run
+   `identifySlots` on already-confirmed templates (admin re-confirmation, template
+   re-import, debug regenerate, etc.). If any exists, the new canonicalized
+   `slot_id` scheme will diverge from stored slot_ids and break substrate fill
+   **silently.**
+2. **Migration surface.** Query prod for the count of `confirmed`
+   `format_templates` before deploying.
+3. **Existing PDF traffic.** Confirm no prod workflow currently exercises
+   `/format-extract-v2` with PDF input (should be zero — PDF was rejected before).
