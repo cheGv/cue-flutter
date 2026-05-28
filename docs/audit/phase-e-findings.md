@@ -265,8 +265,201 @@ Information" section heading is missing from both rendered outputs. **Fix
 (Roman-numeral, numbered, lettered) as `static_text` scaffolding — reproduced
 verbatim — NOT as fillable slots; the per-client VALUE beneath the heading is
 the slot. Re-run `identifySlots` on both templates after the prompt fix;
-expected diff is the heading blocks shifting slot → static_text. NOT implemented
-here (week-2 scope).
+expected diff is the heading blocks shifting slot → static_text.
+
+**E-11 closure (2026-05-28) — rule live, validated on both templates.** The
+slot-identifier prompt now states: a paragraph block whose text is ONLY a
+declared section heading (no per-client value on the same line) is
+`static_text`, NOT a content slot; a paragraph block with a heading AND a
+per-client value on the same line is a content slot with
+`notes: "Label prefix: <full heading>"` so the renderer preserves the heading
+even when the drafter returns an empty value. The heading still acts as the
+AUTHORITATIVE ROLE SIGNAL for the section's content slots (E-7 unchanged) —
+what changes is that the heading TEXT itself is never blanked.
+
+Validation:
+- **e20412d1 (PDF-derived):** two-run stability on identical geometry; 35
+  heading-pattern blocks, every one in the right E-11 bucket and bitwise-stable
+  between runs A and B at the (kind, label, notes) level. Canonical case
+  `b8 "I. Background Information: : The child was brought to AIISH "` upgraded
+  from descriptive notes ("Intro sentence with date and complaint") to
+  `notes: "Label prefix: I. Background Information: :"` — the form that
+  triggers renderer heading-preservation. Bitwise A==B is `false` only because
+  of E-10 notes-flicker on non-heading content slots (already deferred); slot
+  identity is stable.
+- **8a04fd1e (.docx-derived):** one regression-guard re-identification run.
+  Empty diff across all 8 buckets — slot/static counts 99/28 == stored 99/28;
+  zero label changes, slot drops, slot adds, static drops, static adds,
+  slot↔static flips, or E-7 `background_information` drift. Local enumeration
+  of the 12 heading-pattern blocks against the E-11 expectation: 12/12 match in
+  stored. No store needed — the stored map is already E-11-correct.
+
+**E-11 residual gap (logged, not dismissed) — b13 and b127 in 8a04fd1e carry
+descriptive notes, not `Label prefix:` notes.** The stored map for 8a04fd1e
+predates the explicit E-11 rule and was identified under E-7 alone. Block 13
+(`"I. Background Information: : The child was brought to AIISH"`) carries
+`notes: "Section intro with complaint context"` and block 127 (`"f) General:
+Preference for any modality over the other: No,"`) carries
+`notes: "Modality preference"`. Both are correctly classified as slots — that
+is not the gap — but the notes are descriptive instead of label-prefix, so the
+renderer's label-prefix preservation mechanism does NOT fire for them.
+Deductively, an empty drafter value on either slot will blank the heading text
+— the precise E-11 failure mode. **This is deductively known to matter (empty
+value + descriptive note = vanished heading), not speculative; it does not
+need a render audit to confirm.**
+
+**Resolution dependency: E-11 residual (b13, b127 descriptive notes in
+8a04fd1e) resolves via E-13 re-identification; do not fix independently.** When
+E-13's table-geometry fix forces an `identifySlots` re-run on these templates,
+b13 and b127 will regenerate into `Label prefix:` form under the current E-11
+prompt automatically. Spending a dedicated API call to fix only these two slots
+is wasted work.
+
+**E-14 Flutter constraint — forward-looking precondition (logged 2026-05-28).**
+The Step-1.5 Flutter audit (2026-05-28) found that `field_idx` is
+architecturally invisible to the current Flutter app: the only file that
+touches `format_slot_map` is `lib/services/format_extractor_service.dart`,
+which fires `/format-identify-slots` and reads only the HTTP status — never
+deserializing the slot map's contents. The confirm screen
+(`format_template_upload_screen.dart`) operates on
+`ExtractedTemplate.sections` (the semantic section list, list-indexed by
+position in the array), not on slot internals. Per CLAUDE.md §13 / Cue Mirror
+C2, **the clinician never sees raw slot identity** — the slot map is
+server-side plumbing only.
+
+**Constraint (precondition on any future feature):** any future Mirror UI that
+surfaces individual slots — a slot-review debug screen, a slot-by-slot edit
+mode, an admin "approve slot decomposition" view, or any other slot-level
+clinician surface — MUST be `field_idx`-aware from day one. The current
+confirm screen is insulated because it operates at the section level, not the
+slot level. A future slot-level UI built assuming one-slot-per-block would
+re-introduce the `field_idx` collision risk that does not currently exist in
+the codebase. This is a precondition on any such feature, not a debt to be
+discovered when the feature ships.
+
+**E-11 residual was broader than originally scoped — closed 2026-05-28.** The
+bundled re-identify pass on 8a04fd1e (triggered by the E-13 work) revealed
+**14 heading+value blocks** with descriptive notes, not the 2 originally
+scoped: b13 (background_information) + b87 (social_pragmatic_skills, "Display
+of inappropriate and exaggerated affect") + 11 sensory_assessment blocks
+(b102, b104, b106, b109, b110, b111, b116, b117, b121, b124, b125) + b127.
+All 14 now upgraded to `Label prefix:` form in the stored map. Honest record
+of the under-scoping: the original audit looked only at the canonical
+`b13`/`b127` cases and missed the 12 additional sensory-assessment + 1
+social-pragmatic blocks with the same pattern. The 8a04fd1e re-identify (one
+LLM call, no geometry change, zero structural changes — only notes drift)
+closed all 14 in one pass.
+
+### Finding E-13 — PDF table data rows can leak out of the table and render as column-interleaved free text (added 2026-05-28)
+
+**PDF table data rows can leak out of the table and render as column-interleaved
+free text.** In e20412d1, the linguistic-skills table's data row fell outside
+the detected table region (the source PDF drew no closing horizontal rule
+under the data row), so the receptive/expressive language content flowed
+through `linesToParagraphs` as blocks b52-b54 with the two columns' text
+interleaved on shared baselines (e.g. `"Child occasionally comprehends kinship`
+**`The child predominantly expresses needs`**`terms..."`). This is **DATA
+CORRUPTION, not a cosmetic structural difference** — clinical content is
+shredded into unparseable lines.
+
+Two root mechanisms in `lib/extractPDFGeometry.js`:
+1. **Table-region detection requires ≥2 horizontal row boundaries per band**
+   (`detectTablesFromSegments`, line 358), so a data row whose source PDF lacks
+   a closing horizontal rule is excluded from the detected table region.
+2. **`groupGlyphsIntoLines` clusters glyphs by baseline only**, with no
+   horizontal-gap split (lines 182–198), so two-column text on a shared
+   baseline fuses into one line. `buildLineRuns` only converts large
+   horizontal gaps to a single space character — it does not split.
+
+**Priority: ABOVE E-9** (data integrity over cosmetic cleanup). E-9 was edge-
+gutter trimming — visually cleaner but no clinical content is at risk. E-13
+loses or corrupts clinical content silently.
+
+Surfaced by the E-9 diagnostic (2026-05-28). Diagnose-and-propose work scoped
+under this finding; no implementation yet.
+
+**Dependency:** E-13's eventual `identifySlots` re-run on e20412d1 + 8a04fd1e
+also closes the E-11 residual (b13 and b127 descriptive notes regenerate as
+`Label prefix:` notes under the current E-11 prompt). See E-11 residual
+section.
+
+### Finding E-14 — Multi-field header lines cause field-slot loss (PRE-EXISTING .docx-path defect, added 2026-05-28)
+
+**Multi-field header lines cause field-slot loss.** When a single visual line
+packs multiple demographic fields (e.g. `Registration Number: 544039
+Clinician: A.K.Guru Vignesh Age/Gender: 4.11 years/ Male`), the slot
+identifier fails to decompose the line into one slot per field, dropping
+fields. Functional data loss on clinically load-bearing fields (age, date),
+not cosmetic.
+
+**Status: PRE-EXISTING .docx-path defect, not a PDF-introduced bug.** The PDF
+work merely exposed it by surfacing the same identifier behavior on a layout
+that packs more fields per line. The .docx-derived 8a04fd1e (the only
+production-capable template baseline today) has the same defect at block 7:
+`"Age/Gender: 4.11 years/ Male Supervisor: Deepa Anand Language used:
+kannada"` is identified as ONE `age_gender` slot with notes `"Contains age,
+gender, supervisor, language"` — Supervisor and Language values are NOT
+addressable by the drafter as their own slots. On Vrishin's PDF (e20412d1),
+the bug is louder: the multi-field demographic block `b4` ("Registration
+Number / Clinician / Age/Gender" packed on one line) drops both `age_gender`
+and `date` (the latter via b3's two-field packing) on every fresh identify
+run. **This is a pre-launch correctness blocker for the .docx mirror, higher
+priority than its discovery-order suggests.**
+
+**Mechanism — geometry IS decomposable; identifier is under-using the signal.**
+Inspecting `runs[]` on both extractors:
+
+- e20412d1 PDF `b3` "Case Name: Vrishin V T Date of report: 19-04-2022" → 4
+  runs: `[bold "Case Name: "][regular "Vrishin V T"][bold " Date of report:
+  "][regular "19-04-2022"]`.
+- e20412d1 PDF `b4` "Registration Number: ... Clinician: ... Age/Gender: ..."
+  → 6 runs in the same `(bold-label-ending-in-colon)(regular-value)` pattern,
+  3 field pairs.
+- 8a04fd1e .docx `b7` "Age/Gender: ... Supervisor: ... Language used: ..." →
+  6 runs in the same pattern, 3 field pairs.
+
+Every bold run ends with `:`. Every following regular run carries the value.
+The pattern is mechanically unambiguous and present on both paths. The slot
+identifier sees this structure in the LLM payload but under-decomposes
+multi-field paragraphs into a single slot.
+
+**Fix direction (authorized 2026-05-28): Option A — deterministic post-LLM
+decomposition only.** Detect paragraph blocks whose runs[] match the
+alternating `(bold endswith ":") (regular) (bold endswith ":") (regular) …`
+pattern, and emit one slot per `(bold, regular)` pair with notes
+`"Label prefix: <bold text>"`. The decomposition is purely geometric — no
+semantic judgment needed, so the LLM is not involved in finding the
+boundaries (E-8 principle: deterministic code owns identity, LLM owns only
+semantics). Each pseudo-slot needs a sub-location key beyond the current
+`{block, row, cell}` schema — a blast-radius diagnostic on the schema
+extension is gated on this finding before code lands.
+
+**NOT used:** Option B (prompt-nudge — reintroduces LLM nondeterminism to
+detect a deterministic signal) and Option C (both — Option B half is
+redundant). Pure Option A.
+
+**E-14 closed 2026-05-28 (producer + renderer + both maps stored).** Diff-and-
+halt pass on both templates: e20412d1 recovered `age_gender`, `date`, and
+second `clinician_name` (3 demographic field-slots that had dropped under the
+non-decomposed map); 8a04fd1e unfolded the `b7` packed slot into 3 distinct
+field-slots (`age_gender`, `supervisor_name`, `other` for "Language used:"),
+closing the pre-launch correctness blocker on the production-capable .docx
+baseline. Label resolution: **8/8 LOOKUP**, zero LLM-fallbacks across both
+templates — `LABEL_TO_SEMANTIC` covers this corpus completely. Identity
+stability A==B confirmed on both templates (notes-flicker per E-10
+acceptable).
+
+**Forward-looking constraint (LABEL_TO_SEMANTIC table coverage).** `"Language
+used:"` currently maps to `other` because Cue has no first-class `language`
+semantic_label. The slot stays fully addressable via its `Label prefix:
+Language used:` note (the renderer preserves the heading, the drafter can
+fill the value), so this is not a gap — it's a deliberate looser-canonical
+mapping. **Forward constraint:** if a `language` semantic role is later added
+to Cue (plausible given bilingual / code-switching clinical context), add one
+entry to `LABEL_TO_SEMANTIC` (`'language used' → 'language'`,
+`'language' → 'language'`) and "Language used:" reclassifies cleanly. The
+deterministic decomposer requires no other code change; the renderer is
+already field_idx-aware. Logged as a forward constraint, not a debt.
 
 ### Finding E-12 — PDF slot fragmentation lowers drafter fill rate (visual audit; week-2 scope)
 
@@ -406,11 +599,15 @@ fonts preserved, slot identity bitwise-stable.
 | E-8 | Decouple deterministic slot_id from LLM free-text | **Resolved** — bitwise-stable |
 | E-9 | Table structural-equivalence (PDF-inferred vs .docx-explicit) | **Deferred → week 2** |
 | E-10 | LLM free-text notes load-bearing but not canonicalized | **Deferred → week 2** |
-| E-11 | Section headings must be static_text, not slots | **Deferred → week 2** |
+| E-11 | Section headings must be static_text, not slots | **Resolved (2026-05-28)** — rule live; one residual (b13/b127 descriptive notes in 8a04fd1e) tracked to E-13 re-identification |
 | E-12 | PDF slot fragmentation lowers drafter fill rate | **Deferred → week 2** |
+| E-13 | PDF table data rows can leak as column-interleaved free text (DATA CORRUPTION) | **Open (2026-05-28)** — diagnose-and-propose phase; above E-9 |
+| E-14 | Multi-field header lines cause field-slot loss (PRE-EXISTING .docx defect exposed by PDF work) | **Open (2026-05-28)** — fix direction Option A authorized; blast-radius diagnostic on field_idx schema pending; pre-launch correctness blocker for .docx mirror |
 
-Resolved: E-1…E-8. Deferred to week 2: E-9, E-10, E-11, E-12. One follow-up (E-3,
-system-wide anchor canonicalization) tracked for before the second prod template.
+Resolved: E-1…E-8, E-11 (closed 2026-05-28; one residual at b13/b127 in 8a04fd1e
+tracked to E-13 re-identification, not fixed independently). Deferred to week 2:
+E-9, E-10, E-12. One follow-up (E-3, system-wide anchor canonicalization) tracked
+for before the second prod template.
 
 ### Phase E week 1 deploy-prep — PENDING (gate logged; checks NOT run yet)
 
@@ -431,6 +628,27 @@ at the deploy gate, not now):
    `format_templates` before deploying.
 3. **Existing PDF traffic.** Confirm no prod workflow currently exercises
    `/format-extract-v2` with PDF input (should be zero — PDF was rejected before).
+
+**Batched batch note (2026-05-28).** The proxy working tree now carries **three
+findings' worth of uncommitted changes**, not one — when the §7 deploy-prep
+gate eventually runs, it accounts for ALL THREE as one batch, not separately:
+1. **E-11** — section-heading rule in `lib/identifySlots.js` (live since the
+   8a04fd1e re-identify on 2026-05-28).
+2. **E-13** — band-merge + band-seal fix in `lib/extractPDFGeometry.js`
+   (`detectTablesFromSegments`); landed with 3 regression tests; verified
+   structurally green against `vrishin PT.pdf`.
+3. **E-14** — renderer extension in `lib/buildReportDocxV2.js`
+   (`fieldSlotsByBlock`, `injectedMultiFieldParagraph`); landed with 3 new
+   tests; structural-fingerprint smoke against 8a04fd1e confirmed
+   bit-identical behavior on pre-E-14 stored maps (no field_idx slots). The
+   E-14 producer (identifySlots field_idx emission) is NOT yet built — it is
+   gated on the Step-1.5 Flutter confirm-screen check.
+
+The deploy-prep gate's three pre-deploy checks above apply to the BATCH. Any
+push of `lib/identifySlots.js` OR `lib/buildReportDocxV2.js` OR
+`lib/extractPDFGeometry.js` carries all three findings together — they cannot
+be cherry-picked into separate Render deploys without rebasing the
+extractPDFGeometry / identifySlots / buildReportDocxV2 history.
 
 ### Phase E week 1 — push status (2026-05-27)
 
