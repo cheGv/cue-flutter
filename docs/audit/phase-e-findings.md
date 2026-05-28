@@ -612,12 +612,23 @@ a wrong assumption rather than tune to a sample (see E-15 occupancy test).
 ### Finding E-15 — PDF table detector hallucinates tables on prose-heavy content (HIGH severity)
 
 **Symptom.** 3 tables detected on a document the operator describes as
-mostly prose + bulleted lists. The largest detected table at `b3` was
-**37 rows × 13 cols** with grid widths ranging from 13 pt to 102 pt; only
-~30 of its 481 nominal cells received a slot classification (**~6 % fill**).
+mostly prose + bulleted lists. The largest detected table at `b3` is
+**37 rows × 13 cols** with grid widths ranging from 13 pt to 102 pt.
 Clinical narrative that should be free paragraphs got shredded into ~60
 fake-table-cell slots, all labeled `progress_report` or
 `background_information`.
+
+**Measurement correction (2026-05-28 build).** The original recon
+reported `b3` as "~6% fill" — that was the count of LLM-emitted SLOTS
+(~30) divided by total cells (481). True **geometry-layer** occupancy
+(cells with any glyph content) is **17.3%** — ~83 glyph-bearing cells of
+481. The 6% figure was a downstream-classification artifact: the LLM
+treated most of `b3`'s glyph-bearing cells as narrative context rather
+than emitting a slot for each, but the cells DID contain glyphs at the
+geometry level. **Honest-record rule: slot-count is NOT a valid proxy
+for cell-content occupancy; always measure at the geometry layer.** This
+correction has structural consequences for E-15's mechanism — see the
+fix-sketch section below.
 
 **Root-cause hypothesis.** `detectTablesFromSegments` keys on drawn vector
 rules. Colored brand-header graphics (Inside Out's letterhead) emit
@@ -626,7 +637,10 @@ dividers, etc. — that get classified as `horizontal`/`vertical` rules in
 `pushSeg` and cluster into spurious bands. The `mergeSliverColumns`
 filter drops only sub-12.5 pt columns; 13 pt + survive. **The detector
 has no signal for "is the body actually tabular?" — it only checks "are
-there axis-aligned rules?"**
+there axis-aligned rules?"** Separate finding: E-15 catches *empty*
+decorative grids; the Ikansh-b3 case is a *full* phantom grid because
+prose got bucketed INTO it — that's the upstream rule-misclassification
+problem captured as Finding E-24 below.
 
 ### Finding E-16 — Signature block at b42 misidentified as a 4×4 table (LOW severity, child of E-15)
 
@@ -745,18 +759,103 @@ what Word would call the "top margin"** for an editable document.
 Cosmetic for now; forward concern if Cue ever computes "edit area"
 extents.
 
-### Severity ranking (catalog only — not building yet)
+### Finding E-24 — Decorative/branding vector strokes misclassified as table rules (HIGH severity, identified 2026-05-28 during E-15 build)
 
-1. **E-15** (false tables on prose) — corrupts structural inference; ~half of Ikansh's clinical content lands in fake table cells. HIGH.
+**This is the upstream finding that the E-15 occupancy test cannot
+catch.** Surfaced when the E-15 implementation measured Ikansh's b3 at
+**17.3% true cell-content occupancy** (vs the recon's 6% slot-count
+estimate). At 17.3%, b3 sits well above any reasonable occupancy
+threshold — and yet b3 is structurally false (clinical prose, not a
+table). The phantom grid is FULL because narrative got bucketed INTO it,
+not because the grid is decorative-and-empty.
+
+**Symptom.** Decorative/branding vector strokes (Inside Out's colored
+letterhead graphics — corner accents, page-divider bars, brand-frame
+rectangles) get classified as `horizontal`/`vertical` table rules by
+`pushSeg` inside `extractPDFGeometry.js`. `detectTablesFromSegments`
+clusters them into a grid; `buildTableBlock`'s glyph-bucketing pass then
+places nearby narrative glyphs into the resulting cells. Result: a
+high-occupancy phantom grid filled with misplaced prose.
+
+**Why E-15 cannot catch this.** E-15 measures *"is the grid full of
+content?"* — and this grid IS full of content. E-15 is the right test
+for *decorative empty grids* (the cleaner case: brand strokes that
+enclose no text); it is structurally the wrong test for *decorative
+strokes that happen to lie around prose*. The two failure modes share
+the same root cause (decorative strokes being treated as rules) but
+diverge at the bucketing stage.
+
+**Candidate discriminating signals (HYPOTHESES — none implemented; do
+NOT pick one from a single example):**
+
+1. **Strokes in the top-margin band above first content** — branding
+   typically lives at page-top, above the text frame. Strokes whose
+   y-range falls entirely inside the inferred top margin are decorative.
+2. **Non-black stroke colour** — table rules are conventionally black/
+   greyscale; brand graphics use the clinic's colour palette. pdfjs
+   exposes stroke colour at the operator level; `pushSeg` currently
+   discards it.
+3. **`rectangle` op vs `lineTo` op origin** — brand graphics are
+   typically full rectangles drawn as `rectangle` ops; table rules are
+   typically `lineTo` segments emitted by Word's table grid drawing.
+   Tracking which op produced a segment is information `pushSeg`
+   currently throws away.
+4. **Enclosed-region width vs text column width** — if the proposed
+   table's column range is wider than the text frame (e.g. brand banner
+   spanning page-edge to page-edge while text is column-bounded), it's
+   not a content table.
+
+**Deferred to corpus.** The discriminating signal *cannot be chosen from
+one branding example* (Inside Out). Clinic 3 / clinic 4 with different
+branding styles are required to identify which signal generalizes —
+e.g., does the next clinic's branding also use non-black strokes? Does
+it use `rectangle` ops? Does it sit in the top-margin band? **This is a
+textbook wait-for-corpus finding.** No fix to build; the principle the
+fix would encode (decorative-stroke ≠ table-rule) is too thinly
+characterised by N=1 branding sample to choose a signal.
+
+**Note on the framing-note exemption.** E-15 was exempted from
+broaden-corpus-first because it removes a wrong assumption rather than
+tunes to a sample. E-24 cannot claim the same exemption — picking
+*which* signal (colour, op-type, position, span) for "decorative stroke
+detection" requires sample evidence about how branding actually
+manifests across clinics, and one example doesn't give that. The
+*principle* (decorative strokes shouldn't form tables) is sound; the
+*mechanism* must wait.
+
+### Severity ranking (updated 2026-05-28 after E-15 build + E-24 split)
+
+1. **E-24** (decorative strokes misclassified as table rules — the upstream root cause of Ikansh's phantom grids) — corrupts structural inference; not catchable by E-15 because phantom grids fill with bucketed prose; signal selection requires corpus. HIGH.
 2. **E-17/E-18** (decomposer run-convention overfit) — re-introduces the exact bug E-14 was supposed to fix, on a different PDF. HIGH.
-3. **E-22** (numbered-heading vanish risk) — E-11 didn't fully generalize. MEDIUM–HIGH.
-4. **E-19** (bullet fragmentation) — degrades slot grain but content survives. MEDIUM.
-5. **E-21** (image bytes missing on subsequent pages) — visual cosmetic. LOW–MEDIUM.
-6. **E-16** (signature-block as table) — visual cosmetic, child of E-15. LOW.
-7. **E-20** (new semantic labels needed) — taxonomy extension, not a bug. INFORMATIONAL.
-8. **E-23** (margin inference on branded layouts) — observational. LOW.
+3. **E-15** (occupancy test for decorative *empty* grids) — **BUILT 2026-05-28**; correctly rejects truly decorative empty grids; does NOT reach Ikansh's high-occupancy case (that's E-24). Mechanism in place for future genuinely-empty phantom grids. RESOLVED for its scope.
+4. **E-22** (numbered-heading vanish risk) — E-11 didn't fully generalize. MEDIUM–HIGH.
+5. **E-19** (bullet fragmentation) — degrades slot grain but content survives. MEDIUM.
+6. **E-21** (image bytes missing on subsequent pages) — visual cosmetic. LOW–MEDIUM.
+7. **E-16** (signature-block as table) — visual cosmetic, child of E-15/E-24. LOW.
+8. **E-20** (new semantic labels needed) — taxonomy extension, not a bug. INFORMATIONAL.
+9. **E-23** (margin inference on branded layouts) — observational. LOW.
 
-### E-15 fix sketch — content-occupancy test (prose only, NOT YET BUILT)
+### E-15 fix — content-occupancy test (BUILT 2026-05-28; scope clarified post-build)
+
+**Build status.** Implemented in `lib/extractPDFGeometry.js` 2026-05-28
+with threshold `MIN_TABLE_OCCUPANCY = 0.08` (provisional, calibrated
+against N=2). 6 unit tests added (`extractPDFGeometry.test.js`); full
+proxy suite green (68 → 64 pass, +6 new tests). Vrishin regression: both
+real tables preserved (linguistic 50.0%, test-material 26.7%). Ikansh
+regression: all 3 phantom tables survive — their true geometry-layer
+occupancy is 17.3% / 28.6% / 12.5%, all well above the conservative
+threshold. **This was the measurement learning: E-15 catches decorative
+EMPTY grids; the Ikansh case is a FULL phantom grid (prose bucketed
+into a decorative grid), which is structurally a different problem —
+captured separately as E-24.**
+
+The threshold was deliberately NOT raised to ~20% to cover Ikansh's
+case, because doing so would parameter-fit a single-clinic sample
+(re-overfit at N=2). E-15 stays at 8% as a sound, sample-independent
+mechanism for decorative empty grids; the Ikansh case waits for E-24
+corpus.
+
+**Original sketch retained below for design context.**
 
 **Principle.** A table is structurally defined by **content occupancy**,
 not by drawn rules alone. The current detector identifies a region as a
@@ -850,14 +949,18 @@ calibration of a sound principle). That's what the framing note meant
 by *"fixes that remove a wrong assumption rather than tune to a
 sample."*
 
-### Fix sequencing — explicit hold
+### Fix sequencing — updated 2026-05-28
 
-**Catalog-and-halt.** No fixes built. Sample size = 2 documents; tuning
-heuristics now risks re-overfitting to two examples. **Corpus must broaden
-(clinic 3, clinic 4) before example-specific tuning**, EXCEPT for the
-**E-15 occupancy test** — which is principled (removes a wrong assumption)
-rather than sample-tuned. That one fix is scoped above in the E-15 sketch
-but not yet built, awaiting Guru's call.
+**E-15 BUILT and committed** (occupancy test for decorative empty grids;
+8% threshold, conservative). All other findings (E-17, E-18, E-19, E-22,
+E-24) held pending corpus broadening — N=2 sample remains insufficient
+for example-specific tuning. **E-24 specifically does NOT qualify for the
+E-15 exemption**: choosing the discriminating signal between "table rule"
+and "brand decoration" requires sample evidence about how branding
+manifests across clinics, which one example doesn't provide. The
+principle (decorative strokes ≠ table rules) is sound; the mechanism
+must wait for clinic 3 / clinic 4. E-20 is a taxonomy extension, not a
+fix.
 
 ---
 
@@ -892,8 +995,8 @@ fonts preserved, slot identity bitwise-stable.
 | E-12 | PDF slot fragmentation lowers drafter fill rate | **Deferred → week 2** |
 | E-13 | PDF table data rows can leak as column-interleaved free text (DATA CORRUPTION) | **Open (2026-05-28)** — diagnose-and-propose phase; above E-9 |
 | E-14 | Multi-field header lines cause field-slot loss (PRE-EXISTING .docx defect exposed by PDF work) | **Resolved (2026-05-28)** — Option A deterministic decomposer landed in identifySlots; renderer extended with field_idx schema; both maps re-identified + stored; Asha visual gate passed |
-| E-15 | PDF table detector hallucinates tables on prose-heavy content | **Open (2026-05-28)** — HIGH severity; E-15 occupancy-test fix scoped (principled, removes wrong assumption); held pending corpus broadening OR explicit authorization |
-| E-16 | Signature block misidentified as 4×4 table (child of E-15) | **Open (2026-05-28)** — LOW; resolves with E-15 |
+| E-15 | Occupancy test for decorative *empty* phantom grids | **Resolved (2026-05-28)** — built; 8% threshold; Vrishin regression preserved; Ikansh phantoms NOT caught (they're high-occupancy — see E-24); 6 unit tests green. The recon's "6%" was a slot-count proxy; true geometry-layer occupancy is 17.3% — measurement correction logged |
+| E-16 | Signature block misidentified as 4×4 table | **Open (2026-05-28)** — LOW; child of E-24 (decorative-stroke misclassification); not caught by E-15 (high-occupancy phantom) |
 | E-17 | E-14 multi-field decomposer fails on alternate run-boundary convention | **Open (2026-05-28)** — HIGH; held pending corpus (don't re-overfit on N=2) |
 | E-18 | Second instance of E-17 root cause on Clinician/Languages line | **Open (2026-05-28)** — HIGH; child of E-17 |
 | E-19 | Bulleted-list paragraphs fragment across blocks (hanging-indent continuation) | **Open (2026-05-28)** — MEDIUM; held pending corpus |
@@ -901,6 +1004,7 @@ fonts preserved, slot identity bitwise-stable.
 | E-21 | Page-2+ brand-header images decode to bytes=0 (unsupported pdfjs ImageKind) | **Open (2026-05-28)** — LOW–MEDIUM; held pending corpus |
 | E-22 | Numbered section headings classified as slots WITHOUT `Label prefix:` notes — E-11 vanish-risk | **Open (2026-05-28)** — MEDIUM–HIGH; prompt-strictness issue; held pending corpus |
 | E-23 | Top margin inference yields 2× standard on branded-letterhead layouts | **Open (2026-05-28)** — LOW; observational |
+| E-24 | Decorative/branding vector strokes misclassified as table rules (the upstream root cause of Ikansh's HIGH-occupancy phantom grids) | **Open (2026-05-28)** — HIGH severity; not catchable by E-15 (phantom grid is FULL of bucketed prose, not empty); signal selection (stroke colour, op type, position, span) requires corpus — wait-for-clinic-3 finding |
 
 Resolved: E-1…E-8, E-11 (closed 2026-05-28; one residual at b13/b127 in 8a04fd1e
 tracked to E-13 re-identification, not fixed independently). Deferred to week 2:
