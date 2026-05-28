@@ -572,6 +572,295 @@ proposes semantics; deterministic code owns identity.
 
 ---
 
+## Phase E week 2 — Second-clinic generalization recon (2026-05-28)
+
+**Read-only recon on a second clinic's PDF**
+(`Ikansh Shetty SALT Progress Report.pdf` — Inside Out Clinic, Bangalore;
+SLP Hamshi Ganjam; child Ikansh Shetty). Document differs from Vrishin's
+AIISH PT report along four axes: corner color logo (vs centered text
+header), prose + bulleted lists body (vs ruled tables), two-column
+demographic header with a different run-boundary convention, and new
+section vocabulary (CURRENT LANGUAGE AGE, OVERALL PROGRESS SUMMARY,
+RECOMMENDED GOALS, OVERALL IMPRESSION). One API call (`identifySlots`); no
+DB writes; no fix built. Recon catalogs 9 findings as the corpus output of
+this generalization gate.
+
+**Verdict (one line):** *The architecture has real generalization wins
+(logo recovery, all-caps heading detection, LLM semantic-vocab mapping)
+but the table detector and the multi-field decomposer both show pronounced
+overfit to Vrishin's specific layout conventions. Two new high-severity
+findings (E-15, E-17) catalog the same bug class that earlier findings
+(E-13, E-14) were supposed to fix — confirming Phase E week-1/week-2 work
+was specifically Vrishin-shaped rather than universally generalized. The
+framework holds; the heuristics need broadening before the second
+clinician's template is production-fit.*
+
+### Framing — single root pattern across E-15…E-23
+
+These nine findings share a single root pattern: **heuristics tuned to
+Vrishin's specific drawing conventions rather than to structural intent.**
+E-15 (rules-without-occupancy = table), E-17/E-18 (one colon-placement
+convention), E-22 (headings-without-values only), E-19 (same-left-edge
+continuation only) are all instances of *"encoded how Vrishin was drawn,
+not what the structure means."* The architecture is sound; the heuristics
+need broadening from Vrishin-convention to convention-class. Critically:
+with a sample size of TWO documents, tuning the heuristics now risks
+**re-overfitting to two examples instead of one**. Corpus must broaden
+(clinic 3, 4) before example-specific tuning, EXCEPT for fixes that remove
+a wrong assumption rather than tune to a sample (see E-15 occupancy test).
+
+### Finding E-15 — PDF table detector hallucinates tables on prose-heavy content (HIGH severity)
+
+**Symptom.** 3 tables detected on a document the operator describes as
+mostly prose + bulleted lists. The largest detected table at `b3` was
+**37 rows × 13 cols** with grid widths ranging from 13 pt to 102 pt; only
+~30 of its 481 nominal cells received a slot classification (**~6 % fill**).
+Clinical narrative that should be free paragraphs got shredded into ~60
+fake-table-cell slots, all labeled `progress_report` or
+`background_information`.
+
+**Root-cause hypothesis.** `detectTablesFromSegments` keys on drawn vector
+rules. Colored brand-header graphics (Inside Out's letterhead) emit
+decorative vector segments at the top of each page — page-edge accents,
+dividers, etc. — that get classified as `horizontal`/`vertical` rules in
+`pushSeg` and cluster into spurious bands. The `mergeSliverColumns`
+filter drops only sub-12.5 pt columns; 13 pt + survive. **The detector
+has no signal for "is the body actually tabular?" — it only checks "are
+there axis-aligned rules?"**
+
+### Finding E-16 — Signature block at b42 misidentified as a 4×4 table (LOW severity, child of E-15)
+
+The 4×4 table at `b42` contains only 2 `clinician_name` slots
+(`r2c1`, `r2c2`) — almost certainly the report's signature block
+(clinician name + supervisor name + sig-line layout), not a real table.
+Same root cause as E-15. Render impact: signature renders inside an
+unnecessary 4×4 grid.
+
+### Finding E-17 — E-14 multi-field decomposer FAILS to fire on Ikansh's run convention (HIGH severity)
+
+**Symptom.** `b1` source `"Name of child: Ikansh Shetty Date of Assessment:
+09.03.2026 Date of Birth: 20.06.2022 …"` — 8 runs, alternating bold label
++ regular value, 3+ fields. `detectMultiFieldRuns` pre-check matched
+**zero** blocks. The LLM emitted ONE slot for the whole paragraph
+(`client_name`, notes `"Contains Name, DOB, Date of Assessment, Age/
+Gender"`) — exactly the E-14 anti-pattern the decomposer was built to fix.
+
+**Root-cause hypothesis.** Ikansh's run boundaries are placed differently
+from Vrishin's:
+
+| Convention | Layout |
+|---|---|
+| Vrishin | `[BOLD "Case Name: "][regular "Vrishin V T"]` — colon at end of bold run |
+| Ikansh | `[BOLD "Name of child"][regular ": Ikansh Shetty "]` — colon at start of value run |
+
+The `detectMultiFieldRuns` test
+`if (!/:\s*$/.test(labelText)) return null;` rejects the Ikansh convention
+because the bold run doesn't end with `:`. **The detector is overfit to
+Vrishin's specific run-boundary convention** and doesn't recognize the
+equally common alternate placement.
+
+### Finding E-18 — b2 — same root cause as E-17, second instance
+
+`b2` "Clinician: Hamshi Ganjam Languages: Tulu, English" — 4 runs in the
+same `[BOLD label][regular ": value "]` pattern as E-17. LLM identified as
+single `clinician_name` slot, notes `"Label prefix: Clinician: and
+Languages:"` — Languages folded into clinician_name. Same root cause as
+E-17.
+
+### Finding E-19 — Bulleted-list paragraphs fragment across multiple blocks (MEDIUM severity)
+
+**Symptom.** Each bulleted line splits across 2–3 paragraph blocks. Example:
+`b5` "• Activities of Oral Placement Therapy (OPT) targeting oral" →
+`b6` "rently in progress. Oral desen" → potentially `b7`. The `•` glyph
+and the bullet's text continuation are not folded into one paragraph.
+
+**Consequence.** Each bullet becomes N slots instead of 1. Drafter has to
+fill each fragment separately. Renderer reproduces the visual layout but
+the slot grain is too fine for sensible content-fill.
+
+**Root-cause hypothesis.** `linesToParagraphs` continuation heuristic
+requires `Math.abs(ln.xLeft - curLast.xLeft) <= 3` — same left-edge
+alignment. Bullet continuations use a **hanging-indent** layout: bullet
+glyph at xLeft, continuation text at a different (slightly indented)
+xLeft. The continuation check fails → each visual line becomes its own
+paragraph.
+
+### Finding E-20 — New semantic labels `presenting_complaint` and `progress_report` emitted by LLM (INFORMATIONAL — taxonomy gap, not a bug)
+
+The LLM emitted two labels not in Cue's existing taxonomy:
+- `presenting_complaint` (2 slots) — common SLP terminology, reasonable
+- `progress_report` (53 slots) — matches the document type (this is a
+  progress report, not an initial assessment like Vrishin)
+
+Both are sensible domain terms the LLM picked when no existing Cue label
+fit cleanly. **Not a bug — Cue's taxonomy doesn't currently cover progress
+reports.** Cue's `LABEL_TO_SEMANTIC` table and `KNOWN_LABELS` set should
+be extended to include these. Addressable when Cue's clinical label
+coverage formally extends to progress reports.
+
+### Finding E-21 — 4 of 7 extracted images have bytes=0 / invalid PNG (LOW–MEDIUM severity, visual cosmetic)
+
+**Symptom.** Images 3, 4, 5, 6 — anchored on pages 2–3 (brand headers +
+footers repeated per page) — came back with `bytes=0` and
+`validPNG=false`. Image 1 (page-1 logo, 161947 bytes) and image 7
+(signature, 32384 bytes) are valid.
+
+**Root-cause hypothesis.** `extractPDFGeometry.encodePng` decodes only
+`IMAGE_KIND_RGBA_32BPP` / `IMAGE_KIND_RGB_24BPP` /
+`IMAGE_KIND_GRAYSCALE_1BPP`. Anything else returns `null`. The page-2+
+brand-header images are a different pdfjs `ImageKind` (indexed color?
+JPEG2000? CMYK?). The anchor is captured correctly but the bytes are
+dropped. At render time, pages 2+ would show blank space where the brand
+header should be.
+
+### Finding E-22 — Numbered section headings classified as recommendations SLOTS with EMPTY notes (MEDIUM–HIGH severity, E-11 failure mode)
+
+**Symptom.** `b30` "1. Continue speech and language therapy focusing on:",
+`b34` "2. Encourage joint attention…", `b36` "4. Provide parent
+counselling…", `b38` "5. Continue regular monitoring…" all became
+`SLOT[recommendations]` with `notes:""` — empty. No `Label prefix:` form.
+
+**Consequence.** When the drafter returns empty for these slots, the
+renderer has no `Label prefix:` heading to preserve. **The heading text
+"1. Continue speech and language therapy focusing on:" would vanish from
+the rendered output.** This is precisely the E-11 failure mode the rule
+was designed to prevent.
+
+**Root-cause hypothesis.** The E-11 prompt rule recognized
+headings-without-values as `static_text`, and headings-with-values as
+slots with `Label prefix:` notes. The LLM applied the slot-with-notes
+form inconsistently — for these recommendations headings, it produced
+slots without the prefix-preservation note. **The prompt is not
+enforcing the `Label prefix:` requirement strictly enough.**
+
+### Finding E-23 — Top margin 2929 DXA (146 pt) is unusually large (LOW severity, observational)
+
+Vrishin's top margin: 1450 DXA (72.5 pt, standard 1″). Ikansh's: 2929 DXA
+(146.45 pt, ~2× standard). The colored brand-header band occupies the top
+~145 pt of every page; the first text glyph below the band is what
+`buildPageSetup` uses to infer the top margin. The image anchor (y=−147
+in margin-relative coords) sits inside this margin band, which is
+geometrically correct but produces a margin number that **doesn't match
+what Word would call the "top margin"** for an editable document.
+Cosmetic for now; forward concern if Cue ever computes "edit area"
+extents.
+
+### Severity ranking (catalog only — not building yet)
+
+1. **E-15** (false tables on prose) — corrupts structural inference; ~half of Ikansh's clinical content lands in fake table cells. HIGH.
+2. **E-17/E-18** (decomposer run-convention overfit) — re-introduces the exact bug E-14 was supposed to fix, on a different PDF. HIGH.
+3. **E-22** (numbered-heading vanish risk) — E-11 didn't fully generalize. MEDIUM–HIGH.
+4. **E-19** (bullet fragmentation) — degrades slot grain but content survives. MEDIUM.
+5. **E-21** (image bytes missing on subsequent pages) — visual cosmetic. LOW–MEDIUM.
+6. **E-16** (signature-block as table) — visual cosmetic, child of E-15. LOW.
+7. **E-20** (new semantic labels needed) — taxonomy extension, not a bug. INFORMATIONAL.
+8. **E-23** (margin inference on branded layouts) — observational. LOW.
+
+### E-15 fix sketch — content-occupancy test (prose only, NOT YET BUILT)
+
+**Principle.** A table is structurally defined by **content occupancy**,
+not by drawn rules alone. The current detector identifies a region as a
+table whenever ≥2 horizontal-rule clusters and ≥2 vertical-rule clusters
+form an axis-aligned grid. But axis-aligned vector rules get drawn for
+many reasons that aren't "this is a table": brand-header decorations,
+page-edge accents, signature lines, decorative borders, divider bars.
+These produce phantom grids whose cells are mostly empty because no
+content was ever meant to occupy them. The occupancy test reverses the
+inferential direction: instead of *"do drawn rules suggest a table?"*,
+ask *"does content confirm a table?"* This replaces a false assumption
+(*axis-aligned rules ⇒ table*) with a definition consistent with how
+clinicians actually use tables (*a table is a grid that holds content*).
+
+**Where it would live.** After `detectTablesFromSegments` and
+`refineTableDescs` produce a descriptor but **before** the descriptor is
+finalized into a table block. The glyph-bucketing pass in
+`buildTableBlock` is already doing the work — it iterates every cell and
+assigns glyphs by (row y-band, column x-band). The occupancy test adds
+one counter after that loop: count non-empty cells, divide by total
+cells (rows × cols), compare to threshold. Below threshold → descriptor
+discarded; glyph lines flow into the existing `linesToParagraphs`
+fallback (same path that handles non-tabular regions today). No new code
+path; just a reject branch into the existing paragraph path. Cost is
+trivial — one counter and one comparison per descriptor.
+
+**Open question 1 — what threshold.** This is the sample-tuning part of
+the otherwise-principled fix. Concrete data points:
+- Ikansh's worst false table: b3 with ~6 % occupancy (~30 cells filled
+  of 481).
+- Vrishin's real tables (post-E-13): linguistic ~50 %; test-material
+  ~33 %.
+
+A threshold around **15–20 %** would safely reject Ikansh's false tables
+while accepting Vrishin's real ones. **But with N=2, this threshold is
+itself a fit-to-sample** — exactly the trap the framing note warns
+against. Right move: record both data points, note the wide gap, **defer
+the threshold choice** until more corpus arrives. The principle ships
+first; the threshold gets pinned later from a richer distribution.
+
+**Open question 2 — interaction with rule-strength signal.** A
+descriptor's confidence depends on two independent signals: rule
+strength (rule count, regularity of spacing, rectangle-op vs lineTo-op
+intent) and content occupancy. The interesting case is the 2×2:
+
+| Rule strength | Occupancy | Verdict |
+|---|---|---|
+| Strong | High | Definitely a table |
+| Strong | Low | Sparsely-filled form (KEEP) |
+| Weak | High | Paragraph layout that aligns (probably NOT a table) |
+| Weak | Low | Decorative artifacts (Ikansh's case — REJECT) |
+
+A single-threshold occupancy test treats (strong, low) and (weak, low)
+identically — both rejected. That's wrong for sparsely-filled forms. A
+more nuanced rule would say: *reject if rule-strength is low AND
+occupancy is low; keep if either signal is strong.* But rule-strength
+quantification is its own design problem (counting rules? rectangle-op
+ratio?), so the simpler occupancy-only rule is the right starting point
+if the threshold is set conservatively. **Cost asymmetry favors the
+conservative threshold:** a false REJECT (accepting a sparse form as
+paragraphs) is cheaper than a false ACCEPT (Ikansh's case — clinical
+narrative shredded into fake cells).
+
+**Open question 3 — sparsely-filled clinical forms.** A real clinical
+form with many empty fields (a 20-row checklist with 3 rows filled)
+might fall under any sensible threshold. Mitigations when implementation
+time comes:
+- Compute occupancy **per row** rather than across the whole grid. A
+  form where MOST rows have ≥1 filled cell is a real table even if many
+  individual cells are empty.
+- Require BOTH whole-grid occupancy < threshold AND per-row-median
+  occupancy < threshold before rejecting (two-of-two beats one-of-one).
+- Apply the test only above a SIZE threshold (e.g., > 6 cols or > 15
+  rows). Small tables presumed correct; their false-positive damage is
+  bounded.
+
+These are refinements to the principle, not alternatives to it.
+
+**Why this passes the framing-note test.** The current detector encodes
+a wrong assumption: *axis-aligned rules ⇒ table*. The occupancy test
+doesn't tune a parameter to make Vrishin look 50 % and Ikansh look 6 %
+— those numbers exist independently of the test. The test **replaces
+the wrong assumption with a structural definition** that maps to how
+the domain works. Even if the threshold lands inconveniently between
+cases, the principle generalizes: *low occupancy = not a table* is a
+true statement about the domain. The threshold is a calibration of a
+sound principle — a different category of parameter than something
+like "Vrishin's tables have ≥3 columns" or "bold labels end with
+colons" (those latter ARE sample-fit; the occupancy threshold is a
+calibration of a sound principle). That's what the framing note meant
+by *"fixes that remove a wrong assumption rather than tune to a
+sample."*
+
+### Fix sequencing — explicit hold
+
+**Catalog-and-halt.** No fixes built. Sample size = 2 documents; tuning
+heuristics now risks re-overfitting to two examples. **Corpus must broaden
+(clinic 3, clinic 4) before example-specific tuning**, EXCEPT for the
+**E-15 occupancy test** — which is principled (removes a wrong assumption)
+rather than sample-tuned. That one fix is scoped above in the E-15 sketch
+but not yet built, awaiting Guru's call.
+
+---
+
 ## Phase E Week 1 — Closed (2026-05-27)
 
 **Architectural premise VALIDATED.** A Word-exported PDF flows end-to-end through
@@ -602,7 +891,16 @@ fonts preserved, slot identity bitwise-stable.
 | E-11 | Section headings must be static_text, not slots | **Resolved (2026-05-28)** — rule live; one residual (b13/b127 descriptive notes in 8a04fd1e) tracked to E-13 re-identification |
 | E-12 | PDF slot fragmentation lowers drafter fill rate | **Deferred → week 2** |
 | E-13 | PDF table data rows can leak as column-interleaved free text (DATA CORRUPTION) | **Open (2026-05-28)** — diagnose-and-propose phase; above E-9 |
-| E-14 | Multi-field header lines cause field-slot loss (PRE-EXISTING .docx defect exposed by PDF work) | **Open (2026-05-28)** — fix direction Option A authorized; blast-radius diagnostic on field_idx schema pending; pre-launch correctness blocker for .docx mirror |
+| E-14 | Multi-field header lines cause field-slot loss (PRE-EXISTING .docx defect exposed by PDF work) | **Resolved (2026-05-28)** — Option A deterministic decomposer landed in identifySlots; renderer extended with field_idx schema; both maps re-identified + stored; Asha visual gate passed |
+| E-15 | PDF table detector hallucinates tables on prose-heavy content | **Open (2026-05-28)** — HIGH severity; E-15 occupancy-test fix scoped (principled, removes wrong assumption); held pending corpus broadening OR explicit authorization |
+| E-16 | Signature block misidentified as 4×4 table (child of E-15) | **Open (2026-05-28)** — LOW; resolves with E-15 |
+| E-17 | E-14 multi-field decomposer fails on alternate run-boundary convention | **Open (2026-05-28)** — HIGH; held pending corpus (don't re-overfit on N=2) |
+| E-18 | Second instance of E-17 root cause on Clinician/Languages line | **Open (2026-05-28)** — HIGH; child of E-17 |
+| E-19 | Bulleted-list paragraphs fragment across blocks (hanging-indent continuation) | **Open (2026-05-28)** — MEDIUM; held pending corpus |
+| E-20 | New semantic labels (`presenting_complaint`, `progress_report`) needed in taxonomy | **Open (2026-05-28)** — INFORMATIONAL; not a bug, taxonomy extension |
+| E-21 | Page-2+ brand-header images decode to bytes=0 (unsupported pdfjs ImageKind) | **Open (2026-05-28)** — LOW–MEDIUM; held pending corpus |
+| E-22 | Numbered section headings classified as slots WITHOUT `Label prefix:` notes — E-11 vanish-risk | **Open (2026-05-28)** — MEDIUM–HIGH; prompt-strictness issue; held pending corpus |
+| E-23 | Top margin inference yields 2× standard on branded-letterhead layouts | **Open (2026-05-28)** — LOW; observational |
 
 Resolved: E-1…E-8, E-11 (closed 2026-05-28; one residual at b13/b127 in 8a04fd1e
 tracked to E-13 re-identification, not fixed independently). Deferred to week 2:
