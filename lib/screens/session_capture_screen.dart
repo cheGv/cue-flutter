@@ -45,6 +45,7 @@ import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/domain_pill.dart';
+import '../widgets/recall_assistant/recall_pill_safe_area.dart';
 import '../widgets/voice_note_sheet.dart';
 import 'report_screen.dart';
 
@@ -1087,7 +1088,10 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
           top: BorderSide(color: kCueBorder, width: kCueCardBorderW),
         ),
       ),
-      child: Column(
+      // Reserve the bottom-right corner so the global "Ask Cue" pill never
+      // shadows the right-aligned Save / Save & Generate buttons.
+      child: RecallPillSafeArea(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -1190,6 +1194,7 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
             ),
           ],
         ],
+        ),
       ),
     );
   }

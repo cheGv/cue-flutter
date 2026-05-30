@@ -12,6 +12,7 @@ import '../services/session_archive_service.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/recall_assistant/recall_pill_safe_area.dart';
 import 'narrate_session_screen.dart';
 // Phase 4.0.7.39 — SessionCaptureScreen import removed; the
 // "Continue editing →" link now uses pushReplacementNamed to
@@ -1214,8 +1215,10 @@ class _ReportScreenState extends State<ReportScreen> {
           return Container(
             color: kCuePaper,
             child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                  horizontal: hPad, vertical: 32),
+              // Bottom padding reserves the global recall pill's footprint so
+              // the bottom action buttons clear it at max scroll.
+              padding: EdgeInsets.fromLTRB(
+                  hPad, 32, hPad, 32 + kRecallPillReservedHeight),
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 680),

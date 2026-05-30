@@ -20,6 +20,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../constants/clinical_areas.dart';
 import '../narrate_web_audio.dart';
+import '../widgets/recall_assistant/recall_pill_safe_area.dart';
 import 'ltg_edit_screen.dart';
 import '../services/clients_query.dart';
 
@@ -472,7 +473,10 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
       ),
       body: SingleChildScrollView(
         controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        // Extra bottom padding reserves the global recall pill's footprint so
+        // the full-width "Generate goal plan" bar clears it at max scroll.
+        padding: const EdgeInsets.fromLTRB(
+            20, 28, 20, 28 + kRecallPillReservedHeight),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

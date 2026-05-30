@@ -18,6 +18,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../narrate_web_audio.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/recall_assistant/recall_pill_safe_area.dart';
 import 'report_screen.dart';
 
 // Phase 4.0.7.40-flutter — predicate for the Generate Report
@@ -822,9 +823,13 @@ class _NarrateSessionScreenState extends State<NarrateSessionScreen> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           return SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: constraints.maxWidth < 600 ? 24 : 80,
-              vertical:   40,
+            // Bottom padding reserves the global recall pill's footprint so the
+            // full-width "Generate Report" button clears it at max scroll.
+            padding: EdgeInsets.fromLTRB(
+              constraints.maxWidth < 600 ? 24 : 80,
+              40,
+              constraints.maxWidth < 600 ? 24 : 80,
+              40 + kRecallPillReservedHeight,
             ),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
