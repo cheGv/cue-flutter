@@ -20,6 +20,7 @@ import '../constants/clinical_areas.dart';
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/assessment/ald_capture_section.dart';
+import '../widgets/assessment/cas_assessment_surface.dart';
 import '../widgets/assessment/ped_dysarthria_capture_section.dart';
 import '../widgets/assessment/ssd_capture_section.dart';
 import '../widgets/assessment/voice_capture_section.dart';
@@ -455,6 +456,10 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     // 4.0.7.27a — Pediatric Dysarthria surface.
     if (area == 'pediatric-dysarthria') {
       return PedDysarthriaCaptureSection(clientId: clientId);
+    }
+    // 4.0.7.28 — Pediatric CAS surface (dysarthria's closest differential).
+    if (area == 'pediatric-cas') {
+      return CasAssessmentSurface(clientId: clientId);
     }
     return Container(
       padding: const EdgeInsets.all(14),
