@@ -11,10 +11,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
+import '../services/clients_query.dart';
 // 4.0.7.27c-split — assessment intake split out of AddClientScreen
 // (which is now therapy-only). NewAssessmentCaseScreen is the slim
 // 10-field intake; control reaches it via the '/new-assessment' named
@@ -38,8 +38,6 @@ class AssessingScreen extends StatefulWidget {
 }
 
 class _AssessingScreenState extends State<AssessingScreen> {
-  final _supabase = Supabase.instance.client;
-
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _cases = [];
@@ -56,11 +54,12 @@ class _AssessingScreenState extends State<AssessingScreen> {
       _error   = null;
     });
     try {
-      final rows = await _supabase
-          .from('clients')
-          .select()
+      // Phase 4.0.7.29 Stage 2A: route through the ClientsQuery gate so
+      // soft-deleted AND trial-run cases are excluded by construction
+      // (deleted_at IS NULL + is_trial_case = false applied by the gate).
+      final rows = await ClientsQuery()
+          .read('*')
           .eq('engagement_type', 'assessment_only')
-          .isFilter('deleted_at', null)
           .not('engagement_status', 'in', '(discharged,converted)')
           .order('updated_at', ascending: false);
       if (!mounted) return;

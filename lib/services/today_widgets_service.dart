@@ -121,7 +121,7 @@ class TodayWidgetsService {
     try {
       final rows = await _sb
           .from('sessions')
-          .select('date, soap_note, notes')
+          .select('date, soap_note, notes, clients(is_trial_case)')
           .eq('user_id', uid)
           .gte('date', mondayIso)
           .lte('date', fridayIso)
@@ -134,6 +134,10 @@ class TodayWidgetsService {
 
       for (final raw in rows) {
         final r = Map<String, dynamic>.from(raw as Map);
+        // Phase 4.0.7.29 Stage 2A: skip sessions belonging to a trial case so
+        // a trial run never inflates the real week-pulse productivity counts.
+        final c = r['clients'] as Map?;
+        if (c != null && c['is_trial_case'] == true) continue;
         final dateStr = r['date'] as String?;
         if (dateStr == null) continue;
         final dt = DateTime.tryParse(dateStr);
@@ -180,7 +184,7 @@ class TodayWidgetsService {
       final rows = await _sb
           .from('sessions')
           .select('id, date, created_at, soap_note, notes, client_id, '
-                  'clients(name)')
+                  'clients(name, is_trial_case)')
           .eq('user_id', uid)
           .gte('date', sevenDaysAgoIso)
           .isFilter('deleted_at', null)
@@ -196,6 +200,8 @@ class TodayWidgetsService {
         if (isDocumented) continue;
 
         final client = r['clients'] as Map?;
+        // Phase 4.0.7.29 Stage 2A: skip pending notes belonging to a trial case.
+        if (client != null && client['is_trial_case'] == true) continue;
         final clientName = client?['name']?.toString() ?? 'Unknown';
 
         final dateStr = r['date'] as String?;
@@ -233,9 +239,10 @@ class TodayWidgetsService {
       final rows = await _sb
           .from('short_term_goals')
           .select('specific, target_behavior, current_accuracy, '
-                  'target_accuracy, client_id, clients(name)')
+                  'target_accuracy, client_id, clients!inner(name)')
           .eq('user_id', uid)
           .eq('status', 'active')
+          .eq('clients.is_trial_case', false) // Stage 2A: no trial cases
           .order('updated_at', ascending: false)
           .limit(limit);
 
@@ -265,9 +272,10 @@ class TodayWidgetsService {
     try {
       final rows = await _sb
           .from('daily_roster')
-          .select('id, client_id, session_date, clients(name)')
+          .select('id, client_id, session_date, clients!inner(name)')
           .eq('clinician_id', uid)
           .eq('session_date', tomorrowIso)
+          .eq('clients.is_trial_case', false) // Stage 2A: no trial cases
           .order('id', ascending: true);
 
       final list = (rows as List)
@@ -305,9 +313,10 @@ class TodayWidgetsService {
     try {
       final stgRows = await _sb
           .from('short_term_goals')
-          .select('target_behavior, updated_at, client_id, clients(name)')
+          .select('target_behavior, updated_at, client_id, clients!inner(name)')
           .eq('user_id', uid)
           .eq('status', 'active')
+          .eq('clients.is_trial_case', false) // Stage 2A: no trial cases
           .order('updated_at', ascending: true)
           .limit(1);
 

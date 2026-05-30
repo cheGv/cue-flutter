@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
+import '../services/clients_query.dart';
 import 'debrief_fluency_screen.dart';
 import 'parent_interview_fluency_screen.dart';
 
@@ -55,11 +56,9 @@ class _SessionNoteScreenState extends State<SessionNoteScreen> {
 
   Future<void> _loadPopulationAndLatestSession() async {
     try {
-      final clientRow = await _supabase
-          .from('clients')
-          .select('population_type')
+      final clientRow = await ClientsQuery()
+          .read('population_type')
           .eq('id', widget.clientId)
-          .isFilter('deleted_at', null)
           .maybeSingle();
       final pop =
           (clientRow?['population_type'] as String?) ?? 'asd_aac';

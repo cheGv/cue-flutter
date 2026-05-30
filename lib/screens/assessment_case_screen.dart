@@ -162,6 +162,21 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   }
 
   Future<void> _convertToTherapy() async {
+    // Phase 4.0.7.29 Stage 2A — SAFETY WALL #2: a trial case must NEVER cross
+    // into the real therapy world. There is no trial->real path; refuse here
+    // regardless of any UI affordance that surfaced this action. (The flag is
+    // never cleared — real cases are created fresh, not promoted from trials.)
+    if (_client['is_trial_case'] == true) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trial runs cannot be converted to a real client. '
+                'Create a real case from scratch instead.'),
+          ),
+        );
+      }
+      return;
+    }
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -552,21 +567,25 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
                 horizontal: 14, vertical: 10),
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: _convertToTherapy,
-          icon: const Icon(Icons.swap_horiz_rounded,
-              size: 16, color: _coral),
-          label: Text('Convert to therapy',
-              style: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  color: _coral,
-                  fontWeight: FontWeight.w500)),
-          style: OutlinedButton.styleFrom(
-            side: BorderSide(color: _coral.withValues(alpha: 0.45)),
-            padding: const EdgeInsets.symmetric(
-                horizontal: 14, vertical: 10),
+        // Phase 4.0.7.29 Stage 2A: hide convert-to-therapy for trial runs
+        // (safety wall #2 — no trial->real path). _convertToTherapy also
+        // refuses defensively if ever invoked.
+        if (_client['is_trial_case'] != true)
+          OutlinedButton.icon(
+            onPressed: _convertToTherapy,
+            icon: const Icon(Icons.swap_horiz_rounded,
+                size: 16, color: _coral),
+            label: Text('Convert to therapy',
+                style: GoogleFonts.dmSans(
+                    fontSize: 13,
+                    color: _coral,
+                    fontWeight: FontWeight.w500)),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: _coral.withValues(alpha: 0.45)),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 14, vertical: 10),
+            ),
           ),
-        ),
       ],
     );
   }

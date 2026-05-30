@@ -40,6 +40,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../services/session_archive_service.dart';
+import '../services/clients_query.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
@@ -394,11 +395,9 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
 
   Future<void> _loadClinicalArea() async {
     try {
-      final row = await _supabase
-          .from('clients')
-          .select('clinical_area')
+      final row = await ClientsQuery()
+          .read('clinical_area')
           .eq('id', widget.clientId)
-          .isFilter('deleted_at', null)
           .maybeSingle();
       if (!mounted) return;
       setState(() => _clinicalArea = row?['clinical_area'] as String?);

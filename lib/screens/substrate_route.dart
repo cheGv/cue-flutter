@@ -12,13 +12,13 @@
 // later decision.
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/substrate.dart';
 import '../repositories/substrate_repository.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_type_v3.dart';
 import '../widgets/substrate/substrate_view.dart';
+import '../services/clients_query.dart';
 
 class SubstrateRoute extends StatefulWidget {
   final String clientId;
@@ -58,9 +58,8 @@ class _SubstrateRouteState extends State<SubstrateRoute> {
     var name = widget.clientName;
     if (name == null || name.trim().isEmpty) {
       try {
-        final row = await Supabase.instance.client
-            .from('clients')
-            .select('name')
+        final row = await ClientsQuery()
+            .read('name')
             .eq('id', widget.clientId)
             .maybeSingle();
         name = row?['name'] as String?;

@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 import '../models/session.dart';
 import '../repositories/sessions_repository.dart';
 import '../services/session_headline_service.dart';
+import '../services/clients_query.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_text_styles.dart';
 import '../widgets/app_layout.dart';
@@ -67,9 +68,8 @@ class _ClientSessionsScreenState extends State<ClientSessionsScreen> {
 
   Future<void> _fetchClientName() async {
     try {
-      final row = await Supabase.instance.client
-          .from('clients')
-          .select('name')
+      final row = await ClientsQuery()
+          .read('name')
           .eq('id', widget.clientId)
           .maybeSingle();
       if (!mounted || row == null) return;

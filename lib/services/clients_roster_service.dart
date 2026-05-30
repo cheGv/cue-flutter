@@ -18,6 +18,7 @@
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'clients_query.dart';
 import 'name_formatter.dart';
 
 class ClientsRosterService {
@@ -165,10 +166,13 @@ class ClientsRosterService {
         .from('sessions')
         .select('id, client_id, date, duration_minutes, '
             'created_at, updated_at, '
-            'clients(name, engagement_type, engagement_status)')
+            'clients!inner(name, engagement_type, engagement_status)')
         .eq('user_id', uid)
         .eq('status', 'draft')
-        .isFilter('deleted_at', null);
+        .isFilter('deleted_at', null)
+        // Phase 4.0.7.29 Stage 2A: exclude draft sessions of trial cases from
+        // the Inbox worklist AND the Clients action-line draft count.
+        .eq('clients.is_trial_case', false);
 
     final out = <DraftSessionEntry>[];
     for (final r in rows as List) {
@@ -232,11 +236,12 @@ class ClientsRosterService {
   /// unapplied) the select throws PostgrestException; we fall back to a
   /// column-free select so the screen keeps working pre-migration.
   Future<List<Map<String, dynamic>>> _fetchClients() async {
+    // Phase 4.0.7.29 Stage 2A: route through the ClientsQuery gate (applies
+    // deleted_at IS NULL + is_trial_case = false); we add engagement_type.
+    final gate = ClientsQuery(client: _client);
     try {
-      var query = _client
-          .from('clients')
-          .select('$_clientCols, is_fixture')
-          .isFilter('deleted_at', null)
+      var query = gate
+          .read('$_clientCols, is_fixture')
           .eq('engagement_type', 'therapy');
       if (kReleaseMode) {
         query = query.eq('is_fixture', false);
@@ -244,10 +249,8 @@ class ClientsRosterService {
       final rows = await query;
       return List<Map<String, dynamic>>.from(rows as List);
     } on PostgrestException {
-      final rows = await _client
-          .from('clients')
-          .select(_clientCols)
-          .isFilter('deleted_at', null)
+      final rows = await gate
+          .read(_clientCols)
           .eq('engagement_type', 'therapy');
       return List<Map<String, dynamic>>.from(rows as List);
     }

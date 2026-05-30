@@ -208,23 +208,27 @@ class _TodayScreenState extends State<TodayScreen> {
 
       final results = await Future.wait([
         // Today's roster — join clients so we have the full client map
+        // Phase 4.0.7.29 Stage 2A: inner-join + filter so a trial case that
+        // somehow reached daily_roster never renders a Today card / fires a brief.
         _supabase
             .from('daily_roster')
-            .select('*, clients(*)')
+            .select('*, clients!inner(*)')
             .eq('clinician_id', uid)
-            .eq('session_date', today),
+            .eq('session_date', today)
+            .eq('clients.is_trial_case', false),
         // Yesterday undocumented
         _supabase
             .from('daily_roster')
-            .select('*, clients(*)')
+            .select('*, clients!inner(*)')
             .eq('clinician_id', uid)
             .eq('session_date', yesterday)
-            .eq('session_documented', false),
+            .eq('session_documented', false)
+            .eq('clients.is_trial_case', false),
         // Full active caseload for bottom-sheet picker
-        _supabase
-            .from('clients')
-            .select()
-            .isFilter('deleted_at', null)
+        // Phase 4.0.7.29 Stage 2A: picker source gated — a trial case can never
+        // be selected into daily_roster (the cascade into briefs / Today / AI).
+        ClientsQuery()
+            .read('*')
             .order('name', ascending: true),
       ]);
 

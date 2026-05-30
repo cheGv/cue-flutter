@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/app_config.dart';
+import 'services/clients_query.dart';
 import 'screens/today_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -91,10 +92,10 @@ Future<void> main() async {
   recallAssistantController.attach(
     resolver: RecallResolver(source: DirectTableCardSource()),
     rosterProvider: () async {
-      final rows = await Supabase.instance.client
-          .from('clients')
-          .select()
-          .isFilter('deleted_at', null)
+      // Phase 4.0.7.29 Stage 2A: gate the recall roster — trial cases must
+      // never be matchable by the global Ask Cue surface (Stage 1's widest leak).
+      final rows = await ClientsQuery()
+          .read('*')
           .order('name', ascending: true);
       return (rows as List)
           .map((r) => Map<String, dynamic>.from(r as Map))
@@ -199,9 +200,11 @@ class _AssessmentCaseDeepLinkLoaderState
       return;
     }
     try {
-      final row = await Supabase.instance.client
-          .from('clients')
-          .select()
+      // Phase 4.0.7.29 Stage 2A: gated deep-link load — a trial case is not
+      // reachable via real /assessing/:id or /clients/:id deep links (Stage 2B
+      // adds a trial-aware open path that opts in via includeTrial: true).
+      final row = await ClientsQuery()
+          .read('*')
           .eq('id', widget.clientId)
           .maybeSingle();
       if (!mounted) return;
@@ -253,9 +256,11 @@ class _ClientProfileDeepLinkLoaderState
       return;
     }
     try {
-      final row = await Supabase.instance.client
-          .from('clients')
-          .select()
+      // Phase 4.0.7.29 Stage 2A: gated deep-link load — a trial case is not
+      // reachable via real /assessing/:id or /clients/:id deep links (Stage 2B
+      // adds a trial-aware open path that opts in via includeTrial: true).
+      final row = await ClientsQuery()
+          .read('*')
           .eq('id', widget.clientId)
           .maybeSingle();
       if (!mounted) return;
@@ -322,9 +327,8 @@ class _ReportDeepLinkLoaderState extends State<_ReportDeepLinkLoader> {
       final clientId = session['client_id']?.toString();
       Map<String, dynamic>? client;
       if (clientId != null) {
-        client = await sb
-            .from('clients')
-            .select('name')
+        client = await ClientsQuery()
+            .read('name')
             .eq('id', clientId)
             .maybeSingle();
       }
@@ -401,9 +405,8 @@ class _SessionCaptureEditDeepLinkLoaderState
         setState(() => _error = 'Session is not linked to a client.');
         return;
       }
-      final client = await sb
-          .from('clients')
-          .select('name')
+      final client = await ClientsQuery()
+          .read('name')
           .eq('id', clientId)
           .maybeSingle();
       if (!mounted) return;

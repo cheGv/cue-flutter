@@ -21,6 +21,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../constants/clinical_areas.dart';
 import '../narrate_web_audio.dart';
 import 'ltg_edit_screen.dart';
+import '../services/clients_query.dart';
 
 // ── constants ──────────────────────────────────────────────────────────────────
 const String _proxyBase = 'https://cue-ai-proxy.onrender.com';
@@ -143,9 +144,8 @@ class _GoalAuthoringScreenState extends State<GoalAuthoringScreen> {
   /// hint text and the SLP picks before generating.
   Future<void> _loadClinicalArea() async {
     try {
-      final row = await _supabase
-          .from('clients')
-          .select('clinical_area')
+      final row = await ClientsQuery()
+          .read('clinical_area')
           .eq('id', widget.clientId)
           .maybeSingle();
       final v = (row?['clinical_area'] as String?)?.trim();
