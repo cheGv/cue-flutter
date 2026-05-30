@@ -1,5 +1,5 @@
 [build]
-  command = "if cd flutter; then git pull && cd ..; else git clone https://github.com/flutter/flutter.git -b stable; fi && flutter/bin/flutter doctor && flutter/bin/flutter clean && flutter/bin/flutter config --enable-web && flutter/bin/flutter pub get && flutter/bin/flutter build web --release"
+  command = "if cd flutter; then git pull && cd ..; else git clone https://github.com/flutter/flutter.git -b stable; fi && flutter/bin/flutter doctor && flutter/bin/flutter clean && flutter/bin/flutter config --enable-web && flutter/bin/flutter pub get && flutter/bin/flutter build web --release --dart-define=APP_ENV=prod"
   publish = "build/web"
 
 [build.environment]

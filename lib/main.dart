@@ -59,10 +59,16 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Supabase target is compile-time-selected (see lib/config/app_config.dart).
-  // Defaults to PRODUCTION; unchanged when launched with no overrides. For a
-  // sandbox build, launch with:
-  //   --dart-define=SUPABASE_URL=https://uuqhusmgoiaxdvtgbmwh.supabase.co
-  //   --dart-define=SUPABASE_ANON_KEY=<sandbox anon key from app_config doc>
+  // Defaults to SANDBOX; production is the explicit opt-in
+  // --dart-define=APP_ENV=prod.
+  //
+  // Referencing kReleaseEnvGuard forces the compiler to evaluate the
+  // build-time release guard: a --release build produced without APP_ENV=prod
+  // fails to COMPILE, so a dropped CI prod-pin fails loud instead of silently
+  // shipping production against the sandbox database.
+  // ignore: unused_local_variable
+  const guardEval = kReleaseEnvGuard;
+  debugPrint('[CueConfig] APP_ENV=$kAppEnv -> Supabase $kSupabaseUrl');
   await Supabase.initialize(
     url: kSupabaseUrl,
     anonKey: kSupabaseAnonKey,

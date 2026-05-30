@@ -25,7 +25,9 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release --base-href "/"
+        # APP_ENV=prod is REQUIRED: app_config.dart defaults to sandbox, and a
+        # --release build without this pin fails to compile (build guard).
+        run: flutter build web --release --base-href "/" --dart-define=APP_ENV=prod
 
       - name: Add CNAME file for custom domain
         run: echo "app.cuerehab.in" > build/web/CNAME
