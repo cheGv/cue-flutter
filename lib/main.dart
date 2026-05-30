@@ -50,6 +50,7 @@ import 'widgets/recall_assistant/recall_assistant_controller.dart';
 import 'widgets/recall_assistant/recall_assistant_overlay.dart';
 import 'theme/cue_theme.dart';
 import 'theme/theme_notifier.dart';
+import 'widgets/sidebar_notifier.dart';
 import 'utils/daily_chart_log.dart';
 
 /// Root navigator key — shared with the recall assistant overlay so it can
@@ -77,6 +78,9 @@ Future<void> main() async {
 
   // Restore persisted theme before first frame.
   await themeNotifier.load();
+
+  // Restore persisted sidebar collapsed/expanded preference (desktop shell).
+  await sidebarNotifier.load();
 
   // Prune yesterday-and-older entries from the daily chart log so
   // Monday-first detection only reads today's opens.

@@ -13,9 +13,14 @@ import 'cue_hold.dart';
 import 'cue_hold/cue_hold_expanded.dart';
 import 'cue_popup.dart';
 import 'cue_study_fab.dart';
+import 'sidebar_notifier.dart';
 const double _kSidebarFull      = 220;
-const double _kSidebarCollapsed = 56;
+// Icon-only rail width (collapsed). ~64px per the rail spec; also used as the
+// auto-collapse width below the desktop breakpoint.
+const double _kSidebarRail      = 64;
 const double _kDesktopBreak     = 1024;
+// Width animation when toggling between full and rail.
+const Duration _kSidebarAnim    = Duration(milliseconds: 180);
 // Phase 4.0.7.22a — bump from 600 → 768 so tablets and SLPs in
 // landscape on phones still get the full mobile chrome (bottom nav +
 // compact header). Above 768 we keep the desktop sidebar.
@@ -142,61 +147,83 @@ class AppLayout extends StatelessWidget {
   }
 
   Widget _buildDesktopLayout(BoxConstraints constraints) {
-    final sidebarWidth = constraints.maxWidth < _kDesktopBreak
-        ? _kSidebarCollapsed
-        : _kSidebarFull;
-    final collapsed = sidebarWidth == _kSidebarCollapsed;
+    // Below the desktop break the rail is mandatory (no room to expand), so the
+    // user toggle is hidden there. At/above it, the user's persisted preference
+    // decides. LayoutBuilder-driven (constraints), never MediaQuery.
+    final wideEnoughToExpand = constraints.maxWidth >= _kDesktopBreak;
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: sidebarWidth,
-          child: _AppSidebar(
-            collapsed: collapsed,
-            activeRoute: activeRoute,
-          ),
-        ),
-        // Content area — Stack overlays the per-screen FAB over content.
-        Expanded(
-          child: Stack(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _TopBar(
-                    title: title,
-                    actions: actions,
-                    suppressBack: _kTopLevelRoutes.contains(activeRoute),
-                    minimal: skipTopBar,
+    return ValueListenableBuilder<bool>(
+      valueListenable: sidebarNotifier,
+      builder: (context, userCollapsed, _) {
+        final collapsed = !wideEnoughToExpand || userCollapsed;
+        final targetWidth = collapsed ? _kSidebarRail : _kSidebarFull;
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Animated width — the content [Expanded] reflows each frame to
+            // fill the reclaimed space (no dead gap). The sidebar is laid out
+            // at its TARGET width inside a clip, so the label Rows never
+            // overflow mid-animation (the clip reveals/hides them instead).
+            AnimatedContainer(
+              duration: _kSidebarAnim,
+              curve: Curves.easeInOut,
+              width: targetWidth,
+              child: ClipRect(
+                child: OverflowBox(
+                  alignment: Alignment.centerLeft,
+                  minWidth: targetWidth,
+                  maxWidth: targetWidth,
+                  child: _AppSidebar(
+                    collapsed: collapsed,
+                    showToggle: wideEnoughToExpand,
+                    activeRoute: activeRoute,
                   ),
-                  Expanded(child: body),
+                ),
+              ),
+            ),
+            // Content area — Stack overlays the per-screen FAB over content.
+            Expanded(
+              child: Stack(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _TopBar(
+                        title: title,
+                        actions: actions,
+                        suppressBack: _kTopLevelRoutes.contains(activeRoute),
+                        minimal: skipTopBar,
+                      ),
+                      Expanded(child: body),
+                    ],
+                  ),
+                  // Per-screen FAB (e.g. narrator mic, add client) — bottom-right
+                  if (floatingActionButton != null)
+                    Positioned(
+                      bottom: 32,
+                      right: 16,
+                      child: floatingActionButton!,
+                    ),
+                  // Global Cue Study FAB — bottom-left
+                  Positioned(
+                    bottom: 32,
+                    left: 16,
+                    child: AnimatedOpacity(
+                      opacity: showCueStudyFab ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: IgnorePointer(
+                        ignoring: !showCueStudyFab,
+                        child: const CueStudyFab(),
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              // Per-screen FAB (e.g. narrator mic, add client) — bottom-right
-              if (floatingActionButton != null)
-                Positioned(
-                  bottom: 32,
-                  right: 16,
-                  child: floatingActionButton!,
-                ),
-              // Global Cue Study FAB — bottom-left
-              Positioned(
-                bottom: 32,
-                left: 16,
-                child: AnimatedOpacity(
-                  opacity: showCueStudyFab ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: IgnorePointer(
-                    ignoring: !showCueStudyFab,
-                    child: const CueStudyFab(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+            ),
+          ],
+        );
+      },
     );
   }
 }
@@ -353,10 +380,14 @@ const _kNavItems = [
 
 class _AppSidebar extends StatelessWidget {
   final bool collapsed;
+  /// Whether the collapse/expand toggle is offered. False below the desktop
+  /// break, where the rail is mandatory (expanding wouldn't fit).
+  final bool showToggle;
   final String activeRoute;
 
   const _AppSidebar({
     required this.collapsed,
+    required this.showToggle,
     required this.activeRoute,
   });
 
@@ -370,7 +401,10 @@ class _AppSidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildLogo(isNight),
+          _buildLogo(context, isNight),
+          // In the rail, the collapse/expand toggle is a standalone centered
+          // control beneath the mark. (Expanded mode hosts it in the logo row.)
+          if (collapsed && showToggle) _buildRailToggle(context),
           const SizedBox(height: 8),
           ..._kNavItems.map((item) => _buildNavItem(context, item, isNight)),
           const Spacer(),
@@ -382,7 +416,48 @@ class _AppSidebar extends StatelessWidget {
     );
   }
 
-  Widget _buildLogo(bool isNight) {
+  // Click-only collapse/expand. NO hover-expand by design — hover-expand breaks
+  // touch/iPad and fires accidentally; the toggle is the only way to expand.
+  Widget _buildRailToggle(BuildContext context) {
+    return Tooltip(
+      message: 'Expand menu',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => sidebarNotifier.toggle(),
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Center(
+            child: Icon(
+              Icons.chevron_right_rounded,
+              color: Colors.white.withValues(alpha: 0.55),
+              size: 22,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExpandedToggle(BuildContext context) {
+    return Tooltip(
+      message: 'Collapse menu',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => sidebarNotifier.toggle(),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(
+            Icons.chevron_left_rounded,
+            color: Colors.white.withValues(alpha: 0.55),
+            size: 20,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLogo(BuildContext context, bool isNight) {
     return Container(
       height: 60,
       padding: EdgeInsets.symmetric(horizontal: collapsed ? 0 : 20),
@@ -402,24 +477,31 @@ class _AppSidebar extends StatelessWidget {
               ),
             )
           : Row(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.center,
-              children: const [
-                SizedBox(
+              children: [
+                const SizedBox(
                   width:  22,
                   height: 26,
                   child: CueCuttlefish(size: 22, state: CueState.idle),
                 ),
-                SizedBox(width: 8),
-                Text(
-                  'Cue',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.3,
+                const SizedBox(width: 8),
+                // Flexible + clip so the wordmark never overflows the 64px rail
+                // during the expand animation (the clip reveals it instead).
+                const Flexible(
+                  child: Text(
+                    'Cue',
+                    maxLines: 1,
+                    softWrap: false,
+                    overflow: TextOverflow.clip,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 ),
+                if (showToggle) _buildExpandedToggle(context),
               ],
             ),
     );
@@ -461,11 +543,14 @@ class _AppSidebar extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: collapsed
-            ? Center(
-                child: Icon(
-                  item.icon,
-                  color: isActive ? activeColor : inactiveColor,
-                  size: 22,
+            ? Tooltip(
+                message: item.label,
+                child: Center(
+                  child: Icon(
+                    item.icon,
+                    color: isActive ? activeColor : inactiveColor,
+                    size: 22,
+                  ),
                 ),
               )
             : Row(
@@ -476,14 +561,19 @@ class _AppSidebar extends StatelessWidget {
                     size: 20,
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    item.label,
-                    style: TextStyle(
-                      color: isActive ? activeColor : inactiveColor,
-                      fontSize: 14,
-                      fontWeight: isActive
-                          ? FontWeight.w500
-                          : FontWeight.w400,
+                  Flexible(
+                    child: Text(
+                      item.label,
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: isActive ? activeColor : inactiveColor,
+                        fontSize: 14,
+                        fontWeight: isActive
+                            ? FontWeight.w500
+                            : FontWeight.w400,
+                      ),
                     ),
                   ),
                 ],
@@ -507,13 +597,16 @@ class _AppSidebar extends StatelessWidget {
             ),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
             child: collapsed
-                ? Center(
-                    child: Icon(
-                      isNight
-                          ? Icons.light_mode_rounded
-                          : Icons.dark_mode_rounded,
-                      color: Colors.white.withValues(alpha: 0.45),
-                      size: 20,
+                ? Tooltip(
+                    message: isNight ? 'Day mode' : 'Night mode',
+                    child: Center(
+                      child: Icon(
+                        isNight
+                            ? Icons.light_mode_rounded
+                            : Icons.dark_mode_rounded,
+                        color: Colors.white.withValues(alpha: 0.45),
+                        size: 20,
+                      ),
                     ),
                   )
                 : Row(
@@ -526,11 +619,16 @@ class _AppSidebar extends StatelessWidget {
                         size: 18,
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        isNight ? 'Day mode' : 'Night mode',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.45),
-                          fontSize: 14,
+                      Flexible(
+                        child: Text(
+                          isNight ? 'Day mode' : 'Night mode',
+                          maxLines: 1,
+                          softWrap: false,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
@@ -561,11 +659,14 @@ class _AppSidebar extends StatelessWidget {
         ),
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
         child: collapsed
-            ? Center(
-                child: Icon(
-                  Icons.logout_rounded,
-                  color: Colors.white.withValues(alpha: 0.45),
-                  size: 20,
+            ? Tooltip(
+                message: 'Sign Out',
+                child: Center(
+                  child: Icon(
+                    Icons.logout_rounded,
+                    color: Colors.white.withValues(alpha: 0.45),
+                    size: 20,
+                  ),
                 ),
               )
             : Row(
@@ -576,11 +677,16 @@ class _AppSidebar extends StatelessWidget {
                     size: 18,
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    'Sign Out',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.45),
-                      fontSize: 14,
+                  Flexible(
+                    child: Text(
+                      'Sign Out',
+                      maxLines: 1,
+                      softWrap: false,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.45),
+                        fontSize: 14,
+                      ),
                     ),
                   ),
                 ],
