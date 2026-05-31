@@ -24,6 +24,7 @@ import '../widgets/assessment/cas_assessment_surface.dart';
 import '../widgets/assessment/ped_dysarthria_capture_section.dart';
 import '../widgets/assessment/ssd_capture_section.dart';
 import '../widgets/assessment/voice_capture_section.dart';
+import '../widgets/trial_run_banner.dart';
 
 const Color _ink        = Color(0xFF0E1C36);
 const Color _inkGhost   = Color(0xFF6B7690);
@@ -254,6 +255,14 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Stage 2B — persistent trial-run marking on the assessment
+              // surface. Quiet register by default; flip to
+              // TrialRunBanner(loud: true) to escalate. The case name also
+              // carries a "TRIAL RUN" prefix and the header eyebrow flips below.
+              if (_client['is_trial_case'] == true) ...[
+                const TrialRunBanner(),
+                const SizedBox(height: 16),
+              ],
               _clientHeader(),
               const SizedBox(height: 20),
               _visitTimeline(),
@@ -300,7 +309,7 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('ASSESSMENT CASE',
+          Text(_client['is_trial_case'] == true ? 'TRIAL RUN' : 'ASSESSMENT CASE',
               style: GoogleFonts.syne(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,

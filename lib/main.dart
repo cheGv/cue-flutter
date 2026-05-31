@@ -230,6 +230,64 @@ class _AssessmentCaseDeepLinkLoaderState
   }
 }
 
+/// Stage 2B — trial-aware deep-link loader for /trial/:clientId. The ONLY
+/// loader that opts into trial visibility (includeTrial: true). The real
+/// /assessing/:id and /clients/:id loaders stay gated (trial cases 404 there),
+/// so the Stage 2A wall is intact; a trial run reaches its surface only here.
+class _TrialCaseDeepLinkLoader extends StatefulWidget {
+  final String clientId;
+  const _TrialCaseDeepLinkLoader({required this.clientId});
+
+  @override
+  State<_TrialCaseDeepLinkLoader> createState() =>
+      _TrialCaseDeepLinkLoaderState();
+}
+
+class _TrialCaseDeepLinkLoaderState extends State<_TrialCaseDeepLinkLoader> {
+  Map<String, dynamic>? _client;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) {
+      _redirectToLogin(context, '/trial/${widget.clientId}');
+      return;
+    }
+    try {
+      // Stage 2B opt-in: includeTrial: true lifts the is_trial_case = false
+      // default so a trial case loads here (and only here). The extra
+      // .eq('is_trial_case', true) guarantees this route never renders a real
+      // case even if a non-trial id is passed.
+      final row = await ClientsQuery()
+          .read('*', includeTrial: true)
+          .eq('id', widget.clientId)
+          .eq('is_trial_case', true)
+          .maybeSingle();
+      if (!mounted) return;
+      if (row == null) {
+        setState(() => _error = 'Trial run not found.');
+        return;
+      }
+      setState(() => _client = Map<String, dynamic>.from(row));
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) return _DeepLinkErrorCard(message: _error!);
+    if (_client == null) return const _DeepLinkSpinner();
+    return AssessmentCaseScreen(client: _client!);
+  }
+}
+
 /// Resolves /clients/:clientId → ClientProfileScreen. Highest-traffic
 /// Category 1 surface; closes the chart-refresh-bounce friend-tester
 /// signal directly.
@@ -615,6 +673,18 @@ class CueApp extends StatelessWidget {
               settings: settings,
               builder: (_) =>
                   _AssessmentCaseDeepLinkLoader(clientId: clientId),
+            );
+          }
+          // ── Stage 2B: trial-run case — trial-aware open path ────────
+          // Separate from /assessing/:id (which stays gated). This is the
+          // only route that opts into trial visibility (includeTrial: true).
+          if (uri.pathSegments.length == 2 &&
+              uri.pathSegments[0] == 'trial') {
+            final clientId = uri.pathSegments[1];
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) =>
+                  _TrialCaseDeepLinkLoader(clientId: clientId),
             );
           }
 
