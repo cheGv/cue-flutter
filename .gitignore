@@ -62,5 +62,8 @@ rc.json
 # Phase E sandbox launcher — embeds the sandbox anon key; never commit
 start-cue-web-sandbox.bat
 
+# Sandbox dart-define-from-file — embeds the sandbox anon key; never commit
+sandbox.json
+
 # Supabase CLI local state
 supabase/.temp/
