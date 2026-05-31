@@ -11,6 +11,7 @@
 // The class name stays [ClientProfileScreen] (and the file path is unchanged)
 // so the /clients/:clientId route wiring and the deep-link loader keep working.
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 // supabase_flutter re-exports gotrue's Session; hide it so `Session` here means
 // our sessions-table model.
@@ -23,23 +24,28 @@ import '../models/short_term_goal.dart';
 import '../models/stg_session_metric.dart';
 import '../repositories/citations_repository.dart';
 import '../repositories/client_chart_state_repository.dart';
+import '../repositories/client_view_log_repository.dart';
 import '../repositories/format_templates_repository.dart';
 import '../repositories/ltg_repository.dart';
 import '../repositories/sessions_repository.dart';
 import '../repositories/stg_metrics_repository.dart';
 import '../repositories/stg_repository.dart';
-import '../services/chart_narrator_service.dart';
 import '../services/session_headline_service.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_text_styles.dart';
 import '../utils/chart_navigation.dart';
+import '../models/client_brief_signals.dart';
+import '../models/long_term_goal.dart';
+import '../utils/client_brief_phrasing.dart';
 import '../utils/stg_numbering.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/archive_dialog.dart';
 import '../widgets/chart/chart_action_chips.dart';
 import '../widgets/chart/chart_card.dart';
 import '../widgets/chart/chart_footer_meta.dart';
 import '../widgets/chart/chart_format.dart';
 import '../widgets/chart/chart_header.dart';
+import '../widgets/chart/chart_lifecycle_goals.dart';
 import '../widgets/chart/chart_ltg_anchor.dart';
 import '../widgets/chart/chart_narrator.dart';
 import '../widgets/chart/chart_session_history.dart';
@@ -48,13 +54,22 @@ import '../widgets/chart/chart_stg_focus.dart';
 import '../widgets/chart/chart_stg_section.dart';
 import '../widgets/chart/chart_substrate_link_strip.dart';
 import '../widgets/chart/chart_trajectory_strip.dart';
+import '../widgets/chart/goal_lifecycle_menu.dart';
 import '../widgets/recall_assistant/recall_assistant_controller.dart';
+import 'archived_goals_screen.dart';
 
 // ── Aggregated chart data ──────────────────────────────────────────────────
 
 class _ChartData {
   final ClientChartState state;
   final List<ShortTermGoal> activeStgs;
+  // Non-active but non-archived STGs, preserved for clinical history.
+  final List<ShortTermGoal> completedStgs; // status achieved/mastered
+  final List<ShortTermGoal> closedStgs; // status discontinued
+  // Every non-archived STG (active + completed + closed) — drives the
+  // trajectory tracks + the shared number map, so closed/completed history
+  // doesn't vanish from the viz.
+  final List<ShortTermGoal> visibleStgs;
   final Map<String, List<Citation>> citationsByStg;
   final Map<String, List<StgSessionMetric>> metricsByStg;
   final Map<String, String> stgNumbers;
@@ -68,10 +83,20 @@ class _ChartData {
   final int? ltgMonthsTotal;
   final int? ltgCurrentMonth;
   final DateTime? ltgAuthoredDate;
+  // LTG lifecycle (primary LTG). Null id ⇒ no LTG yet (controls hidden).
+  final String? ltgId;
+  final LtgStatus ltgStatus;
+  // Client briefing — Layer 1's PRIOR last-viewed timestamp (before this open),
+  // folded into the load so Layer 2/3 compute the brief from one consistent
+  // snapshot. Null ⇒ first visit.
+  final DateTime? priorViewedAt;
 
   const _ChartData({
     required this.state,
     required this.activeStgs,
+    required this.completedStgs,
+    required this.closedStgs,
+    required this.visibleStgs,
     required this.citationsByStg,
     required this.metricsByStg,
     required this.stgNumbers,
@@ -85,6 +110,9 @@ class _ChartData {
     required this.ltgMonthsTotal,
     required this.ltgCurrentMonth,
     required this.ltgAuthoredDate,
+    required this.ltgId,
+    required this.ltgStatus,
+    required this.priorViewedAt,
   });
 }
 
@@ -114,13 +142,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
   // when none exist). Loaded once; never blocks the chart's own load.
   Future<bool> _hasConfirmedTemplate = Future<bool>.value(false);
 
+  // Client briefing — Layer 1: the PRIOR "last viewed" timestamp for this
+  // (clinician, client), captured on open BEFORE we stamp now(). Held in
+  // memory this session; the brief (later layers) consumes it to compute
+  // "since your last visit". null = first-ever visit by this clinician.
+  Future<DateTime?> _priorViewedAt = Future<DateTime?>.value(null);
+
   // Locally-held in-focus STG. Null until the first compact-row tap, after
   // which it overrides the loaded initialFocusId. Reset on retry/reload.
   String? _focusedStgId;
 
-  // AI narrator (one call per load) + lazily-generated session headlines.
-  String? _narratorText;
-  bool _narratorLoading = false;
+  // Lazily-generated session headlines (the status-band brief is deterministic).
   final Map<int, String> _headlineOverrides = {};
 
   @override
@@ -146,6 +178,22 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
           .listForUser()
           .then((all) => all.any((t) => t.isConfirmed))
           .catchError((Object _) => false);
+
+      // Client briefing — Layer 1: read-then-write the last-viewed anchor.
+      // Fetch the PRIOR timestamp (what the brief consumes) THEN stamp now().
+      // CRITICAL: read before write, or "since last visit" is always "now".
+      // Best-effort; never blocks the chart's own load.
+      _priorViewedAt = ClientViewLogRepository()
+          .readPriorThenRecord(_clientId)
+          .catchError((Object _) => null);
+      // Layer 1 only — confirm capture in debug; no brief UI yet.
+      _priorViewedAt.then((prior) {
+        if (!mounted) return;
+        if (kDebugMode) {
+          debugPrint('[brief L1] $_clientId prior last-viewed: '
+              '${prior?.toIso8601String() ?? 'first visit'}');
+        }
+      });
     }
     _startLoad();
   }
@@ -157,55 +205,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     }).catchError((Object _) {});
   }
 
-  /// Fire this load's AI calls: one narrator call (using the initial focus) and
-  /// lazy headline generation for the top sessions. Both degrade to null until
-  /// the proxy endpoints deploy; the widgets fall back.
+  /// Fire this load's lazy session-headline generation for the top sessions.
+  /// The status-band brief is now computed DETERMINISTICALLY in [_body] from
+  /// the Layer 2 signals (no narrator AI call — the facts are structured).
   void _kickAi(_ChartData d) {
-    setState(() {
-      _narratorLoading = true;
-      _narratorText = null;
-      _headlineOverrides.clear();
-    });
-
-    ShortTermGoal? focus;
-    for (final stg in d.activeStgs) {
-      if (stg.id == d.initialFocusId) {
-        focus = stg;
-        break;
-      }
-    }
-    focus ??= d.activeStgs.isNotEmpty ? d.activeStgs.first : null;
-
-    ChartNarratorService().narrate(
-      clientId: _clientId,
-      clientName: _clientName,
-      clientState: {
-        'ltg_count': d.state.ltgCount,
-        'active_stg_count': d.state.activeStgCount,
-        'total_session_count': d.state.totalSessionCount,
-        'last_session_date': d.state.lastSessionDate?.toIso8601String(),
-        'undocumented_session_count': d.state.undocumentedSessionCount,
-        'last_next_session_focus': d.state.lastNextSessionFocus,
-        'caregiver_present': d.state.caregiverPresent,
-        'substrate_cell_count': d.state.substrateCellCount,
-      },
-      focusedStg: focus == null
-          ? null
-          : {
-              'id': focus.id,
-              'number': d.stgNumbers[focus.id],
-              'body': focus.specific,
-              'domain': focus.domain?.toJson(),
-              'week': focus.totalSessionsWorked,
-              'total_weeks': focus.timeBoundSessions,
-            },
-    ).then((text) {
-      if (!mounted) return;
-      setState(() {
-        _narratorLoading = false;
-        _narratorText = text;
-      });
-    });
+    setState(() => _headlineOverrides.clear());
 
     final headlines = SessionHeadlineService();
     for (final s in d.sessions.take(8)) {
@@ -239,11 +243,23 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     final citations = results[4] as List<Citation>;
     final focused = results[5] as ShortTermGoal?;
 
-    // Active STGs, ordered by sequence for display.
-    final activeStgs =
-        allStgs.where((s) => s.status == StgStatus.active).toList()
-          ..sort((a, b) =>
-              (a.sequenceNum ?? 1 << 30).compareTo(b.sequenceNum ?? 1 << 30));
+    // allStgs already excludes archived (StgRepository filters deleted_at).
+    // Split the remainder by clinical status into the active working set and
+    // the history sections. Completed = achieved/mastered; Closed =
+    // discontinued; everything else (active/on-hold/modified) stays active.
+    int bySeq(ShortTermGoal a, ShortTermGoal b) =>
+        (a.sequenceNum ?? 1 << 30).compareTo(b.sequenceNum ?? 1 << 30);
+    final activeStgs = allStgs
+        .where((s) => !s.status.isCompleted && !s.status.isClosed)
+        .toList()
+      ..sort(bySeq);
+    final completedStgs =
+        allStgs.where((s) => s.status.isCompleted).toList()..sort(bySeq);
+    final closedStgs =
+        allStgs.where((s) => s.status.isClosed).toList()..sort(bySeq);
+    // Trajectory + number map cover all visible (non-archived) STGs so closed/
+    // completed history persists in the viz.
+    final visibleStgs = [...activeStgs, ...completedStgs, ...closedStgs];
 
     // Group citations by STG (compact-row counts + the focus card's ladder).
     final citationsByStg = <String, List<Citation>>{};
@@ -251,9 +267,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       (citationsByStg[c.stgId] ??= <Citation>[]).add(c);
     }
 
-    // Display numbers ("1.A") for every active STG.
+    // Display numbers ("1.A") for every visible STG.
     final stgNumbers = {
-      for (final s in activeStgs) s.id: stgNumber(s, allStgs, ltgs),
+      for (final s in visibleStgs) s.id: stgNumber(s, allStgs, ltgs),
     };
 
     // Preload sparkline metrics for every active STG so focus shifts are
@@ -286,6 +302,8 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
 
     // Primary LTG display fields (anchor). Horizon is approximate.
     final ltg = ltgs.isNotEmpty ? ltgs.first : null;
+    final ltgId = ltg?['id']?.toString();
+    final ltgStatus = LtgStatus.fromString(ltg?['status'] as String?);
     final ltgText = (ltg?['goal_text'] as String?) ??
         (ltg?['original_text'] as String?);
     final ltgSeq = (ltg?['sequence_num'] as num?)?.toInt();
@@ -302,9 +320,17 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       }
     }
 
+    // Fold in Layer 1's prior last-viewed value (the read-then-write was
+    // kicked off in initState; awaiting it here resolves the brief from one
+    // consistent snapshot). Tolerant: a failure already mapped to null.
+    final priorViewedAt = await _priorViewedAt;
+
     return _ChartData(
       state: state,
       activeStgs: activeStgs,
+      completedStgs: completedStgs,
+      closedStgs: closedStgs,
+      visibleStgs: visibleStgs,
       citationsByStg: citationsByStg,
       metricsByStg: metricsByStg,
       stgNumbers: stgNumbers,
@@ -319,6 +345,9 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       ltgCurrentMonth: currentMonth,
       ltgAuthoredDate:
           DateTime.tryParse(ltg?['created_at']?.toString() ?? ''),
+      ltgId: ltgId,
+      ltgStatus: ltgStatus,
+      priorViewedAt: priorViewedAt,
     );
   }
 
@@ -341,10 +370,115 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     if (mounted) setState(_startLoad);
   }
 
-  void _openRecall() {
-    recallAssistantController
-      ..setFocusedClient(_clientId, _clientName)
-      ..open();
+  // ── Goal lifecycle handlers ───────────────────────────────────────────────
+  //
+  // All SOFT. Status changes keep goals visible (Completed/Closed); archive
+  // hides them with an Undo. Sessions/evidence are never touched. Each refreshes
+  // the chart on completion.
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _snackUndo(String message, Future<void> Function() onUndo) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            try {
+              await onUndo();
+            } finally {
+              _reload();
+            }
+          },
+        ),
+      ));
+  }
+
+  Future<void> _setStgStatus(ShortTermGoal stg, StgStatus status) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await StgRepository().setStatus(stg.id, status);
+    } catch (e) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text("Couldn't update goal: $e")));
+      return;
+    }
+    _reload();
+    _snack('Marked “${stg.specific.trim().isEmpty ? 'goal' : stg.specific.trim()}” ${status.displayLabel().toLowerCase()}.');
+  }
+
+  Future<void> _archiveStg(ShortTermGoal stg) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await StgRepository().archive(stg.id);
+    } catch (e) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text("Couldn't archive goal: $e")));
+      return;
+    }
+    _reload();
+    _snackUndo('Short-term goal archived.',
+        () => StgRepository().restore(stg.id));
+  }
+
+  Future<void> _setLtgStatus(String ltgId, LtgStatus status) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await LtgRepository().setStatus(ltgId, status);
+    } catch (e) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text("Couldn't update goal: $e")));
+      return;
+    }
+    _reload();
+    _snack('Long-term goal marked ${status.displayLabel().toLowerCase()}.');
+  }
+
+  Future<void> _archiveLtg(String ltgId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    // Confirmation required when the LTG has live child STGs — warn they go too.
+    final childCount = await StgRepository().activeChildCount(ltgId);
+    if (!mounted) return;
+    if (childCount > 0) {
+      final res = await showArchiveDialog(
+        context: context,
+        title: 'Archive long-term goal?',
+        body: 'This long-term goal has $childCount short-term '
+            '${childCount == 1 ? 'goal' : 'goals'}. Archiving it will archive '
+            '${childCount == 1 ? 'that goal' : 'those goals'} too. Nothing is '
+            'deleted — you can undo this.',
+        reasons: const [],
+      );
+      if (!res.confirmed) return;
+    }
+    try {
+      await LtgRepository().archiveCascade(ltgId);
+    } catch (e) {
+      messenger
+        ..clearSnackBars()
+        ..showSnackBar(SnackBar(content: Text("Couldn't archive goal: $e")));
+      return;
+    }
+    _reload();
+    _snackUndo(
+      childCount > 0
+          ? 'Long-term goal and its $childCount short-term '
+              '${childCount == 1 ? 'goal' : 'goals'} archived.'
+          : 'Long-term goal archived.',
+      () => LtgRepository().restoreCascade(ltgId),
+    );
   }
 
   void _onChip(String id, _ChartData d) {
@@ -486,6 +620,18 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     };
     final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
 
+    // Client briefing (Layers 2 + 3): compute the factual signals from this
+    // load's snapshot, then phrase them deterministically (no AI) for the
+    // status band.
+    final briefSignals = ClientBriefSignals.compute(
+      priorViewedAt: d.priorViewedAt,
+      sessions: d.sessions,
+      activeStgs: d.activeStgs,
+      stgCodes: d.stgNumbers,
+      now: DateTime.now(),
+    );
+    final briefText = phraseClientBrief(briefSignals, clientName: _firstName);
+
     return SingleChildScrollView(
       child: Align(
         alignment: Alignment.topCenter,
@@ -504,14 +650,15 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   firstSessionDate: d.firstSessionDate,
                   sessionToday: d.sessionToday,
                   isCompact: isCompact,
-                  onRecallTap: _openRecall,
                 ),
                 const SizedBox(height: 16),
                 ChartNarrator(
                   state: s,
                   clientName: _firstName,
-                  aiText: _narratorText,
-                  loading: _narratorLoading,
+                  // Deterministic Layer 3 brief replaces the old AI narrator
+                  // text as the band's content source (same band + styling).
+                  aiText: briefText,
+                  loading: false,
                 ),
                 const SizedBox(height: 16),
                 ChartActionChips(
@@ -544,6 +691,28 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                             clientName: _clientName,
                             sessionCount: s.totalSessionCount,
                           ).then((_) => _reload()),
+                  // Lifecycle controls only when a real LTG exists.
+                  phase: (d.ltgText == null || d.ltgId == null)
+                      ? null
+                      : (d.ltgStatus.isCompleted
+                          ? GoalLifecyclePhase.completed
+                          : d.ltgStatus.isClosed
+                              ? GoalLifecyclePhase.closed
+                              : GoalLifecyclePhase.active),
+                  statusLabel: d.ltgStatus.isActiveLifecycle
+                      ? null
+                      : d.ltgStatus.displayLabel(),
+                  onMarkAchieved: d.ltgId == null
+                      ? null
+                      : () => _setLtgStatus(d.ltgId!, LtgStatus.achieved),
+                  onMarkDiscontinued: d.ltgId == null
+                      ? null
+                      : () => _setLtgStatus(d.ltgId!, LtgStatus.discontinued),
+                  onReactivate: d.ltgId == null
+                      ? null
+                      : () => _setLtgStatus(d.ltgId!, LtgStatus.active),
+                  onArchive:
+                      d.ltgId == null ? null : () => _archiveLtg(d.ltgId!),
                 ),
                 if (d.activeStgs.isNotEmpty && focus != null) ...[
                   const SizedBox(height: 16),
@@ -561,6 +730,11 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                         citations: focusCitations,
                         hasSessionToday: focusHasToday,
                         isCompact: isCompact,
+                        onMarkAchieved: () =>
+                            _setStgStatus(focus, StgStatus.achieved),
+                        onMarkDiscontinued: () =>
+                            _setStgStatus(focus, StgStatus.discontinued),
+                        onArchive: () => _archiveStg(focus),
                       ),
                     ),
                     compact: compact.isEmpty
@@ -574,9 +748,36 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                           ),
                   ),
                 ],
+                // Completed / Closed history — visible but out of the active
+                // set, never in focus. Each renders only when non-empty.
+                if (d.completedStgs.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  ChartLifecycleGoals(
+                    title: 'Completed',
+                    phase: GoalLifecyclePhase.completed,
+                    stgs: d.completedStgs,
+                    stgNumbers: d.stgNumbers,
+                    onReactivate: (stg) =>
+                        _setStgStatus(stg, StgStatus.active),
+                    onArchive: _archiveStg,
+                  ),
+                ],
+                if (d.closedStgs.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  ChartLifecycleGoals(
+                    title: 'Closed',
+                    phase: GoalLifecyclePhase.closed,
+                    stgs: d.closedStgs,
+                    stgNumbers: d.stgNumbers,
+                    onReactivate: (stg) =>
+                        _setStgStatus(stg, StgStatus.active),
+                    onArchive: _archiveStg,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 ChartTrajectoryStrip(
-                  activeStgs: d.activeStgs,
+                  // All non-archived STGs so completed/closed history persists.
+                  activeStgs: d.visibleStgs,
                   sessions: d.sessions,
                   earliestSessionDate: d.earliestSessionDate,
                   stgNumbers: d.stgNumbers,
@@ -602,6 +803,28 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                 ),
                 const SizedBox(height: 16),
                 ChartFooterMeta(state: s, sessionToday: d.sessionToday),
+                const SizedBox(height: 16),
+                // Thread A — quiet, persistent way back to archived goals. The
+                // Undo snackbar is transient; this is the durable route to
+                // restore a goal the clinician archived earlier. Scoped to this
+                // client; the screen itself handles the empty state.
+                Center(
+                  child: CueChartButton(
+                    label: 'View archived goals',
+                    icon: Icons.inventory_2_outlined,
+                    style: CueChartButtonStyle.ghost,
+                    small: true,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ArchivedGoalsScreen(
+                          clientId: _clientId,
+                          clientName: _clientName,
+                          onRestored: _reload,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),

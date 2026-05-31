@@ -76,8 +76,8 @@ void main() {
     expect(find.textContaining('Session today'), findsOneWidget);
   });
 
-  testWidgets('recall button fires onRecallTap', (t) async {
-    var tapped = false;
+  testWidgets('header does not render its own Ask Cue button '
+      '(recall is the global launcher)', (t) async {
     const s = ClientChartState(clientId: 'c1', clientName: 'Dina', age: 19);
     await _pump(
       t,
@@ -86,11 +86,8 @@ void main() {
         firstSessionDate: null,
         sessionToday: false,
         isCompact: false,
-        onRecallTap: () => tapped = true,
       ),
     );
-    await t.tap(find.text('Ask Cue'));
-    await t.pump();
-    expect(tapped, isTrue);
+    expect(find.text('Ask Cue'), findsNothing);
   });
 }

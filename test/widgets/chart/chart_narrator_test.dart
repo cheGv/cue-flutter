@@ -44,4 +44,24 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('AI text with *italics* and **bold** renders with no literal '
+      'markdown characters', (t) async {
+    const s = ClientChartState(
+        clientId: 'c', clientName: 'Asha', ltgCount: 1, activeStgCount: 1);
+    await _pump(
+      t,
+      const ChartNarrator(
+        state: s,
+        clientName: 'Asha',
+        aiText: "*Asha's last session remains undocumented* — "
+            "**STG 1.A** in focus, fluency domain, week 1 of 4.",
+      ),
+    );
+    // The clean prose renders…
+    expect(find.textContaining('last session remains undocumented'),
+        findsOneWidget);
+    // …and not a single asterisk survives in the rendered band.
+    expect(find.textContaining('*'), findsNothing);
+  });
 }

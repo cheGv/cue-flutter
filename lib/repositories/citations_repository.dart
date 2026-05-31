@@ -27,8 +27,10 @@ class CitationsRepository {
   Future<List<Citation>> loadCitationsForClient(String clientId) async {
     final rows = await _client
         .from(_table)
-        .select('*, short_term_goals!inner(client_id)')
+        .select('*, short_term_goals!inner(client_id, deleted_at)')
         .eq('short_term_goals.client_id', clientId)
+        // Don't surface citations whose parent STG is soft-archived.
+        .filter('short_term_goals.deleted_at', 'is', null)
         .order('stg_id', ascending: true)
         .order('display_order', ascending: true);
     return _mapRows(rows);

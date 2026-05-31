@@ -91,4 +91,71 @@ void main() {
     expect(t.widget<Opacity>(find.byType(Opacity)).opacity, 0.4);
     expect(find.textContaining('first session will populate'), findsOneWidget);
   });
+
+  // ── Mastery-criterion line ────────────────────────────────────────────────
+
+  testWidgets('quantified mastery criterion renders the composed line',
+      (t) async {
+    final stg = _stg().copyWith(
+      masteryCriterion: const MasteryCriterion(
+        accuracyPct: 80,
+        consecutiveSessions: 3,
+        trialsPerSession: 10,
+      ),
+    );
+    await _pump(
+      t,
+      ChartStgFocus(
+        stg: stg,
+        stgNumber: '1.A',
+        metrics: const [],
+        citations: const [],
+        hasSessionToday: false,
+        isCompact: false,
+      ),
+    );
+    expect(find.text('CRITERION'), findsOneWidget);
+    expect(find.text('80% across 3 consecutive sessions of 10 trials each'),
+        findsOneWidget);
+  });
+
+  testWidgets('hint-only mastery criterion renders the hint verbatim '
+      '(voice / qualitative goals)', (t) async {
+    final stg = _stg().copyWith(
+      domain: StgDomain.voice,
+      masteryCriterion: const MasteryCriterion(
+        hint: '80% phonation continuity across 3 consecutive sessions',
+      ),
+    );
+    await _pump(
+      t,
+      ChartStgFocus(
+        stg: stg,
+        stgNumber: '2.A',
+        metrics: const [],
+        citations: const [],
+        hasSessionToday: false,
+        isCompact: false,
+      ),
+    );
+    expect(find.text('CRITERION'), findsOneWidget);
+    expect(find.text('80% phonation continuity across 3 consecutive sessions'),
+        findsOneWidget);
+  });
+
+  testWidgets('no criterion blob → no CRITERION row rendered', (t) async {
+    // _stg() has no masteryCriterion. The row must be absent — never blank.
+    await _pump(
+      t,
+      ChartStgFocus(
+        stg: _stg(),
+        stgNumber: '1.A',
+        metrics: const [],
+        citations: const [],
+        hasSessionToday: false,
+        isCompact: false,
+      ),
+    );
+    expect(find.text('CRITERION'), findsNothing);
+  });
 }

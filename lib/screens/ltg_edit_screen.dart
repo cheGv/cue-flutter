@@ -12,6 +12,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/cue_reasoning_panel.dart';
 import '../widgets/cue_study_icon.dart';
 import '../widgets/goal_achieved_overlay.dart';
+import '../models/long_term_goal.dart';
+import '../repositories/ltg_repository.dart';
 
 // ── design tokens ─────────────────────────────────────────────────────────────
 const Color _ink        = Color(0xFF0E1C36);
@@ -571,17 +573,11 @@ class _LtgEditScreenState extends State<LtgEditScreen>
 
     final updatedAt = DateTime.now().toUtc().toIso8601String();
     try {
-      // Phase 4.0.7.27c-goals-archive — also persist achieved_at.
-      // Backs the "celebrating until next session" cutoff on the
-      // client profile goals area.
-      await _supabase
-          .from('long_term_goals')
-          .update({
-            'status':       'achieved',
-            'updated_at':   updatedAt,
-            'achieved_at':  updatedAt,
-          })
-          .eq('id', id);
+      // Phase 4.0.7.27c-goals-archive — route through LtgRepository.setStatus,
+      // the single writer for LTG lifecycle. It stamps achieved_at server-side
+      // (backs the "celebrating until next session" cutoff on the client
+      // profile goals area), so no second place hand-writes this update.
+      await LtgRepository(client: _supabase).setStatus(id, LtgStatus.achieved);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

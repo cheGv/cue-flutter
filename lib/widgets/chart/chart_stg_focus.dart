@@ -8,6 +8,7 @@ import '../../theme/cue_color_scheme.dart';
 import '../../theme/cue_text_styles.dart';
 import '../../utils/sparkline_readout.dart';
 import 'chart_card.dart';
+import 'goal_lifecycle_menu.dart';
 
 /// The in-focus STG — a nested white card on the STG section ground, with a
 /// 4px accent rail, a mono number pill, week indicator, the goal body, an
@@ -21,6 +22,12 @@ class ChartStgFocus extends StatelessWidget {
   final bool isCompact;
   final VoidCallback? onAddEvidence;
 
+  // Lifecycle controls (focus card is always an active STG). When any is
+  // provided, an overflow menu appears in the header.
+  final VoidCallback? onMarkAchieved;
+  final VoidCallback? onMarkDiscontinued;
+  final VoidCallback? onArchive;
+
   const ChartStgFocus({
     super.key,
     required this.stg,
@@ -30,6 +37,9 @@ class ChartStgFocus extends StatelessWidget {
     required this.hasSessionToday,
     required this.isCompact,
     this.onAddEvidence,
+    this.onMarkAchieved,
+    this.onMarkDiscontinued,
+    this.onArchive,
   });
 
   @override
@@ -39,6 +49,7 @@ class ChartStgFocus extends StatelessWidget {
     final body = stg.specific.trim().isNotEmpty
         ? stg.specific.trim()
         : (stg.targetBehavior ?? stg.measurable);
+    final criterionLine = stg.masteryCriterion?.displayLine;
     final radius = BorderRadius.circular(8);
 
     return Container(
@@ -60,6 +71,10 @@ class ChartStgFocus extends StatelessWidget {
                   _header(t, ty),
                   const SizedBox(height: 14),
                   Text(body, style: ty.stgBody),
+                  if (criterionLine != null) ...[
+                    const SizedBox(height: 14),
+                    _CriterionLine(text: criterionLine),
+                  ],
                   const SizedBox(height: 20),
                   _SparklineBox(
                     metrics: metrics,
@@ -112,6 +127,53 @@ class ChartStgFocus extends StatelessWidget {
             TextSpan(text: '${stg.totalSessionsWorked}', style: ty.stgWeekAccent),
             TextSpan(text: ' of ${stg.timeBoundSessions}', style: ty.stgWeek),
           ])),
+        if (onMarkAchieved != null ||
+            onMarkDiscontinued != null ||
+            onArchive != null) ...[
+          const SizedBox(width: 4),
+          GoalLifecycleMenu(
+            phase: GoalLifecyclePhase.active,
+            goalKind: 'short-term goal',
+            onMarkAchieved: onMarkAchieved,
+            onMarkDiscontinued: onMarkDiscontinued,
+            onArchive: onArchive,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+// ── Mastery criterion line ──────────────────────────────────────────────────
+//
+// The mastery rule rendered as its own row beneath the STG body. Reuses the
+// sparkline-eyebrow + evidence-body type registers so it sits inside the same
+// "data tag + sentence" vocabulary already on the focus card. Resolved text
+// (quantified for trial-based domains, free-text hint for qualitative ones)
+// comes from MasteryCriterion.displayLine; this widget never composes it.
+
+class _CriterionLine extends StatelessWidget {
+  final String text;
+  const _CriterionLine({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = CueChartTokens.of(context);
+    final ty = CueChartType.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text('CRITERION', style: ty.sparklineLabel),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            text,
+            style: ty.evidenceFinding.copyWith(color: t.textSecondary),
+          ),
+        ),
       ],
     );
   }

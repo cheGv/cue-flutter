@@ -14,6 +14,7 @@
 // absence is real, not a missing field.
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/goals_query.dart';
 
 /// Build the chart-context string for [clientId].
 ///
@@ -47,16 +48,18 @@ Future<String> buildChartContext(
   final cadence = _computeCadence(sessions);
 
   // ── Goals ───────────────────────────────────────────────────────────────
-  final ltgsRaw = await supabase
-      .from('long_term_goals')
-      .select()
+  // Status is intentionally NOT filtered here: the AI context wants the full
+  // goal history (achieved/discontinued too), just never archived
+  // (created-by-mistake) rows — GoalsQuery already excludes deleted_at.
+  final ltgsRaw = await GoalsQuery(client: supabase)
+      .ltgReads()
       .eq('client_id', clientId)
       .order('sequence_num', ascending: true);
   final ltgs = List<Map<String, dynamic>>.from(ltgsRaw);
 
-  final stgsRaw = await supabase
-      .from('short_term_goals')
-      .select()
+  // Keep all statuses for AI history context; GoalsQuery excludes deleted_at.
+  final stgsRaw = await GoalsQuery(client: supabase)
+      .stgReads()
       .eq('client_id', clientId)
       .order('sequence_num', ascending: true);
   final stgs = List<Map<String, dynamic>>.from(stgsRaw);

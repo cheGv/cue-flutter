@@ -7,16 +7,13 @@ import 'chart_card.dart';
 import 'chart_format.dart';
 
 /// Header card — eyebrow (regular sans, not uppercase), hero name (Inter
-/// 30/700), meta line with separator dots + bold values, and the recall
-/// ("Ask Cue · ⌘K") primary button. Read-only data; recall tap mirrors ⌘K.
+/// 30/700), and meta line with separator dots + bold values. Read-only.
+/// Recall is owned by the global bottom-right launcher (⌘K).
 class ChartHeader extends StatelessWidget {
   final ClientChartState state;
   final DateTime? firstSessionDate;
   final bool sessionToday;
   final bool isCompact;
-
-  /// Opens the recall surface scoped to this client (⌘K is bound globally).
-  final VoidCallback? onRecallTap;
 
   const ChartHeader({
     super.key,
@@ -24,7 +21,6 @@ class ChartHeader extends StatelessWidget {
     required this.firstSessionDate,
     required this.sessionToday,
     required this.isCompact,
-    this.onRecallTap,
   });
 
   @override
@@ -34,29 +30,13 @@ class ChartHeader extends StatelessWidget {
 
     return CueChartCard(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _eyebrow(t, ty),
-                Text(state.clientName, style: ty.hero),
-                const SizedBox(height: 10),
-                _meta(t, ty),
-              ],
-            ),
-          ),
-          const SizedBox(width: 24),
-          CueChartButton(
-            style: CueChartButtonStyle.primary,
-            icon: Icons.auto_awesome,
-            label: 'Ask Cue',
-            kbdHint: '⌘K',
-            onTap: onRecallTap,
-            tooltip: 'Ask Cue about this client · ⌘K',
-          ),
+          _eyebrow(t, ty),
+          Text(state.clientName, style: ty.hero),
+          const SizedBox(height: 10),
+          _meta(t, ty),
         ],
       ),
     );

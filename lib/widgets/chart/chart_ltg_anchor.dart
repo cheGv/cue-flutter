@@ -4,10 +4,13 @@ import '../../theme/cue_color_scheme.dart';
 import '../../theme/cue_text_styles.dart';
 import 'chart_card.dart';
 import 'chart_format.dart';
+import 'goal_lifecycle_menu.dart';
 
-/// LTG card — card-head ("Long-term goal · LTG N" + Edit LTG ghost) over a
-/// body with the goal text (16/1.6) and a meta row (12-month info badge,
-/// "Month X of Y", "Authored …"). Renders an empty-state card when no LTG.
+/// LTG card — card-head ("Long-term goal · LTG N" + Edit LTG ghost + lifecycle
+/// menu) over a body with the goal text (16/1.6) and a meta row (12-month info
+/// badge, "Month X of Y", "Authored …"). Renders an empty-state card when no
+/// LTG. When the LTG is achieved/discontinued, the head reflects the status and
+/// the lifecycle menu offers Reactivate.
 class ChartLtgAnchor extends StatelessWidget {
   final String? ltgText;
   final int? ltgSeq;
@@ -16,6 +19,15 @@ class ChartLtgAnchor extends StatelessWidget {
   final int substrateCellCount;
   final DateTime? authoredDate;
   final VoidCallback? onEditLtg;
+
+  // Lifecycle. [phase] null hides the menu (e.g. empty state). [statusLabel] is
+  // shown in the head when the LTG is not active ("Achieved" / "Discontinued").
+  final GoalLifecyclePhase? phase;
+  final String? statusLabel;
+  final VoidCallback? onMarkAchieved;
+  final VoidCallback? onMarkDiscontinued;
+  final VoidCallback? onReactivate;
+  final VoidCallback? onArchive;
 
   const ChartLtgAnchor({
     super.key,
@@ -26,6 +38,12 @@ class ChartLtgAnchor extends StatelessWidget {
     this.currentMonth,
     this.authoredDate,
     this.onEditLtg,
+    this.phase,
+    this.statusLabel,
+    this.onMarkAchieved,
+    this.onMarkDiscontinued,
+    this.onReactivate,
+    this.onArchive,
   });
 
   @override
@@ -45,10 +63,14 @@ class ChartLtgAnchor extends StatelessWidget {
       );
     }
 
+    final countLabel = statusLabel == null || statusLabel!.trim().isEmpty
+        ? '· LTG ${ltgSeq ?? 1}'
+        : '· LTG ${ltgSeq ?? 1} · ${statusLabel!}';
+
     return CueChartCard(
       head: CueChartCardHead(
         label: 'Long-term goal',
-        count: '· LTG ${ltgSeq ?? 1}',
+        count: countLabel,
         actions: [
           CueChartButton(
             style: CueChartButtonStyle.ghost,
@@ -56,6 +78,15 @@ class ChartLtgAnchor extends StatelessWidget {
             label: 'Edit LTG',
             onTap: onEditLtg,
           ),
+          if (phase != null)
+            GoalLifecycleMenu(
+              phase: phase!,
+              goalKind: 'long-term goal',
+              onMarkAchieved: onMarkAchieved,
+              onMarkDiscontinued: onMarkDiscontinued,
+              onReactivate: onReactivate,
+              onArchive: onArchive,
+            ),
         ],
       ),
       child: Column(

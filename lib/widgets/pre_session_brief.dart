@@ -4,6 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/markdown_strip.dart';
+import '../services/goals_query.dart';
+
 // ── Design tokens (§5 palette) ─────────────────────────────────────────────────
 const Color _ink      = Color(0xFF1B2B4B);
 const Color _ghost    = Color(0xFF6B7690);
@@ -101,15 +104,13 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
       List ltgRows = [];
       try {
         final goalResults = await Future.wait([
-          _supabase
-              .from('short_term_goals')
-              .select()
+          GoalsQuery(client: _supabase)
+              .stgReads()
               .eq('client_id', clientId)
               .eq('status', 'active')
               .order('created_at', ascending: true),
-          _supabase
-              .from('long_term_goals')
-              .select()
+          GoalsQuery(client: _supabase)
+              .ltgReads()
               .eq('client_id', clientId)
               // Phase 4.0.7.23c-deploy — exclude pending_attestation v2
               // drafts from the brief LLM context. Drafts shouldn't
@@ -383,10 +384,15 @@ class _PreSessionBriefState extends State<PreSessionBrief> {
     }
   }
 
-  // Renders brief lines; highlights PATTERN FLAG lines in amber (§9 / task spec)
+  // Renders brief lines; highlights PATTERN FLAG lines in amber (§9 / task spec).
+  // Inline markdown the model may emit (*italics*, **bold**, `code`) is stripped
+  // so it never renders as literal characters — consistent with the chart's
+  // status band. Flag detection runs on the cleaned line so "**PATTERN FLAG:**"
+  // still highlights.
   Widget _buildBriefBody(String text) {
     final lines = text
         .split('\n')
+        .map(stripInlineMarkdown)
         .where((l) => l.trim().isNotEmpty)
         .toList();
 

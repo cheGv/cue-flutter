@@ -70,7 +70,9 @@ class _CompactCardState extends State<_CompactCard> {
     final body = stg.specific.trim().isNotEmpty
         ? stg.specific.trim()
         : (stg.targetBehavior ?? stg.measurable);
-    final domain = stg.domain?.toJson();
+    // Domain pill: prefer the raw string when the enum is `unknown` (so
+    // "RVT"-like clinical tokens surface), else the canonical DB identifier.
+    final domain = stg.domainDisplay;
     final n = widget.evidenceCount;
 
     return MouseRegion(

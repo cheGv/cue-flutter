@@ -6,6 +6,8 @@ import '../animation/cue_motion.dart';
 import '../services/day_state_service.dart';
 import '../services/name_formatter.dart';
 import '../services/today_widgets_service.dart';
+import '../services/clients_query.dart';
+import '../services/goals_query.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../theme/cue_text_styles.dart';
@@ -340,11 +342,11 @@ class _TodayScreenState extends State<TodayScreen> {
             .eq('user_id', uid)
             .gte('date', sevenDaysAgo)
             .isFilter('deleted_at', null),
-        _supabase
-            .from('long_term_goals')
-            .select('id')
+        GoalsQuery(client: _supabase)
+            .ltgReads('id')
             .eq('user_id', uid)
             .eq('status', 'achieved')
+            // archived goals never count as wins — gate excludes deleted_at
             .gte('updated_at', sevenDaysAgo),
       ]);
       final sessionRows = (results[0] as List)
@@ -407,15 +409,13 @@ class _TodayScreenState extends State<TodayScreen> {
       List ltgRows = [];
       try {
         final goalResults = await Future.wait([
-          _supabase
-              .from('short_term_goals')
-              .select()
+          GoalsQuery(client: _supabase)
+              .stgReads()
               .eq('client_id', clientId)
               .eq('status', 'active')
               .order('created_at', ascending: true),
-          _supabase
-              .from('long_term_goals')
-              .select()
+          GoalsQuery(client: _supabase)
+              .ltgReads()
               .eq('client_id', clientId)
               // Phase 4.0.7.23c-deploy — exclude pending_attestation v2
               // drafts from today-screen brief generation. Same rationale

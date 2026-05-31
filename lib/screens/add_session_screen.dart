@@ -5,6 +5,7 @@ import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
 import 'narrate_session_screen.dart';
 import 'session_capture_screen.dart';
+import '../services/goals_query.dart';
 // Phase 4.0.7.27d-population-router-removal — SessionModePickerView no
 // longer routed to. Kept in repo as orphan code for Phase 2 multi-domain
 // rebuild. The import is dropped here; re-add when routing is restored.
@@ -51,9 +52,8 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       // does not exist on short_term_goals — selecting it 400s the
       // request. Backlogged: 4.0.7.30-stg-resolver-audit (other
       // readers still request goal_text and survive via catch blocks).
-      final rows = await _supabase
-          .from('short_term_goals')
-          .select('specific, target_behavior')
+      final rows = await GoalsQuery(client: _supabase)
+          .stgReads('specific, target_behavior')
           .eq('client_id', widget.clientId)
           .eq('status', 'active')
           .limit(1);

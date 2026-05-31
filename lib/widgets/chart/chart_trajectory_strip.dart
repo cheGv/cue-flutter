@@ -227,7 +227,9 @@ class ChartTrajectoryStrip extends StatelessWidget {
 
   Widget _rowLabel(CueChartTokens t, CueChartType ty, ShortTermGoal stg) {
     final num = stgNumbers[stg.id] ?? 'STG ${stg.sequenceNum ?? '—'}';
-    final domain = stg.domain?.toJson();
+    // Falls back to the raw DB string when the enum is `unknown` so even an
+    // unrecognised domain token surfaces under the STG label.
+    final domain = stg.domainDisplay;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

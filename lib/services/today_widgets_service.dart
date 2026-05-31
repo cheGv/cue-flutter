@@ -23,6 +23,7 @@
 // for typed-flow sessions.
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'goals_query.dart';
 
 // ── Data models ──────────────────────────────────────────────────────────────
 
@@ -236,9 +237,8 @@ class TodayWidgetsService {
     if (uid == null) return const [];
 
     try {
-      final rows = await _sb
-          .from('short_term_goals')
-          .select('specific, target_behavior, current_accuracy, '
+      final rows = await GoalsQuery(client: _sb)
+          .stgReads('specific, target_behavior, current_accuracy, '
                   'target_accuracy, client_id, clients!inner(name)')
           .eq('user_id', uid)
           .eq('status', 'active')
@@ -311,9 +311,8 @@ class TodayWidgetsService {
     if (uid == null) return null;
 
     try {
-      final stgRows = await _sb
-          .from('short_term_goals')
-          .select('target_behavior, updated_at, client_id, clients!inner(name)')
+      final stgRows = await GoalsQuery(client: _sb)
+          .stgReads('target_behavior, updated_at, client_id, clients!inner(name)')
           .eq('user_id', uid)
           .eq('status', 'active')
           .eq('clients.is_trial_case', false) // Stage 2A: no trial cases

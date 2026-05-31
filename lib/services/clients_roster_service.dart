@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'clients_query.dart';
+import 'goals_query.dart';
 import 'name_formatter.dart';
 
 class ClientsRosterService {
@@ -62,9 +63,8 @@ class ClientsRosterService {
           .select('client_id, date')
           .eq('user_id', uid)
           .isFilter('deleted_at', null),
-      _client
-          .from('short_term_goals')
-          .select('client_id, status')
+      GoalsQuery(client: _client)
+          .stgReads('client_id, status')
           .eq('user_id', uid)
           .eq('status', 'active'),
       listDraftSessions(),
