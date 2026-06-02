@@ -47,6 +47,8 @@ String _sourceLabel(String sourceType) => switch (sourceType) {
       'substrate' => 'Substrate',
       'goal' => 'Goal',
       'citation' => 'Evidence',
+      'assessment' => 'Assessment finding',
+      'client_meta' => 'Client details',
       'static_clinician_authored' => 'Authored by you',
       _ => sourceType.isEmpty ? 'Source' : sourceType,
     };

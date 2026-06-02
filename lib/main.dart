@@ -584,6 +584,22 @@ class CueApp extends StatelessWidget {
             );
           }
 
+          // ── Debug-only: open the proven SANDBOX assessment draft in the ──
+          // existing editable surface (Piece 3 verification). LOAD MODE only:
+          // reads format_drafts + format_draft_sentences from the DB — makes NO
+          // proxy call. kDebugMode-gated (tree-shaken from release), not wired
+          // into any production navigation. Sign in as the draft's owner first
+          // (guruvignesh0022@gmail.com); the rows are RLS-scoped to that user.
+          if (kDebugMode && uri.path == '/debug/assessment-draft') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const FormatDraftViewScreen(
+                clientId: '803344ea-c6ce-45f4-bd8e-70fbe4a166c9', // Mythos
+                draftId: '0557d722-04fa-4bef-8aed-bef6b11097b4', // sandbox assessment draft
+              ),
+            );
+          }
+
           // ── Auth surfaces ───────────────────────────────────────────
           if (uri.path == '/login') {
             final returnTo = uri.queryParameters['return'];
