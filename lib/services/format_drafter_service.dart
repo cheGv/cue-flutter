@@ -15,6 +15,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' hide Session;
 
+import '../config/app_config.dart';
 import '../models/format_draft.dart';
 import '../models/format_draft_sentence.dart';
 import '../models/substrate.dart';
@@ -63,7 +64,7 @@ class FormatDrafterService {
         _metricsRepo = metricsRepository ?? StgMetricsRepository(),
         _chartStateRepo = chartStateRepository ?? ClientChartStateRepository();
 
-  static const _defaultBase = 'https://cue-ai-proxy.onrender.com';
+  static const _defaultBase = kProxyBaseUrl;
   // Drafting reads a whole client's record through an LLM — allow a long ceiling.
   static const _draftTimeout = Duration(seconds: 120);
   // Export renders + uploads a .docx server-side; allow a generous ceiling.

@@ -31,6 +31,16 @@ const String kAppEnv = String.fromEnvironment('APP_ENV', defaultValue: 'sandbox'
 /// True only when this build explicitly opted into production.
 const bool kIsProd = kAppEnv == 'prod';
 
+/// Cue proxy base URL. Defaults to the deployed proxy; overridable at build
+/// time for LOCAL testing — e.g. --dart-define=PROXY_BASE=http://localhost:3001.
+/// A build with NO --dart-define resolves to the real proxy, so production /
+/// release behaviour is unchanged. Build-time switch only — not a deploy, not
+/// a server change.
+const String kProxyBaseUrl = String.fromEnvironment(
+  'PROXY_BASE',
+  defaultValue: 'https://cue-ai-proxy.onrender.com',
+);
+
 // ── Sandbox (default) — project uuqhusmgoiaxdvtgbmwh ─────────────────────────
 const String kSupabaseUrlSandbox = 'https://uuqhusmgoiaxdvtgbmwh.supabase.co';
 const String kSupabaseAnonKeySandbox =
