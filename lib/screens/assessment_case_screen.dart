@@ -17,6 +17,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
+import '../models/format_template.dart';
+import '../repositories/format_templates_repository.dart';
+import '../services/cas_assessment_service.dart';
+import '../services/format_drafter_service.dart';
+import '../services/voice_assessment_service.dart';
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/assessment/ald_capture_section.dart';
@@ -54,6 +59,12 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   // V1 diagnostic synthesis — pure text fields, no AI. SLP attests.
   final _diagnosisCtrl = TextEditingController();
   final _diagCodesCtrl = TextEditingController();
+
+  // Step 3 (Piece 2) — "Draft in my format". protocol == clinical_area. Only
+  // these areas have an assessment reader wired today, so only they can produce
+  // a grounded draft; other areas show a "not available yet" message.
+  static const _draftableProtocols = {'voice', 'pediatric-cas'};
+  bool _drafting = false;
 
   @override
   void initState() {
@@ -218,28 +229,130 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     }
   }
 
-  Future<void> _composeReport() async {
-    try {
-      await _supabase.from('assessment_reports').insert({
-        'client_id': _client['id'].toString(),
-        'status':    'draft',
-        'body':      {
-          'diagnosis':  _diagnosisCtrl.text.trim(),
-          'diag_codes': _diagCodesCtrl.text.trim(),
-        },
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Draft report created.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not create report: $e')),
-        );
-      }
+  /// Step 3 (Piece 2) — "Draft in my format". Replaces the V1 stub that wrote a
+  /// bare assessment_reports row (removed — nothing read it). Real flow: pick a
+  /// confirmed format -> requestAssessmentDraft (the proxy builds the grounded
+  /// draft from this client's structured assessment data) -> open it in the
+  /// editable surface (Piece 3, verified). App code only; no proxy/DB changes.
+  Future<void> _draftInMyFormat() async {
+    final clientId = _client['id'].toString();
+    final protocol = (_client['clinical_area'] as String?) ?? '';
+
+    // Guard: only voice + pediatric-cas have assessment readers today. Other
+    // areas (dysarthria / ALD / SSD / …) can't be drafted yet — say so plainly
+    // rather than crash or call the drafter with no reader behind it.
+    if (!_draftableProtocols.contains(protocol)) {
+      _toast("Report drafting isn't available for this assessment type yet.");
+      return;
     }
+
+    final template = await _pickFormat();
+    if (template == null) return; // cancelled, or no confirmed formats
+
+    if (!mounted) return;
+    setState(() => _drafting = true);
+    try {
+      final assessmentId = await _resolveAssessmentId(protocol, clientId);
+      if (assessmentId == null) {
+        _toast("Report drafting isn't available for this assessment type yet.");
+        return;
+      }
+      final draft = await FormatDrafterService().requestAssessmentDraft(
+        templateId: template.id,
+        clientId: clientId,
+        protocol: protocol,
+        assessmentId: assessmentId,
+      );
+      if (!mounted) return;
+      // The editable surface in LOAD mode — the proven Piece 3 render path.
+      Navigator.of(context)
+          .pushNamed('/clients/$clientId/draft-report/view/${draft.id}');
+    } catch (e) {
+      if (mounted) _toast('Could not draft the report: $e');
+    } finally {
+      if (mounted) setState(() => _drafting = false);
+    }
+  }
+
+  /// Modal bottom sheet of the clinician's CONFIRMED formats (same source as the
+  /// therapy initiate screen). Returns the chosen template, or null if she
+  /// cancels / has no confirmed formats. No date range — assessments are
+  /// point-in-time.
+  Future<FormatTemplate?> _pickFormat() async {
+    List<FormatTemplate> formats;
+    try {
+      formats = (await FormatTemplatesRepository().listForUser())
+          .where((t) => t.isConfirmed)
+          .toList();
+    } catch (e) {
+      if (mounted) _toast('Could not load your formats: $e');
+      return null;
+    }
+    if (!mounted) return null;
+    if (formats.isEmpty) {
+      _toast('Add and confirm a report format first, then draft this report.');
+      return null;
+    }
+    return showModalBottomSheet<FormatTemplate>(
+      context: context,
+      backgroundColor: _paper,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+              child: Text('DRAFT IN THIS FORMAT',
+                  style: GoogleFonts.syne(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: _inkGhost,
+                      letterSpacing: 1.6)),
+            ),
+            for (final t in formats)
+              ListTile(
+                leading:
+                    const Icon(Icons.description_outlined, size: 18, color: _teal),
+                title: Text(
+                  t.name.trim().isEmpty ? 'Untitled format' : t.name,
+                  style: GoogleFonts.dmSans(
+                      fontSize: 14, color: _ink, fontWeight: FontWeight.w500),
+                ),
+                onTap: () => Navigator.pop(ctx, t),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Resolves the assessment-row id for this client under its protocol, reusing
+  /// the same service the capture surface uses. Returns null for protocols with
+  /// no reader. By report time the row exists (she's filled the capture
+  /// surface), so loadOrCreate loads it rather than creating an empty one.
+  Future<String?> _resolveAssessmentId(String protocol, String clientId) async {
+    switch (protocol) {
+      case 'voice':
+        final a = await VoiceAssessmentService.instance
+            .loadOrCreate(clientId: clientId);
+        return a.id;
+      case 'pediatric-cas':
+        final a = await CasAssessmentService.instance
+            .loadOrCreate(clientId: clientId);
+        return a['id'] as String?;
+      default:
+        return null;
+    }
+  }
+
+  void _toast(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -502,6 +615,11 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   }
 
   Widget _diagnosticSynthesis() {
+    // NOTE (Step 3, Piece 2): these diagnosis / diag-codes fields are no longer
+    // persisted — their only prior save was the removed assessment_reports stub.
+    // The format draft is built from structured assessment data, not these text
+    // boxes, so they are intentionally inert for now. Wire their own save as a
+    // separate task if diagnosis capture is needed here.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -531,16 +649,36 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   }
 
   Widget _reportComposer() {
+    // Generating state — the LLM round-trip takes ~30-60s. Visible, and it
+    // replaces the button so a second tap can't fire mid-draft.
+    if (_drafting) {
+      return Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2, color: _teal),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Drafting your report in your format… (~30–60 seconds)',
+              style: GoogleFonts.dmSans(
+                  fontSize: 13, color: _ink, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: _composeReport,
-            icon: const Icon(Icons.description_outlined,
-                size: 16, color: _teal),
-            label: Text('Compose report',
+            onPressed: _draftInMyFormat,
+            icon: const Icon(Icons.auto_awesome, size: 16, color: _teal),
+            label: Text('Draft in my format',
                 style: GoogleFonts.dmSans(
                     fontSize: 13,
                     color: _teal,
