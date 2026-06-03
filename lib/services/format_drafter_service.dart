@@ -30,6 +30,7 @@ import '../repositories/sessions_repository.dart';
 import '../repositories/stg_metrics_repository.dart';
 import '../repositories/stg_repository.dart';
 import '../repositories/substrate_repository.dart';
+import 'assessment_bridge/assessment_context_assembler.dart';
 
 class FormatDrafterService {
   FormatDrafterService({
@@ -47,6 +48,7 @@ class FormatDrafterService {
     CitationsRepository? citationsRepository,
     StgMetricsRepository? metricsRepository,
     ClientChartStateRepository? chartStateRepository,
+    AssessmentContextAssembler? assessmentAssembler,
   })  : _client = client ?? http.Client(),
         _tokenProvider = tokenProvider ?? _defaultToken,
         _base = baseUrl,
@@ -62,7 +64,9 @@ class FormatDrafterService {
         _stgRepo = stgRepository ?? StgRepository(),
         _citationsRepo = citationsRepository ?? CitationsRepository(),
         _metricsRepo = metricsRepository ?? StgMetricsRepository(),
-        _chartStateRepo = chartStateRepository ?? ClientChartStateRepository();
+        _chartStateRepo = chartStateRepository ?? ClientChartStateRepository(),
+        _assessmentAssembler =
+            assessmentAssembler ?? AssessmentContextAssembler();
 
   static const _defaultBase = kProxyBaseUrl;
   // Drafting reads a whole client's record through an LLM — allow a long ceiling.
@@ -84,6 +88,7 @@ class FormatDrafterService {
   final CitationsRepository _citationsRepo;
   final StgMetricsRepository _metricsRepo;
   final ClientChartStateRepository _chartStateRepo;
+  final AssessmentContextAssembler _assessmentAssembler;
 
   static Future<String?> _defaultToken() async =>
       Supabase.instance.client.auth.currentSession?.accessToken;
@@ -175,6 +180,16 @@ class FormatDrafterService {
       'canonical_data': canonical,
     };
 
+    return _generateAndLoad(body, token);
+  }
+
+  /// Shared by requestDraft (therapy) and requestAssessmentDraft (assessment):
+  /// POST the fully-built [body] to /format-draft and read the proxy-persisted
+  /// draft back by id. The mode (therapy vs assessment) is decided server-side
+  /// by the body's shape — this helper is agnostic. Extracted VERBATIM from the
+  /// original requestDraft tail; the therapy path's behaviour is unchanged.
+  Future<FormatDraft> _generateAndLoad(
+      Map<String, dynamic> body, String token) async {
     final resp = await _client
         .post(
           Uri.parse('$_base/format-draft'),
@@ -207,6 +222,46 @@ class FormatDrafterService {
           'The generated draft could not be loaded. Please try again.');
     }
     return draft;
+  }
+
+  /// Orchestrate an ASSESSMENT draft end-to-end. Sibling of [requestDraft]: the
+  /// ONLY difference is that the body is built by the assessment bridge
+  /// (assembleAssessmentContext -> a canonical_data carrying an `assessment`
+  /// block) instead of the therapy assembler, and date_range is null (an
+  /// assessment is point-in-time). The proxy auto-detects assessment mode from
+  /// the `assessment` block; POST + persistence + read-back are identical.
+  Future<FormatDraft> requestAssessmentDraft({
+    required String templateId,
+    required String clientId,
+    required String protocol, // 'voice' | 'pediatric-cas' | ...
+    required String assessmentId,
+    List<Map<String, dynamic>>? lexiconDefaults,
+  }) async {
+    final token = await _tokenProvider();
+    if (token == null) throw FormatDrafterException('You are not signed in.');
+
+    final template = await _templatesRepo.get(templateId);
+    if (template == null) {
+      throw FormatDrafterException('That format template could not be found.');
+    }
+
+    final canonical = await _assessmentAssembler.assembleAssessmentContext(
+      clientId: clientId,
+      protocol: protocol,
+      assessmentId: assessmentId,
+    );
+    final lexicon = lexiconDefaults ?? await resolveLexiconDefaults(templateId);
+
+    final body = <String, dynamic>{
+      'template_id': templateId,
+      'client_id': clientId,
+      'date_range': null, // assessments are point-in-time
+      'locked_template': template.extractedTemplate.toJson(),
+      'lexicon_defaults': lexicon,
+      'canonical_data': canonical,
+    };
+
+    return _generateAndLoad(body, token);
   }
 
   /// Reload a persisted draft + its sentence corpus (after generation or edit).

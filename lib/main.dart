@@ -39,6 +39,11 @@ import 'screens/format_mirror_test_screen.dart';
 // the kDebugMode-gated '/debug/substrate/:clientId' route below; tree-shaken
 // out of release builds.
 import 'screens/substrate_route.dart';
+// Debug-only Piece 2 Step 2 trigger: generates an assessment draft via
+// FormatDrafterService.requestAssessmentDraft. Referenced solely from the
+// kDebugMode-gated '/debug/assessment-generate' route below; tree-shaken from
+// release builds.
+import 'screens/assessment_generate_debug_screen.dart';
 // Recall wiring (composition root). main.dart constructs the concrete
 // DirectTableCardSource + roster query and injects them into the dedicated
 // recall assistant controller; the recall_assistant_*.dart files stay free
@@ -597,6 +602,18 @@ class CueApp extends StatelessWidget {
                 clientId: '803344ea-c6ce-45f4-bd8e-70fbe4a166c9', // Mythos
                 draftId: '0557d722-04fa-4bef-8aed-bef6b11097b4', // sandbox assessment draft
               ),
+            );
+          }
+
+          // ── Debug-only: GENERATE an assessment draft via the app's own ──
+          // FormatDrafterService.requestAssessmentDraft (Piece 2 Step 2) for the
+          // sandbox Mythos voice assessment, then open it in the editable
+          // surface. Hits the LOCAL proxy (PROXY_BASE override) + sandbox login.
+          // kDebugMode-gated (tree-shaken from release); not in production nav.
+          if (kDebugMode && uri.path == '/debug/assessment-generate') {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const AssessmentGenerateDebugScreen(),
             );
           }
 
