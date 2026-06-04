@@ -1,0 +1,7 @@
+# Real clinical documents + their identity mapping — PHI. NEVER commit/push.
+# Only README.md and CATALOGUE.md (redacted, codes only) are committable here.
+files/
+*.pdf
+*.docx
+*.doc
+_corpus-key.md
