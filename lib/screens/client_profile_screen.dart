@@ -564,6 +564,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     return AppLayout(
       title: _clientName,
       activeRoute: 'roster',
+      heldScopeClientId: _clientId, // scope The Hold's strip to this client
       body: LayoutBuilder(
         builder: (context, constraints) {
           final tokens = CueChartTokens.of(context);

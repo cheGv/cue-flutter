@@ -51,6 +51,7 @@ import 'screens/assessment_generate_debug_screen.dart';
 import 'services/recall_card_source.dart';
 import 'services/recall_resolver.dart';
 import 'widgets/cue_hold.dart' show cueHoldController;
+import 'services/hold_service.dart' show holdRouteObserver;
 import 'widgets/recall_assistant/recall_assistant_controller.dart';
 import 'widgets/recall_assistant/recall_assistant_overlay.dart';
 import 'theme/cue_theme.dart';
@@ -515,6 +516,9 @@ class CueApp extends StatelessWidget {
         // Root navigator key — lets the recall overlay (mounted above the
         // Navigator in `builder`) present the voice sheet via the modal route.
         navigatorKey: rootNavigatorKey,
+        // The Hold's held-work strip subscribes to this to re-derive on
+        // return to a screen (RouteAware.didPopNext). See hold_service.dart.
+        navigatorObservers: [holdRouteObserver],
         // The recall assistant overlay floats above every screen. Mounted in
         // `builder` (above the Navigator) so the card + dim backdrop + the
         // "Ask Cue" button sit over all chrome. Global Cmd/Ctrl+K is

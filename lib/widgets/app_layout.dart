@@ -11,6 +11,7 @@ import '../theme/cue_theme.dart';
 import 'cue_cuttlefish.dart';
 import 'cue_hold.dart';
 import 'cue_hold/cue_hold_expanded.dart';
+import 'cue_hold/cue_hold_held_strip.dart';
 import 'cue_popup.dart';
 import 'cue_study_fab.dart';
 import 'sidebar_notifier.dart';
@@ -54,6 +55,12 @@ class AppLayout extends StatelessWidget {
   /// every other screen.
   final bool skipTopBar;
 
+  /// Phase 4.1.x — on a single client's surface (the chart) this carries
+  /// that client's id so The Hold's held-work strip scopes to that client.
+  /// Null on every other screen → strip shows most-urgent work across all
+  /// clients.
+  final String? heldScopeClientId;
+
   const AppLayout({
     super.key,
     required this.title,
@@ -63,6 +70,7 @@ class AppLayout extends StatelessWidget {
     this.actions = const [],
     this.showCueStudyFab = true,
     this.skipTopBar = false,
+    this.heldScopeClientId,
   });
 
   @override
@@ -89,6 +97,13 @@ class AppLayout extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 layout,
+                // The Hold's held-work strip — a sibling overlay anchored
+                // under the pill. Renders only when there's unfinished work;
+                // never touches the pill's tap/long-press (→ Cue Study).
+                CueHoldHeldStrip(
+                  isMobile: isMobile,
+                  scopeClientId: heldScopeClientId,
+                ),
                 // Phase 4.1.4 — the Hold lives inside _TopBar's center
                 // zone (see _TopBar.build). The outer Stack only carries
                 // the overlays that need to escape the topbar: the
