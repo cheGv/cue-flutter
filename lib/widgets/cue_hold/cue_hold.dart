@@ -117,27 +117,9 @@ class CueHold extends StatelessWidget {
   }
 
   void _onPillTap(CueHoldController c) {
-    // Phase 4.1.5 B — iOS Dynamic Island tap-to-toggle. Tapping the
-    // pill while the chat is already expanded collapses it back to the
-    // prior pill state (same path as the minimize button).
-    if (c.state == CueHoldState.expanded) {
-      c.minimizeExpanded();
-      return;
-    }
-    final clientId = c.clientId;
-    final clientName = c.clientName;
-    if (clientId.isEmpty) {
-      // No client context yet — open client-less expanded chat anyway,
-      // using empty anchors.
-      c.expand(clientId: '', clientName: '');
-      return;
-    }
-    c.expand(
-      clientId: clientId,
-      clientName: clientName,
-      stgId: c.stgAnchorId,
-      ltgId: c.ltgAnchorId,
-    );
+    // Phase 4.2.x — pill tap RESERVED for held-work navigation (Task B).
+    // Study moved to CueStudyFab (bottom-left). Do NOT restore c.expand()
+    // here — Task B wires the held-item list into this tap.
   }
 
   /// Phase 4.1.4 — mic icon is visually present but not wired to real
