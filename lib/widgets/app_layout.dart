@@ -10,8 +10,6 @@ import '../theme/theme_notifier.dart';
 import '../theme/cue_theme.dart';
 import 'cue_cuttlefish.dart';
 import 'cue_hold.dart';
-import 'cue_hold/cue_hold_expanded.dart';
-import 'cue_hold/cue_hold_held_strip.dart';
 import 'cue_popup.dart';
 import 'cue_study_fab.dart';
 import 'sidebar_notifier.dart';
@@ -97,18 +95,10 @@ class AppLayout extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 layout,
-                // The Hold's held-work strip — a sibling overlay anchored
-                // under the pill. Renders only when there's unfinished work;
-                // never touches the pill's tap/long-press (→ Cue Study).
-                CueHoldHeldStrip(
-                  isMobile: isMobile,
-                  scopeClientId: heldScopeClientId,
-                ),
-                // Phase 4.1.4 — the Hold lives inside _TopBar's center
-                // zone (see _TopBar.build). The outer Stack only carries
-                // the overlays that need to escape the topbar: the
-                // EXPANDED inline chat and the FULL ACTIVITY popup.
-                _ExpandedChatOverlay(isMobile: isMobile),
+                // Phase 4.2.x — the Hold lives inside _TopBar's center zone
+                // and owns its held-work chooser (OverlayPortal in CueHold).
+                // The outer Stack now only carries the FULL ACTIVITY popup
+                // (long-press → Study), which still must escape the topbar.
                 _FullActivityOverlay(isMobile: isMobile),
               ],
             ),
@@ -128,6 +118,7 @@ class AppLayout extends StatelessWidget {
           isMobile: true,
           suppressBack: _kTopLevelRoutes.contains(activeRoute),
           minimal: skipTopBar,
+          heldScopeClientId: heldScopeClientId,
         ),
         Expanded(
           child: Stack(
@@ -209,6 +200,7 @@ class AppLayout extends StatelessWidget {
                         actions: actions,
                         suppressBack: _kTopLevelRoutes.contains(activeRoute),
                         minimal: skipTopBar,
+                        heldScopeClientId: heldScopeClientId,
                       ),
                       Expanded(child: body),
                     ],
@@ -260,6 +252,7 @@ class _TopBar extends StatelessWidget {
   final bool isMobile;
   final bool suppressBack;
   final bool minimal;
+  final String? heldScopeClientId;
 
   const _TopBar({
     required this.title,
@@ -267,6 +260,7 @@ class _TopBar extends StatelessWidget {
     this.isMobile = false,
     this.suppressBack = false,
     this.minimal = false,
+    this.heldScopeClientId,
   });
 
   static const double _holdReserve = 240;
@@ -359,7 +353,10 @@ class _TopBar extends StatelessWidget {
           // organically by its current state.
           Align(
             alignment: Alignment.center,
-            child: CueHold(isMobile: isMobile),
+            child: CueHold(
+              isMobile: isMobile,
+              heldScopeClientId: heldScopeClientId,
+            ),
           ),
         ],
       ),
@@ -900,50 +897,6 @@ class _CueHoldShortcuts extends StatelessWidget {
 // Renders a scrim + the existing CuePopup centered in the viewport. The
 // CuePopup itself is unchanged; we just give it modal placement when
 // the controller is in FULL ACTIVITY state.
-
-// ── EXPANDED inline chat overlay (Phase 4.1.4) ───────────────────────────────
-//
-// The CueHold widget itself stays inside the topbar at all times,
-// rendering the pill-shape state. When the controller flips to EXPANDED,
-// this overlay mounts the chat surface anchored just below the topbar's
-// right edge (desktop) or full-width below the topbar (mobile).
-
-class _ExpandedChatOverlay extends StatelessWidget {
-  final bool isMobile;
-  const _ExpandedChatOverlay({required this.isMobile});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: cueHoldController,
-      builder: (context, _) {
-        if (cueHoldController.state != CueHoldState.expanded) {
-          return const SizedBox.shrink();
-        }
-        final topbarHeight = isMobile ? 48.0 : 56.0;
-        if (isMobile) {
-          return Positioned(
-            top: topbarHeight + 4,
-            left: 12,
-            right: 12,
-            child: CueHoldExpanded(
-              controller: cueHoldController,
-              isMobile: true,
-            ),
-          );
-        }
-        return Positioned(
-          top: topbarHeight + 4,
-          right: 32,
-          child: CueHoldExpanded(
-            controller: cueHoldController,
-            isMobile: false,
-          ),
-        );
-      },
-    );
-  }
-}
 
 class _FullActivityOverlay extends StatelessWidget {
   final bool isMobile;
