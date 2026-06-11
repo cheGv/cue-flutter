@@ -16,17 +16,16 @@
 // row-deleting methods await the service first (a row needs its server id;
 // a delete must not lie), matching the pre-refactor behaviour exactly.
 //
-// SAFETY (unchanged by the refactor): the controller exposes the off-ramp
-// trigger state (offRampActive — 18mo+ age band OR an airway-sign behaviour
-// marked present; trigger conditions DRAFT, clinician sign-off pending).
-// The off-ramp CARD's presence is bound to the ladder / behaviours layer
-// WRAPPERS structurally — see the library doc in
+// SAFETY: the controller exposes the off-ramp trigger state (offRampActive),
+// which is SIGN-TRIGGERED (clinician sign-off 2026-06-11): it fires ONLY
+// when an airway-sign behaviour is marked present — at ANY age. Age alone
+// never fires it. The off-ramp CARD's presence is bound to the ladder /
+// behaviours layer WRAPPERS structurally — see the library doc in
 // feeding_assessment_surface.dart for the binding contract. The controller
 // never judges anything: every getter here is display state, not a verdict.
 
 import 'package:flutter/foundation.dart';
 
-import '../../constants/feeding_ladder_content.dart';
 import '../../services/feeding_assessment_service.dart';
 
 class FeedingAssessmentController extends ChangeNotifier {
@@ -56,12 +55,6 @@ class FeedingAssessmentController extends ChangeNotifier {
   List<Map<String, dynamic>> get ladderBands => _ladderBands;
   List<Map<String, dynamic>> get behaviors => _behaviors;
 
-  /// The off-ramp age threshold derives from the first off-ramp band — one
-  /// source of truth with the seeded content. (Trigger DRAFT, sign-off
-  /// pending.)
-  static final int offRampAgeMinMonths =
-      kFeedingLadderBands.firstWhere((b) => b.offRampBand).ageMinMonths;
-
   int? get ageMonths {
     final a = _parent['age_months'];
     return a is int ? a : null;
@@ -84,10 +77,13 @@ class FeedingAssessmentController extends ChangeNotifier {
   bool get airwayBehaviorMarked => _behaviors
       .any((b) => b['airway_sign'] == true && b['status'] == 'present');
 
-  /// DRAFT trigger (sign-off pending): age in an off-ramp band (18mo+) OR an
-  /// airway-sign behaviour marked present.
-  bool get offRampActive =>
-      ((ageMonths ?? -1) >= offRampAgeMinMonths) || airwayBehaviorMarked;
+  /// SIGN-TRIGGERED (clinician sign-off 2026-06-11): fires ONLY when an
+  /// airway-sign behaviour is marked present — at ANY age. Age alone never
+  /// fires it: an age-based alarm cries wolf on every typically developing
+  /// toddler past 18 months and trains the safety channel to be dismissed.
+  /// The 18mo+ bands keep their in-band airway GUIDANCE text; the card is
+  /// the true signal, raised by the actual marked sign.
+  bool get offRampActive => airwayBehaviorMarked;
 
   // ── Bootstrap ────────────────────────────────────────────────────────
 

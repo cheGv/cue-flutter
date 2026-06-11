@@ -15,17 +15,37 @@
 // practice guidance, and the Goday et al. pediatric feeding disorder
 // consensus. Milestone ages are approximate windows, not cutoffs.
 //
-// ── DRAFT-CONTENT FLAGS (clinician sign-off PENDING — acceptable in the
-//    sandbox beta, MUST be reviewed before this surface graduates to
-//    draftable, exactly like SSD's graduation gate) ──────────────────────
-//   * every redFlagPrompt below (observation prompts, never verdicts)
-//   * the off-ramp trigger conditions (18mo+ band OR airway-sign behaviour
-//     marked present) and kFeedingOffRampCaution wording
-//   * kFeedingWesternNormCaveat wording (founder's own phrasing pending)
-//   * kFeedingStarterBehaviors content — including the EIGHTH item
-//     (airway_signs_textured), which is an ADDITION beyond the spec's seven:
-//     without it the off-ramp's behaviour trigger would be unreachable,
-//     since free-typed rows cannot be classified as airway signs.
+// ── SIGN-OFF STATUS (clinician review completed 2026-06-11) ─────────────
+//   SIGNED OFF:
+//   * every redFlagPrompt below — content v2 (see CONTENT VERSIONS).
+//     Observation prompts, never verdicts — that register is unchanged.
+//   * the off-ramp trigger — now SIGN-TRIGGERED ONLY: an airway-sign
+//     behaviour marked present, at ANY age. Age alone never fires it (an
+//     age-based alarm cries wolf on typically developing toddlers and
+//     trains the safety channel to be dismissed). Band guidance text in
+//     the 18mo+ bands still directs observation toward airway signs.
+//   * kFeedingStarterBehaviors — including the EIGHTH item
+//     (airway_signs_textured), now LOAD-BEARING: it is the sole off-ramp
+//     trigger (free-typed rows cannot be classified as airway signs).
+//   STILL v1 DRAFT (refine in real clinician testing):
+//   * kFeedingWesternNormCaveat wording
+//   * kFeedingOffRampCaution wording (the trigger is signed off; the
+//     caution's phrasing iterates with testing)
+//
+// ── CONTENT VERSIONS (rows are version-frozen at seed time: existing
+//    assessments keep the text they were marked against; new assessments
+//    seed the current version) ─────────────────────────────────────────────
+//   v1 (2026-06-11, commit 87063a4) — initial draft.
+//   v2 (2026-06-11, this version) — post-sign-off corrections:
+//     band 1: "colour change" → perioral cyanosis (precise sign, urgent);
+//     band 3: pincer trigger 10mo → "not emerging by 12mo" (pincer emerges
+//             9–12mo, masters ~12mo, normal range to 15mo — 10mo fired
+//             false alarms on typical children);
+//     band 4: "excessive drooling" REMOVED (developmentally normal until
+//             15–18mo, pathologic only past 4yr); EI cutoffs labelled;
+//     bands 5–7: unchanged (rotary-chew flag confirmed by ASHA + jaw-motion
+//             literature; refusal / selectivity / ARFID / airway triggers
+//             clinically standard).
 
 /// One oral-motor dissociation function: the DB column pair it captures to,
 /// the clinical term (secondary label), and the plain-language observable
@@ -71,8 +91,10 @@ const List<FeedingDissociationFunction> kFeedingDissociationFunctions = [
 
 /// One developmental feeding-ladder band. ageMaxMonths == null means
 /// open-ended (the 30–36+ band). offRampBand marks the 18mo+ bands whose
-/// red flags include overt airway signs — the swallow off-ramp renders
-/// alongside them.
+/// red-flag guidance includes overt airway signs — it drives the in-band
+/// beyond-scope marker ONLY. The off-ramp CARD itself is SIGN-TRIGGERED
+/// (an airway-sign behaviour marked present, any age), never band- or
+/// age-triggered (sign-off 2026-06-11).
 typedef FeedingLadderBand = ({
   String key,
   int order,
@@ -103,8 +125,9 @@ const List<FeedingLadderBand> kFeedingLadderBands = [
         'Suckle transitioning to suck; tongue moves front-to-back '
         '(antero-posterior) only.',
     redFlagPrompt:
-        'Suckle reflex not practised or fading before ~4 months; poor latch; '
-        'fatigue or colour change with feeds.',
+        'Suckle reflex not practised or fading before ~4 months; poor latch, '
+        'fatigue, or perioral cyanosis (blueness around lips/mouth) during '
+        'feeds — the last is urgent, escalate.',
     offRampBand: false,
   ),
   (
@@ -136,8 +159,9 @@ const List<FeedingLadderBand> kFeedingLadderBands = [
     expectedOralMotor:
         'Rotary chew begins around 10 months; gag reflex moves posterior.',
     redFlagPrompt:
-        'Persistent purée dependence past ~9 months with no progression. '
-        'No pincer grasp by 10 months. Gagging not diminished by ~10 months.',
+        'Persistent purée dependence past ~9 months with no progression to '
+        'lumps/solids. Pincer grasp not emerging by 12 months. Gagging not '
+        'diminished by ~10 months.',
     offRampBand: false,
   ),
   (
@@ -152,8 +176,8 @@ const List<FeedingLadderBand> kFeedingLadderBands = [
     expectedOralMotor: 'Lateral tongue action; diagonal chew.',
     redFlagPrompt:
         'Not self-feeding finger foods by 14 months; not attempting spoon by '
-        '15 months; not open-cup drinking by 15 months. Failure to advance '
-        'through textures; excessive drooling.',
+        '15 months; not open-cup drinking by 15 months (Early Intervention '
+        'cutoffs). Failure to advance through textures.',
     offRampBand: false,
   ),
   (
@@ -278,9 +302,9 @@ const List<FeedingStarterBehavior> kFeedingStarterBehaviors = [
     label: 'Gagging / vomiting on food presentation',
     airwaySign: false,
   ),
-  // ADDED beyond the spec's seven (draft, sign-off pending): the one overt
-  // airway-sign item. Without it the off-ramp's behaviour trigger is
-  // unreachable — free-typed rows can't be classified as airway signs.
+  // The one overt airway-sign item — SIGNED OFF 2026-06-11 and now
+  // LOAD-BEARING: marking it present is the SOLE off-ramp trigger
+  // (free-typed rows can't be classified as airway signs).
   // Gagging/vomiting above is deliberately NOT an airway sign (gag is a
   // protective reflex, not an airway-compromise signal).
   (
@@ -292,16 +316,18 @@ const List<FeedingStarterBehavior> kFeedingStarterBehaviors = [
 ];
 
 /// Western-norm caveat — renders with EVERY ladder band the clinician reads.
-/// DRAFT wording, pending the founder's own version.
+/// v1 wording — to be refined in real clinician testing (founder call,
+/// 2026-06-11).
 const String kFeedingWesternNormCaveat =
     'Milestones derive from predominantly Western cohorts and diets. Indian '
     'weaning practices, staple textures (rice / dal / roti), and hand-feeding '
     'norms may differ — treat this ladder as a reference frame, not a fixed '
     'standard. Clinician and cultural context govern.';
 
-/// Swallow off-ramp caution — the safety boundary of this surface. DRAFT
-/// wording, pending the founder's version. Renders when the child's age band
-/// is 18 months+ OR an airway-sign behaviour is marked present.
+/// Swallow off-ramp caution — the safety boundary of this surface. Renders
+/// ONLY when an airway-sign behaviour is marked present, at any age
+/// (SIGN-TRIGGERED — sign-off 2026-06-11; age alone never fires it).
+/// Wording is v1 — to be refined in real clinician testing.
 const String kFeedingOffRampCaution =
     'Beyond feeding-skills scope — if coughing, choking, or a wet-sounding '
     'voice accompanies textured food, that is an airway sign warranting a '

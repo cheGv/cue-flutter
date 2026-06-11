@@ -34,10 +34,11 @@
 //     FeedingLadderLayer / FeedingBehaviorsLayer, whose build() includes
 //     FeedingOffRampCard unconditionally. There is no includeOffRamp
 //     parameter; the card cannot be opted out of.
-//   * The card gates its own visibility on controller.offRampActive (18mo+
-//     age band OR airway-sign behaviour marked present — DRAFT triggers,
-//     sign-off pending), so a router cannot dodge it by mounting "while
-//     inactive": the card is in the tree and reacts live.
+//   * The card gates its own visibility on controller.offRampActive —
+//     SIGN-TRIGGERED (clinician sign-off 2026-06-11): ONLY an airway-sign
+//     behaviour marked present fires it, at any age; age alone never does.
+//     A router cannot dodge it by mounting "while inactive": the card is in
+//     the tree and reacts live the moment a sign is marked.
 //   * The composer below uses the private bodies and mounts ONE card after
 //     the sections — the pre-refactor position, exactly. A router mounting
 //     BOTH public wrappers side by side gets two cards when active; that
@@ -61,8 +62,10 @@
 //     the callback (exactly SSD's onOpenCas pattern).
 //
 // CONTENT: lib/constants/feeding_ladder_content.dart (brand-neutral,
-// literature-grounded; red flags / off-ramp triggers / Western-norm caveat
-// are DRAFT pending clinician sign-off — graduation gate, like SSD's).
+// literature-grounded). Clinician sign-off 2026-06-11: red-flag prompts
+// (content v2) + the sign-only off-ramp trigger + the starter set are
+// SIGNED OFF; the Western-norm caveat and off-ramp caution WORDING stay v1,
+// to be refined in real clinician testing.
 //
 // TYPOGRAPHY & PALETTE — the SSD surface's locked spine registers verbatim:
 // JetBrains Mono eyebrows for data tags, Inter for everything read, no

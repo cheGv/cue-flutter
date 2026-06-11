@@ -10,9 +10,13 @@
 // renders nothing while the trigger is inactive, so hosts mount it
 // unconditionally and can never "forget" it when the trigger state changes.
 //
-// Trigger (DRAFT, clinician sign-off pending): age in an off-ramp band
-// (18mo+) OR an airway-sign behaviour marked present. Escalates amber →
-// coral when airway signs are actually marked, listing them.
+// Trigger — SIGN-TRIGGERED (clinician sign-off 2026-06-11): fires ONLY when
+// an airway-sign behaviour is marked present, at ANY age. Age alone never
+// fires it (an age-based alarm cries wolf on typically developing toddlers
+// and trains the safety channel to be dismissed; the 18mo+ bands keep their
+// in-band airway GUIDANCE text instead). Because active now always means a
+// sign is marked, the card has ONE register — coral, naming the marked
+// sign(s) — the pre-sign-off amber "age band" state is gone.
 //
 // The onOpenSwallow seam is DORMANT in Phase 1: null renders the caution +
 // referral-cue line and NO dead button; the handoff FilledButton appears
@@ -36,8 +40,6 @@ class FeedingOffRampCard extends StatelessWidget {
       listenable: controller,
       builder: (context, _) {
         if (!controller.offRampActive) return const SizedBox.shrink();
-        final escalated = controller.airwayBehaviorMarked;
-        final tone = escalated ? _coral : _amber;
         return Padding(
           // The 16px breathing room above the card travels WITH the card so
           // every mount point (composer, layer wrappers) spaces identically.
@@ -45,42 +47,39 @@ class FeedingOffRampCard extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
-              color: _amberSoft.withValues(alpha: escalated ? 0.55 : 0.4),
+              color: _amberSoft.withValues(alpha: 0.55),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: tone.withValues(alpha: 0.7), width: 1.2),
+              border:
+                  Border.all(color: _coral.withValues(alpha: 0.7), width: 1.2),
             ),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Icon(Icons.alt_route_rounded, size: 18, color: tone),
+                const Icon(Icons.alt_route_rounded, size: 18, color: _coral),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                      escalated
-                          ? 'Airway sign marked — swallow assessment warranted'
-                          : 'Swallow off-ramp — the boundary of this surface',
+                  child: Text('Airway sign marked — swallow assessment warranted',
                       style: GoogleFonts.inter(
                           fontSize: 14,
-                          color: tone,
+                          color: _coral,
                           fontWeight: FontWeight.w700)),
                 ),
               ]),
               const SizedBox(height: 8),
-              // DRAFT wording — founder's version pending (graduation gate).
+              // Wording v1 — refine in real clinician testing.
               Text(kFeedingOffRampCaution,
                   style: GoogleFonts.inter(
                       fontSize: 12.5, color: _ink, height: 1.45)),
-              if (escalated) ...[
-                const SizedBox(height: 8),
-                for (final b in controller.behaviors.where((b) =>
-                    b['airway_sign'] == true && b['status'] == 'present'))
-                  Text('→ ${b['behavior_label']} — marked present',
-                      style: GoogleFonts.inter(
-                          fontSize: 12.5,
-                          color: _ink,
-                          fontWeight: FontWeight.w600,
-                          height: 1.45)),
-              ],
+              // Active always means at least one marked sign — name them.
+              const SizedBox(height: 8),
+              for (final b in controller.behaviors.where((b) =>
+                  b['airway_sign'] == true && b['status'] == 'present'))
+                Text('→ ${b['behavior_label']} — marked present',
+                    style: GoogleFonts.inter(
+                        fontSize: 12.5,
+                        color: _ink,
+                        fontWeight: FontWeight.w600,
+                        height: 1.45)),
               const SizedBox(height: 10),
               if (onOpenSwallow != null)
                 Align(
