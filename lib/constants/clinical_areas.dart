@@ -1,11 +1,13 @@
 // lib/constants/clinical_areas.dart
 //
-// Phase 4.0.7.23 — single source of truth for the 16 SLP clinical
+// Phase 4.0.7.23 — single source of truth for the 17 SLP clinical
 // areas that match the framework library taxonomy and the
 // clients.clinical_area schema CHECK constraint. Originally 14;
 // pediatric-cas, pediatric-dysarthria, and pediatric-motor-speech
 // were promoted in Phase 4.0.7.27c-prep (count corrected here in
-// Phase 4.0.7.28-session-capture-v1).
+// Phase 4.0.7.28-session-capture-v1); pediatric-feeding added with
+// the childhood-feeding capture surface (2026-06-11, migration
+// 20260611120000 extends the clients CHECK in step).
 //
 // Imported by:
 //   - lib/screens/goal_authoring_screen.dart  (4.0.7.23)
@@ -16,8 +18,8 @@
 //                                              widget.goal['clinical_area'])
 //
 // Order is intentional: pediatric general → autism → speech-sound →
-// motor speech → fluency → voice → adult split → dysphagia → AAC →
-// social → hearing → literacy → multilingual.
+// motor speech → feeding → fluency → voice → adult split → dysphagia →
+// AAC → social → hearing → literacy → multilingual.
 
 const List<({String code, String label})> kClinicalAreas = [
   (code: 'pediatric-language',       label: 'Pediatric Language'),
@@ -30,6 +32,10 @@ const List<({String code, String label})> kClinicalAreas = [
   (code: 'pediatric-cas',            label: 'Pediatric CAS (Childhood Apraxia of Speech)'),
   (code: 'pediatric-dysarthria',     label: 'Pediatric Dysarthria'),
   (code: 'pediatric-motor-speech',   label: 'Pediatric Motor Speech — differential pending'),
+  // Childhood Feeding (2026-06-11) — feeding-SKILLS scope only; swallowing /
+  // dysphagia stays its own area below, with its own later surface and
+  // airway boundary.
+  (code: 'pediatric-feeding',        label: 'Childhood Feeding'),
   (code: 'fluency',                  label: 'Fluency'),
   (code: 'voice',                    label: 'Voice'),
   (code: 'adult-language-cognitive', label: 'Adult Language & Cognitive'),
