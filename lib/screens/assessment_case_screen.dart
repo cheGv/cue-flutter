@@ -20,6 +20,7 @@ import '../constants/clinical_areas.dart';
 import '../models/format_template.dart';
 import '../repositories/format_templates_repository.dart';
 import '../services/cas_assessment_service.dart';
+import '../services/feeding_assessment_service.dart';
 import '../services/format_drafter_service.dart';
 import '../services/voice_assessment_service.dart';
 import '../theme/cue_color_scheme.dart';
@@ -344,6 +345,14 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
         return a.id;
       case 'pediatric-cas':
         final a = await CasAssessmentService.instance
+            .loadOrCreate(clientId: clientId);
+        return a['id'] as String?;
+      // 'pediatric-feeding' — identity: the area slug IS the reader protocol.
+      // Reachable from the UI only once 'pediatric-feeding' joins
+      // _draftableProtocols (the flip — the LAST graduation step); until
+      // then the guard above toasts not-available and this case is dormant.
+      case 'pediatric-feeding':
+        final a = await FeedingAssessmentService.instance
             .loadOrCreate(clientId: clientId);
         return a['id'] as String?;
       default:

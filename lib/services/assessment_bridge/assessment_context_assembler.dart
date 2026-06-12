@@ -19,6 +19,7 @@
 import '../../models/assessment_envelope.dart';
 import '../../repositories/client_chart_state_repository.dart';
 import 'cas_assessment_reader.dart';
+import 'feeding_assessment_reader.dart';
 import 'voice_assessment_reader.dart';
 
 class AssessmentContextAssembler {
@@ -83,12 +84,17 @@ class AssessmentContextAssembler {
         return CasAssessmentReader().readById(assessmentId);
       case VoiceAssessmentReader.protocol: // 'voice'
         return VoiceAssessmentReader().readById(assessmentId);
+      // 'pediatric-feeding' — IDENTITY with the area slug (the CAS/voice
+      // convention; no protocol map needed, unlike SSD's plural-slug split).
+      case FeedingAssessmentReader.protocol:
+        return FeedingAssessmentReader().readById(assessmentId);
       // case 'pediatric-dysarthria': return PedDysarthriaAssessmentReader().readById(assessmentId);
       // case 'adult-language-cognitive': return AldAssessmentReader().readById(assessmentId);
       default:
         throw UnsupportedError(
           'No assessment reader for protocol "$protocol" yet '
-          '(supported: ${CasAssessmentReader.protocol}, ${VoiceAssessmentReader.protocol}).',
+          '(supported: ${CasAssessmentReader.protocol}, '
+          '${VoiceAssessmentReader.protocol}, ${FeedingAssessmentReader.protocol}).',
         );
     }
   }
