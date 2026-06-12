@@ -19,10 +19,14 @@
 //     next-probe nudge, no ranked likelihood, no projected trajectory.
 //   * renders "insufficient data" with what's missing NAMED FACTUALLY when
 //     inputs are incomplete — never a fabricated zero, never a directive.
-//   * carries a structural boundary line on every resolved result stating
-//     that the computation is clerical reflection of the clinician's inputs.
-//     The line is assembled by the component from required fields; there is
-//     no parameter to omit it.
+//   * says nothing ABOUT the boundary (revised 2026-06-12). An earlier draft
+//     appended a "the ratings are yours; the arithmetic is Cue's; your
+//     interpretation governs" line to every resolved result — cut as
+//     condescending clutter. The clinician entering scores already knows the
+//     interpretation is hers; the boundary is structural (this component has
+//     no inference mechanism to need disclaiming), and the restraint IS the
+//     boundary: enforced by what the component cannot say, never announced
+//     in what it does.
 //   * is selectively loud: a metric with no published band shows the number
 //     and an explicit "no published band" — it never borrows authority.
 // test/widgets/loud_result_test.dart enforces all of this, including a
@@ -87,8 +91,7 @@ class LoudResultInsufficient extends LoudResultState {
 }
 
 /// All inputs present: the result announces. Value large, math shown, source
-/// cited, boundary line riding along — assembled from these fields, so it
-/// cannot be omitted or blanked by any caller.
+/// cited — and nothing else. Silent, clean, just the result.
 class LoudResultResolved extends LoudResultState {
   /// Preformatted value, unit included where one exists ("67.0", "47.6%").
   final String value;
@@ -106,37 +109,15 @@ class LoudResultResolved extends LoudResultState {
   /// English-normed". Rendered as "per `<citation>`".
   final String citation;
 
-  /// The boundary line's subject — what the clinician entered ("four
-  /// subscores", "consonant counts").
-  final String inputsLabel;
-
-  /// What kind of numbers they are ("ratings", "counts"). Defaults to the
-  /// universally true "numbers".
-  final String inputsNoun;
-
   const LoudResultResolved({
     required this.value,
     this.band,
     required this.math,
     required this.citation,
-    required this.inputsLabel,
-    this.inputsNoun = 'numbers',
   })  : assert(value != ''),
         assert(math != '', 'the math is shown, always'),
         assert(citation != '', 'a result without a source is an assertion'),
-        assert(inputsLabel != '', 'the boundary line needs its subject'),
-        assert(inputsNoun != ''),
         assert(band == null || band != '', 'no band is null, not ""');
-
-  /// The structural boundary sentence — the computation is clerical
-  /// reflection of the clinician's inputs. Rides every resolved result.
-  String get boundaryLine {
-    final bandClause = band != null
-        ? 'Band per $citation; your interpretation governs.'
-        : 'No published band; your interpretation governs.';
-    return 'Computed from your $inputsLabel — the $inputsNoun are yours; '
-        "the arithmetic is Cue's. $bandClause";
-  }
 }
 
 // ─── Widget ──────────────────────────────────────────────────────────────────
@@ -150,11 +131,15 @@ class LoudResult extends StatelessWidget {
 
   final LoudResultState state;
 
-  /// Optional norming caveat ("English-normed reference — interpret with
-  /// caution for non-English samples."). Renders in the AMBER caution
-  /// register below the resolved card ONLY — a caveat belongs to a displayed
-  /// reference, and in the waiting states there is no number to
-  /// mis-interpret.
+  /// Optional norming/validity caveat — a REAL FACT about the instrument
+  /// (e.g. a band normed on one population: "Shriberg 1982, English-normed —
+  /// interpret with cultural context."), passed by the caller only when the
+  /// displayed reference carries a documented limitation. This is NOT the
+  /// cut boundary-reassurance line: a population-specific band is an
+  /// instrument validity limitation; who interprets needs no announcing.
+  /// Renders in the AMBER caution register below the resolved card ONLY —
+  /// a caveat belongs to a displayed reference, and in the waiting states
+  /// there is no number to mis-interpret.
   final String? caution;
 
   const LoudResult({
@@ -302,14 +287,6 @@ class LoudResult extends StatelessWidget {
                           Text('per ${s.citation}',
                               style: GoogleFonts.inter(
                                   fontSize: 11.5, color: _inkTertiary)),
-                          const SizedBox(height: 10),
-                          Container(height: 0.5, color: _line),
-                          const SizedBox(height: 8),
-                          Text(s.boundaryLine,
-                              style: GoogleFonts.inter(
-                                  fontSize: 11.5,
-                                  color: _inkSecondary,
-                                  height: 1.45)),
                         ],
                       ),
                     ),

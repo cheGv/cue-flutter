@@ -3,15 +3,15 @@
 // Intern scaffold Phase A — proof of the LOUD-register component.
 //
 // Asserts the contract in lib/widgets/assessment/loud_result.dart: the three
-// honest states render correctly, the math line is verbatim, the structural
-// boundary line rides every resolved result (band and no-band variants),
-// selective loudness ("no published band") works, the insufficient state
-// names what's missing factually, the resolved state announces by APPEARING
-// (a cross-fade event, not a grey line filling), the amber caution renders
-// with the resolved card only — and THE BOUNDARY: a forbidden-language sweep
-// over every rendered string makes inferential output (indicates / consider /
-// leans toward / you should / typically / prognosis…) unrepresentable in a
-// passing build.
+// honest states render correctly, the math line is verbatim, selective
+// loudness ("no published band") works, the insufficient state names what's
+// missing factually, the resolved state announces by APPEARING (a cross-fade
+// event, not a grey line filling), the amber norming caveat renders with the
+// resolved card only, the resolved card carries NO boundary-reassurance text
+// (cut 2026-06-12 — the restraint is the boundary, it isn't announced) — and
+// THE BOUNDARY: a forbidden-language sweep over every rendered string makes
+// inferential output (indicates / consider / leans toward / you should /
+// typically / prognosis…) unrepresentable in a passing build.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -66,8 +66,6 @@ const _resolvedWithBand = LoudResultResolved(
   band: 'Moderate',
   math: '(14 + 7.5 + 6.2 + 5.8) × 2 = 67.0',
   citation: 'Kertesz 1982',
-  inputsLabel: 'four subscores',
-  inputsNoun: 'ratings',
 );
 
 // A resolved PCC-R-shaped state — no published band.
@@ -75,49 +73,22 @@ const _resolvedNoBand = LoudResultResolved(
   value: '52.3%',
   math: '(33 + 11) ÷ 84 × 100 = 52.3%',
   citation: 'Shriberg & Kwiatkowski 1982',
-  inputsLabel: 'consonant counts',
-  inputsNoun: 'counts',
 );
 
 void main() {
   setUpAll(() => GoogleFonts.config.allowRuntimeFetching = false);
 
   group('state model', () {
-    test('boundary line — band variant, assembled exactly', () {
-      expect(
-        _resolvedWithBand.boundaryLine,
-        'Computed from your four subscores — the ratings are yours; '
-        "the arithmetic is Cue's. "
-        'Band per Kertesz 1982; your interpretation governs.',
-      );
-    });
-
-    test('boundary line — no-band variant, assembled exactly', () {
-      expect(
-        _resolvedNoBand.boundaryLine,
-        'Computed from your consonant counts — the counts are yours; '
-        "the arithmetic is Cue's. "
-        'No published band; your interpretation governs.',
-      );
-    });
-
-    test('the boundary line cannot be blanked — guards throw', () {
+    test('blank essentials cannot construct — guards throw', () {
       final blank = ''; // runtime value: asserts fire, not const evaluation
-      expect(() => LoudResultResolved(
-            value: '67.0', math: 'x', citation: 'c', inputsLabel: blank),
+      expect(() => LoudResultResolved(value: blank, math: 'x', citation: 'c'),
+          throwsAssertionError);
+      expect(() => LoudResultResolved(value: '67.0', math: blank, citation: 'c'),
+          throwsAssertionError);
+      expect(() => LoudResultResolved(value: '67.0', math: 'x', citation: blank),
           throwsAssertionError);
       expect(() => LoudResultResolved(
-            value: blank, math: 'x', citation: 'c', inputsLabel: 'subscores'),
-          throwsAssertionError);
-      expect(() => LoudResultResolved(
-            value: '67.0', math: blank, citation: 'c', inputsLabel: 'subscores'),
-          throwsAssertionError);
-      expect(() => LoudResultResolved(
-            value: '67.0', math: 'x', citation: blank, inputsLabel: 'subscores'),
-          throwsAssertionError);
-      expect(() => LoudResultResolved(
-            value: '67.0', math: 'x', citation: 'c',
-            inputsLabel: 'subscores', band: blank),
+            value: '67.0', math: 'x', citation: 'c', band: blank),
           throwsAssertionError);
       expect(() => LoudResultInsufficient(missing: blank), throwsAssertionError);
     });
@@ -152,7 +123,7 @@ void main() {
       _expectNoInferentialLanguage(tester);
     });
 
-    testWidgets('NOT loud: no card register, no big value, no boundary line',
+    testWidgets('NOT loud: no card register, nothing at announcement size',
         (tester) async {
       await tester.pumpWidget(_host(const LoudResult(
         label: 'Aphasia Quotient',
@@ -162,8 +133,6 @@ void main() {
 
       // No mono data-tag eyebrow (that register belongs to the resolved card).
       expect(find.text('APHASIA QUOTIENT'), findsNothing);
-      // No boundary line without a computation to bound.
-      expect(find.textContaining("the arithmetic is Cue's"), findsNothing);
       // Nothing rendered at announcement size.
       final loud = tester
           .widgetList<Text>(find.byType(Text))
@@ -173,8 +142,8 @@ void main() {
   });
 
   group('resolved state', () {
-    testWidgets('announces: value large, band, math verbatim, citation, boundary',
-        (tester) async {
+    testWidgets('announces: value large, band, math verbatim, citation — '
+        'and nothing else', (tester) async {
       await tester.pumpWidget(_host(const LoudResult(
         label: 'Aphasia Quotient',
         state: _resolvedWithBand,
@@ -195,13 +164,12 @@ void main() {
       expect(find.text('Moderate'), findsOneWidget);
       expect(find.text('(14 + 7.5 + 6.2 + 5.8) × 2 = 67.0'), findsOneWidget);
       expect(find.text('per Kertesz 1982'), findsOneWidget);
-      // The structural boundary line.
-      expect(
-          find.text(
-              'Computed from your four subscores — the ratings are yours; '
-              "the arithmetic is Cue's. "
-              'Band per Kertesz 1982; your interpretation governs.'),
-          findsOneWidget);
+      // NO boundary-reassurance text (cut 2026-06-12) — the clinician knows
+      // the interpretation is hers; the restraint is the boundary.
+      expect(find.textContaining('yours'), findsNothing);
+      expect(find.textContaining("Cue's"), findsNothing);
+      expect(find.textContaining('interpretation governs'), findsNothing);
+      expect(find.textContaining('Computed from'), findsNothing);
       _expectNoInferentialLanguage(tester);
     });
 
@@ -214,7 +182,6 @@ void main() {
           band: 'n/a band label',
           math: oddMath,
           citation: 'Author 2001',
-          inputsLabel: 'two counts',
         ),
       )));
       await tester.pumpAndSettle();
@@ -231,27 +198,7 @@ void main() {
 
       expect(find.text('52.3%'), findsOneWidget);
       expect(find.text('no published band'), findsOneWidget);
-      expect(
-          find.textContaining(
-              'No published band; your interpretation governs.'),
-          findsOneWidget);
       _expectNoInferentialLanguage(tester);
-    });
-
-    testWidgets('boundary line is present on EVERY resolved variant',
-        (tester) async {
-      for (final state in const [_resolvedWithBand, _resolvedNoBand]) {
-        await tester.pumpWidget(_host(LoudResult(
-          label: 'Metric',
-          state: state,
-        )));
-        await tester.pumpAndSettle();
-        expect(find.textContaining("the arithmetic is Cue's"), findsOneWidget,
-            reason: 'boundary line missing for $state');
-        expect(find.textContaining('your interpretation governs'),
-            findsOneWidget,
-            reason: 'governs clause missing for $state');
-      }
     });
   });
 
@@ -336,8 +283,6 @@ void main() {
           band: 'Moderate',
           math: '(15 + 7.5 + 6.4 + 5.8) × 2 = 69.4',
           citation: 'Kertesz 1982',
-          inputsLabel: 'four subscores',
-          inputsNoun: 'ratings',
         ),
       )));
       await tester.pump(const Duration(milliseconds: 16));
