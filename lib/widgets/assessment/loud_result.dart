@@ -1,0 +1,357 @@
+// lib/widgets/assessment/loud_result.dart
+//
+// Intern scaffold Phase A — the LOUD-register computed-result component.
+//
+// Cue's assessment surfaces behave like a faithful intern with two registers:
+// SILENT (capture fields, section chrome — calm, recessive) and LOUD (computed
+// results — announced when they resolve, with the math shown and the source
+// cited). This file is the loud register as a standalone, reusable widget. It
+// is the proof-of-pattern ancestor of the deferred shared AssessmentScaffold;
+// existing surfaces (SSD's PCC family first) migrate to it LATER, per-surface,
+// with their test suites green — never as part of this file's evolution.
+//
+// THE BOUNDARY (structural, tested — not aspirational):
+// The intern computes what inputs deterministically dictate (a formula has one
+// answer) and NEVER infers what inputs merely suggest (an inference is a
+// choice, and choices are the clinician's). Concretely, this component:
+//   * announces a value, its published band, the arithmetic, the citation —
+//     and nothing else. No "indicates", no "consider", no "leans toward", no
+//     next-probe nudge, no ranked likelihood, no projected trajectory.
+//   * renders "insufficient data" with what's missing NAMED FACTUALLY when
+//     inputs are incomplete — never a fabricated zero, never a directive.
+//   * carries a structural boundary line on every resolved result stating
+//     that the computation is clerical reflection of the clinician's inputs.
+//     The line is assembled by the component from required fields; there is
+//     no parameter to omit it.
+//   * is selectively loud: a metric with no published band shows the number
+//     and an explicit "no published band" — it never borrows authority.
+// test/widgets/loud_result_test.dart enforces all of this, including a
+// forbidden-language sweep that makes inferential output unrepresentable in
+// a passing build.
+//
+// REGISTER & PALETTE — locked light-spine palette + typography, file-local
+// consts, exactly like the sibling assessment surfaces (pre-CueSurfaceScope
+// discipline; theming migrates with the surfaces, not ahead of them):
+//   * JetBrains Mono 10.5 w500 tracked uppercase = the data-tag eyebrow on
+//     the resolved card only. Inter = everything read.
+//   * Value is Inter w700 tabular at 26 — "numbers as game changers",
+//     deliberately the largest thing in the component (Rule 7).
+//   * NO italic (Rule 3). Olive stripe = Cue's calm clerical contribution
+//     (the brief-card-stripe register); AMBER is reserved for the optional
+//     norming-caveat block — the urgent exception, per the dual-accent
+//     doctrine.
+//   * The resolved state ANNOUNCES BY APPEARING: insufficient → resolved is
+//     an AnimatedSwitcher event (fade + small rise), not a grey line filling
+//     in. Live edits within the resolved state update in place — the EVENT
+//     is the state change, not every keystroke.
+
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+// Locked spine palette (matches the sibling assessment surfaces).
+const Color _ink = Color(0xFF1B2B4B); // kCueInk
+const Color _inkSecondary = Color(0xFF5F5E5A); // body / secondary content
+const Color _inkTertiary = Color(0xFF888780); // eyebrows / metadata
+const Color _line = Color(0xFFE8E4DC); // kCueBorder hairline
+const Color _olive = Color(0xFF5C6E3B); // calm default accent
+const Color _amber = Color(0xFFB45309); // urgent register (kCueAmber)
+const Color _amberSoft = Color(0xFFF4E4C4);
+
+/// Insufficient → resolved is an event the eye notices; long enough to read
+/// as an arrival, short enough to never feel like theatre.
+const Duration kLoudResultResolveDuration = Duration(milliseconds: 260);
+
+// ─── State model ─────────────────────────────────────────────────────────────
+
+/// The three honest states of a computed result. Sealed: a surface cannot
+/// invent a fourth state (e.g. "probably…") without the compiler objecting.
+sealed class LoudResultState {
+  const LoudResultState();
+}
+
+/// No inputs at all. Renders nothing — the silent register's section chrome
+/// owns the invitation. Never a fabricated zero.
+class LoudResultEmpty extends LoudResultState {
+  const LoudResultEmpty();
+}
+
+/// Inputs incomplete. Calm, recessive, NOT an error — the honest waiting
+/// state. [missing] names what's absent factually ("2 more subscores
+/// needed"), never directs the assessment ("run X next" is clinical
+/// judgment and forbidden here).
+class LoudResultInsufficient extends LoudResultState {
+  final String missing;
+
+  const LoudResultInsufficient({required this.missing})
+      : assert(missing != '', 'name what is missing — factually');
+}
+
+/// All inputs present: the result announces. Value large, math shown, source
+/// cited, boundary line riding along — assembled from these fields, so it
+/// cannot be omitted or blanked by any caller.
+class LoudResultResolved extends LoudResultState {
+  /// Preformatted value, unit included where one exists ("67.0", "47.6%").
+  final String value;
+
+  /// Published band/label for the value ("Moderate", "severe"). Null when the
+  /// metric has no published band — the component then says so explicitly
+  /// rather than staying silent or borrowing one.
+  final String? band;
+
+  /// The arithmetic, shown: "(14 + 7.5 + 6.2 + 5.8) × 2 = 67.0". Rendered
+  /// verbatim — the component never reformats or re-derives it.
+  final String math;
+
+  /// Source of the formula/band: "Kertesz 1982", "Shriberg 1982,
+  /// English-normed". Rendered as "per `<citation>`".
+  final String citation;
+
+  /// The boundary line's subject — what the clinician entered ("four
+  /// subscores", "consonant counts").
+  final String inputsLabel;
+
+  /// What kind of numbers they are ("ratings", "counts"). Defaults to the
+  /// universally true "numbers".
+  final String inputsNoun;
+
+  const LoudResultResolved({
+    required this.value,
+    this.band,
+    required this.math,
+    required this.citation,
+    required this.inputsLabel,
+    this.inputsNoun = 'numbers',
+  })  : assert(value != ''),
+        assert(math != '', 'the math is shown, always'),
+        assert(citation != '', 'a result without a source is an assertion'),
+        assert(inputsLabel != '', 'the boundary line needs its subject'),
+        assert(inputsNoun != ''),
+        assert(band == null || band != '', 'no band is null, not ""');
+
+  /// The structural boundary sentence — the computation is clerical
+  /// reflection of the clinician's inputs. Rides every resolved result.
+  String get boundaryLine {
+    final bandClause = band != null
+        ? 'Band per $citation; your interpretation governs.'
+        : 'No published band; your interpretation governs.';
+    return 'Computed from your $inputsLabel — the $inputsNoun are yours; '
+        "the arithmetic is Cue's. $bandClause";
+  }
+}
+
+// ─── Widget ──────────────────────────────────────────────────────────────────
+
+class LoudResult extends StatelessWidget {
+  /// Metric name in natural case ("Aphasia Quotient", "PCC"). The resolved
+  /// card uppercases it into the mono data-tag register; the insufficient
+  /// state keeps it quiet Inter inline — the register shift is part of the
+  /// announcement.
+  final String label;
+
+  final LoudResultState state;
+
+  /// Optional norming caveat ("English-normed reference — interpret with
+  /// caution for non-English samples."). Renders in the AMBER caution
+  /// register below the resolved card ONLY — a caveat belongs to a displayed
+  /// reference, and in the waiting states there is no number to
+  /// mis-interpret.
+  final String? caution;
+
+  const LoudResult({
+    super.key,
+    required this.label,
+    required this.state,
+    this.caution,
+  }) : assert(label != '');
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: kLoudResultResolveDuration,
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.04),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
+        ),
+      ),
+      // Keyed by state TYPE: insufficient → resolved animates (the event);
+      // a live recompute within resolved updates in place (no flash per
+      // keystroke).
+      child: KeyedSubtree(
+        key: ValueKey<Type>(state.runtimeType),
+        child: switch (state) {
+          LoudResultEmpty() => const SizedBox.shrink(),
+          LoudResultInsufficient s => _insufficient(s),
+          LoudResultResolved s => _resolved(s),
+        },
+      ),
+    );
+  }
+
+  // ── Insufficient — the silent register's voice ─────────────────────────
+
+  Widget _insufficient(LoudResultInsufficient s) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(children: [
+          Text(label,
+              style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: _inkSecondary,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(width: 8),
+          Text('insufficient data',
+              style: GoogleFonts.inter(
+                  fontSize: 12.5,
+                  color: _inkTertiary,
+                  fontWeight: FontWeight.w500)),
+        ]),
+        const SizedBox(height: 2),
+        Text(s.missing,
+            style: GoogleFonts.inter(
+                fontSize: 12, color: _inkTertiary, height: 1.45)),
+      ],
+    );
+  }
+
+  // ── Resolved — the announcement ────────────────────────────────────────
+
+  Widget _resolved(LoudResultResolved s) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: _line),
+            ),
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Olive stripe — Cue's calm clerical mark (the brief-card
+                  // register), mirroring the caution block's amber stripe in
+                  // shape but never in urgency.
+                  Container(width: 3.5, color: _olive),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label.toUpperCase(),
+                              style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w500,
+                                  color: _inkTertiary,
+                                  letterSpacing: 10.5 * 0.14)),
+                          const SizedBox(height: 6),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                            textBaseline: TextBaseline.alphabetic,
+                            children: [
+                              // Rule 7: the value is the largest thing here.
+                              Text(s.value,
+                                  style: GoogleFonts.inter(
+                                      fontSize: 26,
+                                      fontWeight: FontWeight.w700,
+                                      color: _ink,
+                                      fontFeatures: const [
+                                        FontFeature.tabularFigures()
+                                      ])),
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: s.band != null
+                                    ? Text(s.band!,
+                                        style: GoogleFonts.inter(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: _ink))
+                                    // Selective loudness: no published band
+                                    // is said out loud, quietly.
+                                    : Text('no published band',
+                                        style: GoogleFonts.inter(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w500,
+                                            color: _inkTertiary)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(s.math,
+                              style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: _inkSecondary,
+                                  fontFeatures: const [
+                                    FontFeature.tabularFigures()
+                                  ])),
+                          const SizedBox(height: 2),
+                          Text('per ${s.citation}',
+                              style: GoogleFonts.inter(
+                                  fontSize: 11.5, color: _inkTertiary)),
+                          const SizedBox(height: 10),
+                          Container(height: 0.5, color: _line),
+                          const SizedBox(height: 8),
+                          Text(s.boundaryLine,
+                              style: GoogleFonts.inter(
+                                  fontSize: 11.5,
+                                  color: _inkSecondary,
+                                  height: 1.45)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (caution != null) ...[
+          const SizedBox(height: 8),
+          _cautionNote(caution!),
+        ],
+      ],
+    );
+  }
+
+  /// AMBER caution register — left stripe + weighted text, the SSD surface's
+  /// proven shape, so a norming caveat can never read as decoration.
+  Widget _cautionNote(String text) => ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          color: _amberSoft.withValues(alpha: 0.45),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 3.5, color: _amber),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                    child: Text(text,
+                        style: GoogleFonts.inter(
+                            fontSize: 12.5,
+                            color: _ink,
+                            fontWeight: FontWeight.w600,
+                            height: 1.5)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
