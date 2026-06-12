@@ -19,38 +19,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:cue/widgets/assessment/loud_result.dart';
 
-// ── Boundary suite — the RED column as literal assertions ──────────────────
-// Word-bounded, case-insensitive. The component's own chrome (plus realistic
-// caller strings) must never match: a formula has one answer; an inference is
-// a choice, and choices are the clinician's.
-final List<RegExp> kForbiddenInference = [
-  RegExp(r'\bindicat(es|ed|ing|ion|ive)\b', caseSensitive: false),
-  RegExp(r'\bsuggest(s|ed|ing|ion|ive)?\b', caseSensitive: false),
-  RegExp(r'\bconsider\b', caseSensitive: false),
-  RegExp(r'\blean(s|ing)?\s+toward', caseSensitive: false),
-  RegExp(r'\bthis child has\b', caseSensitive: false),
-  RegExp(r'\byou should\b', caseSensitive: false),
-  RegExp(r'\brecommend', caseSensitive: false),
-  RegExp(r'\btypically\b', caseSensitive: false),
-  RegExp(r'\bcatch up\b', caseSensitive: false),
-  RegExp(r'\bprognosis\b', caseSensitive: false),
-  RegExp(r'\blikel(y|ihood)\b', caseSensitive: false),
-  RegExp(r'requiring intervention', caseSensitive: false),
-  RegExp(r'\bdiagnos(is|es|ed|tic)\b', caseSensitive: false),
-];
-
-Iterable<String> _allRenderedText(WidgetTester tester) => tester
-    .widgetList<Text>(find.byType(Text))
-    .map((t) => t.data ?? t.textSpan?.toPlainText() ?? '');
-
-void _expectNoInferentialLanguage(WidgetTester tester) {
-  for (final text in _allRenderedText(tester)) {
-    for (final pattern in kForbiddenInference) {
-      expect(pattern.hasMatch(text), isFalse,
-          reason: 'forbidden inferential language "$pattern" in: "$text"');
-    }
-  }
-}
+// THE BOUNDARY suite (§5) lives in assessment_boundary_language.dart so every
+// assessment-surface test applies the same RED-column assertions.
+import 'assessment_boundary_language.dart';
 
 Widget _host(Widget child) => MaterialApp(
       home: Scaffold(
@@ -120,7 +91,7 @@ void main() {
       expect(find.text('Aphasia Quotient'), findsOneWidget);
       expect(find.text('insufficient data'), findsOneWidget);
       expect(find.text('2 more subscores needed'), findsOneWidget);
-      _expectNoInferentialLanguage(tester);
+      expectNoInferentialLanguage(tester);
     });
 
     testWidgets('NOT loud: no card register, nothing at announcement size',
@@ -170,7 +141,7 @@ void main() {
       expect(find.textContaining("Cue's"), findsNothing);
       expect(find.textContaining('interpretation governs'), findsNothing);
       expect(find.textContaining('Computed from'), findsNothing);
-      _expectNoInferentialLanguage(tester);
+      expectNoInferentialLanguage(tester);
     });
 
     testWidgets('math line renders verbatim — no reformatting', (tester) async {
@@ -198,7 +169,7 @@ void main() {
 
       expect(find.text('52.3%'), findsOneWidget);
       expect(find.text('no published band'), findsOneWidget);
-      _expectNoInferentialLanguage(tester);
+      expectNoInferentialLanguage(tester);
     });
   });
 
@@ -215,7 +186,7 @@ void main() {
       )));
       await tester.pumpAndSettle();
       expect(find.text(caveat), findsOneWidget);
-      _expectNoInferentialLanguage(tester);
+      expectNoInferentialLanguage(tester);
     });
 
     testWidgets('never renders in the waiting states', (tester) async {
