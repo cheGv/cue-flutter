@@ -62,6 +62,18 @@ void main() {
             value: '67.0', math: 'x', citation: 'c', band: blank),
           throwsAssertionError);
       expect(() => LoudResultInsufficient(missing: blank), throwsAssertionError);
+      // A band note tags a band; without one there is nothing to tag.
+      expect(() => LoudResultResolved(
+            value: '67.0', math: 'x', citation: 'c',
+            bandNote: 'Kertesz 1982 reference'),
+          throwsAssertionError);
+      expect(() => LoudResultResolved(
+            value: '67.0', math: 'x', citation: 'c', band: 'Mild',
+            bandNote: blank),
+          throwsAssertionError);
+      expect(() => LoudResultResolved(
+            value: '67.0', math: 'x', citation: 'c', detail: blank),
+          throwsAssertionError);
     });
   });
 
@@ -170,6 +182,39 @@ void main() {
       expect(find.text('52.3%'), findsOneWidget);
       expect(find.text('no published band'), findsOneWidget);
       expectNoInferentialLanguage(tester);
+    });
+
+    testWidgets('bandNote + detail: provenance at the band, administered '
+        'instrument recorded — both quiet, both optional', (tester) async {
+      await tester.pumpWidget(_host(const LoudResult(
+        label: 'Aphasia Quotient',
+        state: LoudResultResolved(
+          value: '67.0',
+          band: 'Moderate',
+          bandNote: 'Kertesz 1982 reference',
+          detail: 'Telugu WAB · Pallavi 2010',
+          math: '(14 + 7.5 + 6.2 + 5.8) × 2 = 67.0',
+          citation: 'Kertesz 1982',
+        ),
+      )));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Kertesz 1982 reference'), findsOneWidget);
+      expect(find.text('Telugu WAB · Pallavi 2010'), findsOneWidget);
+      // Both are quieter than the band itself.
+      final band = tester.widget<Text>(find.text('Moderate'));
+      final note = tester.widget<Text>(find.text('Kertesz 1982 reference'));
+      expect(note.style!.fontSize!, lessThan(band.style!.fontSize!));
+      expectNoInferentialLanguage(tester);
+
+      // Absent when null — the plain resolved card is unchanged.
+      await tester.pumpWidget(_host(const LoudResult(
+        label: 'Aphasia Quotient',
+        state: _resolvedWithBand,
+      )));
+      await tester.pumpAndSettle();
+      expect(find.text('Kertesz 1982 reference'), findsNothing);
+      expect(find.text('Telugu WAB · Pallavi 2010'), findsNothing);
     });
   });
 

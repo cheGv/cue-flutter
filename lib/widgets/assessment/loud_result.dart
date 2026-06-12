@@ -101,6 +101,19 @@ class LoudResultResolved extends LoudResultState {
   /// rather than staying silent or borrowing one.
   final String? band;
 
+  /// Optional quiet tag rendered beside the band naming WHOSE band it is
+  /// ("Kertesz 1982 reference") — for instruments administered in an
+  /// adaptation whose own normative cutoffs are not the displayed band's.
+  /// The band must never read as the adaptation's validated cutoff; this
+  /// note keeps the provenance at the band, where the eye reads it. Only
+  /// meaningful with a band present.
+  final String? bandNote;
+
+  /// Optional quiet line under the value row identifying what was
+  /// administered ("Telugu WAB · Pallavi 2010") — a record-keeping fact,
+  /// calm register, never a verdict.
+  final String? detail;
+
   /// The arithmetic, shown: "(14 + 7.5 + 6.2 + 5.8) × 2 = 67.0". Rendered
   /// verbatim — the component never reformats or re-derives it.
   final String math;
@@ -112,12 +125,18 @@ class LoudResultResolved extends LoudResultState {
   const LoudResultResolved({
     required this.value,
     this.band,
+    this.bandNote,
+    this.detail,
     required this.math,
     required this.citation,
   })  : assert(value != ''),
         assert(math != '', 'the math is shown, always'),
         assert(citation != '', 'a result without a source is an assertion'),
-        assert(band == null || band != '', 'no band is null, not ""');
+        assert(band == null || band != '', 'no band is null, not ""'),
+        assert(bandNote == null || bandNote != ''),
+        assert(bandNote == null || band != null,
+            'a band note tags a band — there is nothing to tag without one'),
+        assert(detail == null || detail != '');
 }
 
 // ─── Widget ──────────────────────────────────────────────────────────────────
@@ -257,23 +276,47 @@ class LoudResult extends StatelessWidget {
                                         FontFeature.tabularFigures()
                                       ])),
                               const SizedBox(width: 10),
-                              Flexible(
-                                child: s.band != null
-                                    ? Text(s.band!,
-                                        style: GoogleFonts.inter(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: _ink))
-                                    // Selective loudness: no published band
-                                    // is said out loud, quietly.
-                                    : Text('no published band',
+                              if (s.band != null) ...[
+                                Flexible(
+                                  child: Text(s.band!,
+                                      style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: _ink)),
+                                ),
+                                // Whose band it is, said quietly AT the band
+                                // — never the administered adaptation's
+                                // validated cutoff by implication.
+                                if (s.bandNote != null) ...[
+                                  const SizedBox(width: 6),
+                                  Flexible(
+                                    child: Text(s.bandNote!,
                                         style: GoogleFonts.inter(
                                             fontSize: 11.5,
                                             fontWeight: FontWeight.w500,
                                             color: _inkTertiary)),
-                              ),
+                                  ),
+                                ],
+                              ] else
+                                // Selective loudness: no published band is
+                                // said out loud, quietly.
+                                Flexible(
+                                  child: Text('no published band',
+                                      style: GoogleFonts.inter(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w500,
+                                          color: _inkTertiary)),
+                                ),
                             ],
                           ),
+                          if (s.detail != null) ...[
+                            const SizedBox(height: 4),
+                            Text(s.detail!,
+                                style: GoogleFonts.inter(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: _inkSecondary)),
+                          ],
                           const SizedBox(height: 8),
                           Text(s.math,
                               style: GoogleFonts.inter(

@@ -1,6 +1,6 @@
 // test/widgets/wab_k_aq_widget_test.dart
 //
-// Intern scaffold Phase B1 — proof of the WAB-K AQ proving widget.
+// Intern scaffold Phase B1 + B+ — proof of the WAB-K AQ proving widget.
 //
 // The silent two-register interaction: scores in → AQ appears, no prompts,
 // no narration. Asserts the verified formula (AQ = sum × 2) including values
@@ -11,6 +11,12 @@
 // (an impossible subscore never computes; it is named), recede-on-clear,
 // in-place recompute on edit — and the Section 5 forbidden-language suite
 // over every rendered state.
+//
+// B+ multilingual layer: the adaptation selector changes the administered-
+// instrument detail line and the norming caveat ONLY. Same subscores → same
+// AQ → same band in every adaptation; the band wears "Kertesz 1982
+// reference" in every adaptation (never the language's own validated
+// cutoff); the §5 suite runs clean across every selected-language state.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +42,23 @@ Widget _host() => const MaterialApp(
 Future<void> _enter(WidgetTester tester, int field, String text) async {
   await tester.enterText(find.byType(TextField).at(field), text);
   await tester.pump();
+}
+
+/// Open the adaptation dropdown and pick [label].
+Future<void> _selectAdaptation(WidgetTester tester, String label) async {
+  await tester.tap(find.byType(DropdownButtonFormField<WabAdaptation>));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
+}
+
+/// Enter the spec-example subscores → AQ 67.0, Moderate.
+Future<void> _enterExampleScores(WidgetTester tester) async {
+  await _enter(tester, 0, '14');
+  await _enter(tester, 1, '7.5');
+  await _enter(tester, 2, '6.2');
+  await _enter(tester, 3, '5.8');
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -144,8 +167,12 @@ void main() {
       expect(find.textContaining('Computed from'), findsNothing);
       expectNoInferentialLanguage(tester);
 
-      // The norming caveat (a real instrument fact) rides the resolved card.
-      expect(find.text(kWabKNormingCaveatV1), findsOneWidget);
+      // B+: the band wears its provenance; the administered instrument is
+      // recorded; English (the default, explicit) carries no caveat — the
+      // displayed bands ARE its own norms.
+      expect(find.text(kWabBandReferenceNote), findsOneWidget);
+      expect(find.text('English WAB · Kertesz 1982'), findsOneWidget);
+      expect(find.textContaining('Severity bands are'), findsNothing);
     });
 
     testWidgets('band boundary reached through the widget, not just the fn',
@@ -224,7 +251,113 @@ void main() {
       expect(find.text('APHASIA QUOTIENT'), findsNothing);
       expect(find.text('insufficient data'), findsOneWidget);
       expect(find.text('1 more subscore needed'), findsOneWidget);
-      expect(find.text(kWabKNormingCaveatV1), findsNothing);
+      expect(find.text('English WAB · Kertesz 1982'), findsNothing);
+      expectNoInferentialLanguage(tester);
+    });
+  });
+
+  group('multilingual layer — language changes the label, never the math', () {
+    test('the registry: six published adaptations, unique codes, cited', () {
+      expect(kWabAdaptations.length, 6);
+      expect(kWabAdaptations.map((a) => a.code).toSet().length, 6);
+      expect(kWabAdaptations.first.code, 'english');
+      for (final a in kWabAdaptations) {
+        expect(a.citation, isNotEmpty);
+        expect(a.resultLine, '${a.shortLabel} · ${a.citation}');
+      }
+    });
+
+    test('caveat: none for English; own-norms named; generic otherwise', () {
+      expect(wabAdaptationCaveat(kWabAdaptations[0]), isNull);
+      expect(
+        wabAdaptationCaveat(
+            kWabAdaptations.firstWhere((a) => a.code == 'kannada')),
+        'Severity bands are the Kertesz 1982 (English WAB) reference — '
+        'Kannada WAB-K publishes its own normative data; interpret with '
+        'that context.',
+      );
+      expect(
+        wabAdaptationCaveat(
+            kWabAdaptations.firstWhere((a) => a.code == 'bengali')),
+        'Severity bands are the Kertesz 1982 (English WAB) reference — '
+        'Bengali B-WAB publishes its own normative data; interpret with '
+        'that context.',
+      );
+      for (final code in ['telugu', 'malayalam', 'hindi']) {
+        expect(
+          wabAdaptationCaveat(
+              kWabAdaptations.firstWhere((a) => a.code == code)),
+          'Severity bands are the Kertesz 1982 (English WAB) reference — '
+          "interpret against the administered adaptation's norms.",
+          reason: 'generic reference caveat expected for $code',
+        );
+      }
+    });
+
+    testWidgets('the selection is explicit from the first frame',
+        (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+      expect(find.text('English (WAB / WAB-R)'), findsOneWidget);
+    });
+
+    testWidgets(
+        'same subscores → same AQ, same band, same math, Kertesz-reference '
+        'tag, correct detail + caveat — in EVERY adaptation', (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+      await _enterExampleScores(tester);
+
+      for (final a in kWabAdaptations) {
+        await _selectAdaptation(tester, a.label);
+
+        // The arithmetic is language-independent — identical everywhere.
+        expect(find.text('67.0'), findsOneWidget,
+            reason: 'AQ must not change for ${a.code}');
+        expect(find.text('Moderate'), findsOneWidget,
+            reason: 'band must not change for ${a.code}');
+        expect(find.text('(14 + 7.5 + 6.2 + 5.8) × 2 = 67.0'), findsOneWidget,
+            reason: 'math must not change for ${a.code}');
+        expect(find.text('per Kertesz 1982'), findsOneWidget,
+            reason: 'formula citation must not change for ${a.code}');
+
+        // The band is the Kertesz REFERENCE in every language — never
+        // relabeled as the adaptation's own validated cutoff.
+        expect(find.text(kWabBandReferenceNote), findsOneWidget,
+            reason: 'band provenance must show for ${a.code}');
+
+        // The administered instrument is recorded, cited.
+        expect(find.text(a.resultLine), findsOneWidget,
+            reason: 'detail line wrong for ${a.code}');
+
+        // The caveat tracks the adaptation honestly.
+        final caveat = wabAdaptationCaveat(a);
+        if (caveat == null) {
+          expect(find.textContaining('Severity bands are'), findsNothing,
+              reason: 'English carries no caveat');
+        } else {
+          expect(find.text(caveat), findsOneWidget,
+              reason: 'caveat wrong for ${a.code}');
+        }
+
+        // §5: no inferential language in any selected-language state.
+        expectNoInferentialLanguage(tester);
+      }
+    });
+
+    testWidgets('switching adaptation while waiting changes no waiting text',
+        (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+      await _enter(tester, 0, '14');
+
+      await _selectAdaptation(tester, 'Telugu');
+      expect(find.text('insufficient data'), findsOneWidget);
+      expect(find.text('3 more subscores needed'), findsOneWidget);
+      // No caveat, no detail line in the waiting state — there is no number
+      // to contextualize yet.
+      expect(find.textContaining('Severity bands are'), findsNothing);
+      expect(find.text('Telugu WAB · Pallavi 2010'), findsNothing);
       expectNoInferentialLanguage(tester);
     });
   });

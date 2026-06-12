@@ -28,11 +28,24 @@
 // maximum do not compute: the readout names the violation factually and
 // waits. Never a fabricated AQ.
 //
+// THE MULTILINGUAL LAYER (Phase B+, 2026-06-12). The AQ formula is identical
+// across every published WAB language adaptation — language changes the
+// LABEL, never the arithmetic. The adaptation selector therefore changes
+// exactly two things on the result: the administered-instrument detail line
+// ("Telugu WAB · Pallavi 2010") and the norming caveat. It never changes the
+// AQ, the band, or the math. THE ONE HONEST CONSTRAINT: the severity band is
+// always shown as "Kertesz 1982 reference" — a true statement — and never
+// asserted as the selected adaptation's own validated cutoff, because some
+// adaptations (Kannada, Bengali) publish their own normative data and we
+// have not verified which kept Kertesz's bands. Cue computes the
+// language-independent AQ, labels the reference truthfully, and the
+// clinician applies the administered adaptation's norms.
+//
 // THE BOUNDARY: the widget announces the value, the Kertesz band, the
 // arithmetic, the citation — and nothing else. No "indicates", no
 // "consider", no severity commentary, no therapy direction. The Section 5
-// forbidden-language suite runs over every rendered state in
-// test/widgets/wab_k_aq_widget_test.dart.
+// forbidden-language suite runs over every rendered state, in every
+// adaptation, in test/widgets/wab_k_aq_widget_test.dart.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -103,14 +116,115 @@ String wabKerteszBand(double aq) {
   return 'Mild';
 }
 
-/// Norming caveat v1 — wording flagged for Guru's review in the Phase B
-/// report. The limitation is documented, not invented: the severity bands
-/// are English-WAB norms (Kertesz 1982), while the Kannada WAB-K publishes
-/// its own normative data (AIISH; Chengappa & Kumar's WAB-K normative
-/// study).
-const String kWabKNormingCaveatV1 =
-    'Severity bands are Kertesz 1982 (English WAB) norms — the Kannada '
-    'WAB-K publishes its own normative data; interpret with that context.';
+/// A published WAB language adaptation. Data, not hardcoded UI — extend the
+/// list when further adaptations are confirmed in the literature.
+class WabAdaptation {
+  /// Stable lowercase key (graduation will persist this).
+  final String code;
+
+  /// Selector display label.
+  final String label;
+
+  /// Short instrument name for the result's detail line.
+  final String shortLabel;
+
+  /// Published citation for the adaptation.
+  final String citation;
+
+  /// True where the adaptation publishes its OWN normative data (so the
+  /// caveat says so). False means "not verified here" — never "has none".
+  final bool publishesOwnNorms;
+
+  const WabAdaptation({
+    required this.code,
+    required this.label,
+    required this.shortLabel,
+    required this.citation,
+    this.publishesOwnNorms = false,
+  });
+
+  /// "Telugu WAB · Pallavi 2010" — the administered-instrument record line.
+  String get resultLine => '$shortLabel · $citation';
+}
+
+/// Published WAB adaptations offered by the selector. Citations verified
+/// 2026-06-12 (sources in the Phase B+ report):
+///   * English — Kertesz, A. (1979; 1982). The Western Aphasia Battery.
+///     The original; the AQ formula and severity bands are its norms.
+///   * Kannada (WAB-K) — Chengappa & Kumar (2008), Normative & Clinical
+///     Data on the Kannada Version of the WAB. Publishes own normative data.
+///   * Telugu — Pallavi (2010), WAB in Telugu, unpublished master's
+///     dissertation, University of Mysore.
+///   * Malayalam — Jenny, E.P. (1992), A Test of Aphasia in Malayalam,
+///     unpublished master's dissertation, University of Mysore.
+///   * Hindi (WAB-H) — Kacker, Pandit & Dua (1991), Hindi aphasia
+///     examination reliability/validity (Indian J. Disability &
+///     Rehabilitation); the WAB-H used in Indian validation work (e.g. the
+///     Indian Aphasia Battery study). Citation to re-confirm at graduation.
+///   * Bengali (B-WAB) — Keshree, Kumar, Basu, Chakrabarty & Kishore
+///     (2013), Adaptation of the WAB in Bangla, Psychology of Language and
+///     Communication 17(2):189–201. Standardized on 150 normals across five
+///     age groups — publishes own normative data.
+const List<WabAdaptation> kWabAdaptations = [
+  WabAdaptation(
+    code: 'english',
+    label: 'English (WAB / WAB-R)',
+    shortLabel: 'English WAB',
+    citation: 'Kertesz 1982',
+  ),
+  WabAdaptation(
+    code: 'kannada',
+    label: 'Kannada (WAB-K)',
+    shortLabel: 'Kannada WAB-K',
+    citation: 'Chengappa & Kumar 2008',
+    publishesOwnNorms: true,
+  ),
+  WabAdaptation(
+    code: 'telugu',
+    label: 'Telugu',
+    shortLabel: 'Telugu WAB',
+    citation: 'Pallavi 2010',
+  ),
+  WabAdaptation(
+    code: 'malayalam',
+    label: 'Malayalam',
+    shortLabel: 'Malayalam WAB',
+    citation: 'Jenny 1992',
+  ),
+  WabAdaptation(
+    code: 'hindi',
+    label: 'Hindi (WAB-H)',
+    shortLabel: 'Hindi WAB-H',
+    citation: 'Kacker, Pandit & Dua 1991',
+  ),
+  WabAdaptation(
+    code: 'bengali',
+    label: 'Bengali (B-WAB)',
+    shortLabel: 'Bengali B-WAB',
+    citation: 'Keshree et al. 2013',
+    publishesOwnNorms: true,
+  ),
+];
+
+/// The band's provenance, said quietly AT the band in every adaptation —
+/// the integrity point of the multilingual layer.
+const String kWabBandReferenceNote = 'Kertesz 1982 reference';
+
+/// Norming caveat for the selected adaptation — a documented instrument
+/// fact, kept brief (never reassurance). English gets none: there the
+/// displayed bands ARE the administered instrument's own norms. Adaptations
+/// with verified own normative data are named; the rest get the generic
+/// reference statement.
+String? wabAdaptationCaveat(WabAdaptation a) {
+  if (a.code == 'english') return null;
+  if (a.publishesOwnNorms) {
+    return 'Severity bands are the Kertesz 1982 (English WAB) reference — '
+        '${a.shortLabel} publishes its own normative data; interpret with '
+        'that context.';
+  }
+  return 'Severity bands are the Kertesz 1982 (English WAB) reference — '
+      "interpret against the administered adaptation's norms.";
+}
 
 class WabKAqWidget extends StatefulWidget {
   const WabKAqWidget({super.key});
@@ -137,6 +251,11 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
     _Subscore('Repetition', kWabRepetitionMax),
     _Subscore('Naming', kWabNamingMax),
   ];
+
+  /// Selected adaptation — explicit at all times; defaults to the original
+  /// instrument. Changes the detail line and the caveat, never the
+  /// arithmetic.
+  WabAdaptation _adaptation = kWabAdaptations.first;
 
   @override
   void dispose() {
@@ -177,6 +296,10 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
     return LoudResultResolved(
       value: aq.toStringAsFixed(1),
       band: wabKerteszBand(aq),
+      // The band wears its provenance in every adaptation; the detail line
+      // records what was administered. Neither changes the number.
+      bandNote: kWabBandReferenceNote,
+      detail: _adaptation.resultLine,
       math: '($terms) × 2 = ${aq.toStringAsFixed(1)}',
       citation: 'Kertesz 1982',
     );
@@ -193,6 +316,11 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Row(children: [
+          Expanded(child: _adaptationSelector()),
+          const SizedBox(width: 12),
+          const Expanded(child: SizedBox()),
+        ]),
+        Row(children: [
           Expanded(child: _numField(_subscores[0])),
           const SizedBox(width: 12),
           Expanded(child: _numField(_subscores[1])),
@@ -206,9 +334,46 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
         LoudResult(
           label: 'Aphasia Quotient',
           state: _aqState(),
-          caution: kWabKNormingCaveatV1,
+          caution: wabAdaptationCaveat(_adaptation),
         ),
       ],
+    );
+  }
+
+  /// Silent-register setting, not the focus: which published adaptation was
+  /// administered. Quiet label + dense outlined dropdown matching the
+  /// subscore fields.
+  Widget _adaptationSelector() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Adaptation',
+            style: GoogleFonts.inter(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: _ink,
+                letterSpacing: -0.05)),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<WabAdaptation>(
+          initialValue: _adaptation,
+          isExpanded: true,
+          isDense: true,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          ),
+          style: GoogleFonts.inter(
+              fontSize: 13.5, fontWeight: FontWeight.w400, color: _ink),
+          items: [
+            for (final a in kWabAdaptations)
+              DropdownMenuItem(value: a, child: Text(a.label)),
+          ],
+          onChanged: (a) {
+            if (a != null) setState(() => _adaptation = a);
+          },
+        ),
+      ]),
     );
   }
 
