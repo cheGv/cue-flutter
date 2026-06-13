@@ -17,6 +17,11 @@
 // AQ → same band in every adaptation; the band wears "Kertesz 1982
 // reference" in every adaptation (never the language's own validated
 // cutoff); the §5 suite runs clean across every selected-language state.
+//
+// Aphasia cutoff (Kertesz & Poole 1974): AQ ≥ 93.8 is classified no aphasia,
+// surfaced in place of the "Mild" severity band (band and cutoff are different
+// instruments); AQ just below stays banded; the cutoff caveat names the cutoff
+// reference, not the severity bands; §5 stays clean over the new output.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -124,8 +129,149 @@ void main() {
       expect(wabKerteszBand(75.0), 'Moderate'); // at cutoff: lower band
       expect(wabKerteszBand(75.1), 'Mild'); // just across
       expect(wabKerteszBand(76.0), 'Mild');
-      expect(wabKerteszBand(93.8), 'Mild'); // Kertesz aphasia cutoff — still
-      expect(wabKerteszBand(100.0), 'Mild'); // the published band; see code
+      // wabKerteszBand is the PURE severity band — it never applies the 93.8
+      // aphasia cutoff (that is wabAtOrAboveAphasiaCutoff, exercised in the
+      // next group and surfaced by the widget). So on the severity scale 93.8
+      // and 100 are still 'Mild'; the cutoff relation is layered on top.
+      expect(wabKerteszBand(93.8), 'Mild');
+      expect(wabKerteszBand(100.0), 'Mild');
+    });
+  });
+
+  group('aphasia cutoff (93.8) — Kertesz & Poole 1974', () {
+    // The cutoff is a DIFFERENT instrument from the severity band: AQ ≥ 93.8 is
+    // classified no aphasia, even though the severity scale would call that
+    // range "Mild". Reporting a published cutoff, never diagnosing.
+    test('wabAtOrAboveAphasiaCutoff: inclusive at 93.8, on the exact value', () {
+      expect(kWabAphasiaCutoff, 93.8);
+      expect(wabAtOrAboveAphasiaCutoff(93.79), isFalse);
+      expect(wabAtOrAboveAphasiaCutoff(93.8), isTrue); // at cutoff: inclusive
+      expect(wabAtOrAboveAphasiaCutoff(93.81), isTrue);
+      expect(wabAtOrAboveAphasiaCutoff(96.0), isTrue);
+      expect(wabAtOrAboveAphasiaCutoff(100.0), isTrue);
+      expect(wabAtOrAboveAphasiaCutoff(93.6), isFalse); // just below → banded
+      expect(wabAtOrAboveAphasiaCutoff(75.0), isFalse);
+      expect(wabAtOrAboveAphasiaCutoff(0), isFalse);
+    });
+
+    test('cutoff caveat names the cutoff reference, not the severity bands', () {
+      // English: its own cutoff (Kertesz & Poole 1974) — no caveat, either
+      // register.
+      expect(wabAdaptationCaveat(kWabAdaptations[0], atOrAboveCutoff: true),
+          isNull);
+      // Own-norms adaptation: the cutoff reference is named (not "Severity
+      // bands"), then the own-norms context.
+      expect(
+        wabAdaptationCaveat(
+            kWabAdaptations.firstWhere((a) => a.code == 'kannada'),
+            atOrAboveCutoff: true),
+        'The 93.8 aphasia cutoff is the Kertesz & Poole 1974 (English WAB) '
+        'reference — Kannada WAB-K publishes its own normative data; interpret '
+        'with that context.',
+      );
+      // Generic adaptation.
+      expect(
+        wabAdaptationCaveat(
+            kWabAdaptations.firstWhere((a) => a.code == 'hindi'),
+            atOrAboveCutoff: true),
+        'The 93.8 aphasia cutoff is the Kertesz & Poole 1974 (English WAB) '
+        "reference — interpret against the administered adaptation's norms.",
+      );
+    });
+
+    testWidgets(
+        'AQ ≥ 93.8 surfaces the cutoff relation in place of the "Mild" band',
+        (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+
+      // 20 + 10 + 9 + 9 = 48 → AQ 96.0 — the spec's mislabel example, which
+      // used to render "Mild".
+      await _enter(tester, 0, '20');
+      await _enter(tester, 1, '10');
+      await _enter(tester, 2, '9');
+      await _enter(tester, 3, '9');
+      await tester.pumpAndSettle();
+
+      expect(find.text('96.0'), findsOneWidget);
+      expect(find.text(kWabNoAphasiaLabel), findsOneWidget); // 'No aphasia'
+      expect(find.text(kWabAphasiaCutoffNote), findsOneWidget);
+      // The mislabel is gone: no severity band shown at/above the cutoff.
+      expect(find.text('Mild'), findsNothing);
+      // Formula source unchanged — the AQ is still Kertesz 1982.
+      expect(find.text('per Kertesz 1982'), findsOneWidget);
+      // English carries its own cutoff — no caveat block (both variants say
+      // "interpret"; none is shown here).
+      expect(find.textContaining('interpret'), findsNothing);
+      // Reporting a published cutoff is not inferential language.
+      expectNoInferentialLanguage(tester);
+    });
+
+    testWidgets('AQ just below 93.8 stays the severity band, no cutoff line',
+        (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+
+      // 20 + 9 + 9 + 8.8 = 46.8 → AQ 93.6, just below the cutoff.
+      await _enter(tester, 0, '20');
+      await _enter(tester, 1, '9');
+      await _enter(tester, 2, '9');
+      await _enter(tester, 3, '8.8');
+      await tester.pumpAndSettle();
+
+      expect(find.text('93.6'), findsOneWidget);
+      expect(find.text('Mild'), findsOneWidget); // banded as before
+      expect(find.text(kWabBandReferenceNote), findsOneWidget);
+      expect(find.text(kWabNoAphasiaLabel), findsNothing);
+      expect(find.text(kWabAphasiaCutoffNote), findsNothing);
+      expectNoInferentialLanguage(tester);
+    });
+
+    testWidgets('crossing 93.8 by one edit flips band → cutoff relation',
+        (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+
+      // 20 + 9 + 9 + 8.8 → AQ 93.6, Mild.
+      await _enter(tester, 0, '20');
+      await _enter(tester, 1, '9');
+      await _enter(tester, 2, '9');
+      await _enter(tester, 3, '8.8');
+      await tester.pumpAndSettle();
+      expect(find.text('Mild'), findsOneWidget);
+      expect(find.text(kWabNoAphasiaLabel), findsNothing);
+
+      // Nudge naming 8.8 → 9 (sum 47 → AQ 94.0), crossing the cutoff.
+      await _enter(tester, 3, '9');
+      await tester.pumpAndSettle();
+      expect(find.text('94.0'), findsOneWidget);
+      expect(find.text(kWabNoAphasiaLabel), findsOneWidget);
+      expect(find.text('Mild'), findsNothing);
+      expectNoInferentialLanguage(tester);
+    });
+
+    testWidgets('cutoff caveat shows for a non-English adaptation, §5 clean',
+        (tester) async {
+      await tester.pumpWidget(_host());
+      await tester.pumpAndSettle();
+      // AQ 96.0, above the cutoff.
+      await _enter(tester, 0, '20');
+      await _enter(tester, 1, '10');
+      await _enter(tester, 2, '9');
+      await _enter(tester, 3, '9');
+      await tester.pumpAndSettle();
+
+      await _selectAdaptation(tester, 'Kannada (WAB-K)');
+
+      expect(find.text('96.0'), findsOneWidget);
+      expect(find.text(kWabNoAphasiaLabel), findsOneWidget);
+      // The caveat now names the CUTOFF reference, not "Severity bands".
+      final caveat = wabAdaptationCaveat(
+          kWabAdaptations.firstWhere((a) => a.code == 'kannada'),
+          atOrAboveCutoff: true);
+      expect(find.text(caveat!), findsOneWidget);
+      expect(find.textContaining('Severity bands are'), findsNothing);
+      expectNoInferentialLanguage(tester);
     });
   });
 

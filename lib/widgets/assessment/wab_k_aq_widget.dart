@@ -39,13 +39,19 @@
 // adaptations (Kannada, Bengali) publish their own normative data and we
 // have not verified which kept Kertesz's bands. Cue computes the
 // language-independent AQ, labels the reference truthfully, and the
-// clinician applies the administered adaptation's norms.
+// clinician applies the administered adaptation's norms. The same honesty
+// governs the 93.8 aphasia cutoff (Kertesz & Poole 1974): it is the
+// English-WAB cutoff, named as such, with the adaptation caveat carrying its
+// provenance — reported, never recomputed as the adaptation's own.
 //
-// THE BOUNDARY: the widget announces the value, the Kertesz band, the
-// arithmetic, the citation — and nothing else. No "indicates", no
-// "consider", no severity commentary, no therapy direction. The Section 5
-// forbidden-language suite runs over every rendered state, in every
-// adaptation, in test/widgets/wab_k_aq_widget_test.dart.
+// THE BOUNDARY: the widget announces the value, the Kertesz severity band —
+// or, at/above the published 93.8 aphasia cutoff (Kertesz & Poole 1974), the
+// cutoff relation in its place — the arithmetic, the citation, and nothing
+// else. Surfacing the cutoff is threshold-REPORTING of a published fact (§5
+// boundary pair 3), never a diagnosis: no "indicates", no "consider", no
+// severity commentary, no therapy direction. The Section 5 forbidden-language
+// suite runs over every rendered state, in every adaptation, in
+// test/widgets/wab_k_aq_widget_test.dart.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -103,18 +109,49 @@ double? computeWabAq({
 /// continuously — ≤25, ≤50, ≤75, >75 — banding on the exact (unrounded)
 /// value.
 ///
-/// NOT encoded here: Kertesz's recommended aphasia cutoff of AQ 93.8 (100%
-/// specificity / 60% sensitivity per Strokengine). An AQ above it still
-/// renders the published "Mild" band; whether Cue should additionally state
-/// the cutoff relation — and whether WAB-K (Kannada) cutoffs belong here
-/// instead of/alongside the English-WAB norms — is flagged for Guru in the
-/// Phase B report, not decided in code.
+/// This is the PURE severity band — it never applies the aphasia cutoff.
+/// Kertesz's published aphasia cutoff (AQ 93.8; Kertesz & Poole 1974) is a
+/// SEPARATE instrument, handled by [wabAtOrAboveAphasiaCutoff]: at/above it a
+/// score is classified no aphasia, and the widget surfaces that cutoff
+/// relation in place of the band. An AQ of 96 sits in this "Mild" range yet is
+/// non-aphasic by the cutoff — showing "Mild" alone would mislabel a
+/// non-aphasic score, which is why the two are kept distinct. The WAB-K
+/// (Kannada) own-cutoff question stays a norming caveat, not a recomputation:
+/// Cue reports the English-WAB cutoff and names its provenance.
 String wabKerteszBand(double aq) {
   if (aq <= 25) return 'Very severe';
   if (aq <= 50) return 'Severe';
   if (aq <= 75) return 'Moderate';
   return 'Mild';
 }
+
+/// The published aphasia/no-aphasia cutoff for the WAB AQ: AQ ≥ 93.8 is
+/// classified NO APHASIA; AQ < 93.8 is aphasia present, where the severity
+/// band ([wabKerteszBand]) applies. The severity band and this cutoff are
+/// DIFFERENT instruments — an AQ of 96 sits in the "Mild" severity range yet
+/// is non-aphasic by the cutoff, so showing "Mild" alone mislabels a
+/// non-aphasic score as mild aphasia.
+///
+/// Source: Kertesz, A. & Poole, E. (1974). The aphasia quotient: the taxonomic
+/// approach to measurement of aphasic disability. Canadian Journal of
+/// Neurological Sciences, 1(1), 7–16 — the published 93.8 cutoff (100%
+/// specificity / ~60% sensitivity). This is threshold REPORTING of a published
+/// cutoff, not a diagnosis Cue makes (intern-scaffold §5 boundary pair 3).
+const double kWabAphasiaCutoff = 93.8;
+
+/// True when [aq] is at or above the published [kWabAphasiaCutoff] — classified
+/// no aphasia. Read on the exact (unrounded) value, like [wabKerteszBand]; the
+/// literature states the relation as AQ ≥ 93.8, so the boundary is inclusive.
+bool wabAtOrAboveAphasiaCutoff(double aq) => aq >= kWabAphasiaCutoff;
+
+/// Band-slot label shown at/above the cutoff — the published classification,
+/// not a severity grade. Reported, never inferred.
+const String kWabNoAphasiaLabel = 'No aphasia';
+
+/// The cutoff relation + its source, said quietly AT the classification (the
+/// bandNote slot), exactly as [kWabBandReferenceNote] tags the severity band —
+/// so "No aphasia" never reads as Cue's verdict, only the published cutoff's.
+const String kWabAphasiaCutoffNote = 'at/above 93.8 cutoff · Kertesz & Poole 1974';
 
 /// A published WAB language adaptation. Data, not hardcoded UI — extend the
 /// list when further adaptations are confirmed in the literature.
@@ -157,10 +194,14 @@ class WabAdaptation {
 ///     dissertation, University of Mysore.
 ///   * Malayalam — Jenny, E.P. (1992), A Test of Aphasia in Malayalam,
 ///     unpublished master's dissertation, University of Mysore.
-///   * Hindi (WAB-H) — Kacker, Pandit & Dua (1991), Hindi aphasia
-///     examination reliability/validity (Indian J. Disability &
-///     Rehabilitation); the WAB-H used in Indian validation work (e.g. the
-///     Indian Aphasia Battery study). Citation to re-confirm at graduation.
+///   * Hindi (WAB-H) — Kacker, Pandit & Dua (1991), "Reliability and validity
+///     studies of examination for aphasia test in Hindi", Indian Journal of
+///     Disability and Rehabilitation 1991;5:13–19 (verified 2026-06-13).
+///     HONEST PROVENANCE: this is the Hindi examination for aphasia used AS
+///     the WAB-H reference in Indian validation work — NOT a cleanly-labeled
+///     standalone "Hindi WAB adaptation" the way Chengappa & Kumar is
+///     explicitly the Kannada WAB. Cited as the established Hindi reference,
+///     not overclaimed as a formal WAB translation.
 ///   * Bengali (B-WAB) — Keshree, Kumar, Basu, Chakrabarty & Kishore
 ///     (2013), Adaptation of the WAB in Bangla, Psychology of Language and
 ///     Communication 17(2):189–201. Standardized on 150 normals across five
@@ -215,15 +256,20 @@ const String kWabBandReferenceNote = 'Kertesz 1982 reference';
 /// displayed bands ARE the administered instrument's own norms. Adaptations
 /// with verified own normative data are named; the rest get the generic
 /// reference statement.
-String? wabAdaptationCaveat(WabAdaptation a) {
+String? wabAdaptationCaveat(WabAdaptation a, {bool atOrAboveCutoff = false}) {
   if (a.code == 'english') return null;
+  // The displayed reference is English-WAB whether it is the severity band
+  // (Kertesz 1982) or the aphasia cutoff (Kertesz & Poole 1974); the caveat
+  // names whichever is on screen, so it never cites a band that isn't shown.
+  final ref = atOrAboveCutoff
+      ? 'The 93.8 aphasia cutoff is the Kertesz & Poole 1974 (English WAB) '
+          'reference'
+      : 'Severity bands are the Kertesz 1982 (English WAB) reference';
   if (a.publishesOwnNorms) {
-    return 'Severity bands are the Kertesz 1982 (English WAB) reference — '
-        '${a.shortLabel} publishes its own normative data; interpret with '
-        'that context.';
+    return '$ref — ${a.shortLabel} publishes its own normative data; '
+        'interpret with that context.';
   }
-  return 'Severity bands are the Kertesz 1982 (English WAB) reference — '
-      "interpret against the administered adaptation's norms.";
+  return "$ref — interpret against the administered adaptation's norms.";
 }
 
 class WabKAqWidget extends StatefulWidget {
@@ -265,25 +311,34 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
     super.dispose();
   }
 
-  /// The readout state the current inputs deterministically dictate.
-  LoudResultState _aqState() {
+  /// The readout — result state plus the norming caveat that belongs to it —
+  /// the current inputs deterministically dictate. State and caveat resolve
+  /// together because the caveat's wording tracks whether the cutoff relation
+  /// or the severity band is the displayed reference.
+  ({LoudResultState state, String? caution}) _readout() {
     // A subscore above its published maximum cannot compute — name it
     // factually and wait. (Negatives are unreachable: the input formatter
     // admits only digits and the decimal point.)
     for (final s in _subscores) {
       final v = s.value;
       if (v != null && v > s.max) {
-        return LoudResultInsufficient(
-            missing:
-                '${s.label} exceeds its /${s.max.toStringAsFixed(0)} maximum');
+        return (
+          state: LoudResultInsufficient(
+              missing:
+                  '${s.label} exceeds its /${s.max.toStringAsFixed(0)} maximum'),
+          caution: null,
+        );
       }
     }
 
     final values = [for (final s in _subscores) s.value];
     final missing = values.where((v) => v == null).length;
     if (missing > 0) {
-      return LoudResultInsufficient(
-          missing: '$missing more subscore${missing == 1 ? '' : 's'} needed');
+      return (
+        state: LoudResultInsufficient(
+            missing: '$missing more subscore${missing == 1 ? '' : 's'} needed'),
+        caution: null,
+      );
     }
 
     final aq = computeWabAq(
@@ -293,15 +348,24 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
       naming: values[3],
     )!;
     final terms = values.map((v) => _fmtTerm(v!)).join(' + ');
-    return LoudResultResolved(
-      value: aq.toStringAsFixed(1),
-      band: wabKerteszBand(aq),
-      // The band wears its provenance in every adaptation; the detail line
-      // records what was administered. Neither changes the number.
-      bandNote: kWabBandReferenceNote,
-      detail: _adaptation.resultLine,
-      math: '($terms) × 2 = ${aq.toStringAsFixed(1)}',
-      citation: 'Kertesz 1982',
+    final atOrAboveCutoff = wabAtOrAboveAphasiaCutoff(aq);
+    return (
+      state: LoudResultResolved(
+        value: aq.toStringAsFixed(1),
+        // At/above the published 93.8 cutoff the score is classified no
+        // aphasia; showing the "Mild" severity band there would mislabel a
+        // non-aphasic score. Below it, the severity band applies as before.
+        // The band/classification wears its provenance; the detail line
+        // records what was administered. Neither changes the number.
+        band: atOrAboveCutoff ? kWabNoAphasiaLabel : wabKerteszBand(aq),
+        bandNote:
+            atOrAboveCutoff ? kWabAphasiaCutoffNote : kWabBandReferenceNote,
+        detail: _adaptation.resultLine,
+        math: '($terms) × 2 = ${aq.toStringAsFixed(1)}',
+        citation: 'Kertesz 1982',
+      ),
+      caution:
+          wabAdaptationCaveat(_adaptation, atOrAboveCutoff: atOrAboveCutoff),
     );
   }
 
@@ -311,6 +375,7 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final readout = _readout();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -333,8 +398,8 @@ class _WabKAqWidgetState extends State<WabKAqWidget> {
         const SizedBox(height: 8),
         LoudResult(
           label: 'Aphasia Quotient',
-          state: _aqState(),
-          caution: wabAdaptationCaveat(_adaptation),
+          state: readout.state,
+          caution: readout.caution,
         ),
       ],
     );
