@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/progress_brief.dart';
 import 'narrate_session_screen.dart';
 import 'session_capture_screen.dart';
 import '../services/goals_query.dart';
@@ -29,6 +30,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
 
   DateTime _selectedDate = DateTime.now();
   String?  _activeStg;
+  String?  _activeStgId; // feeds the progress brief (assemble_cas_progress_brief)
   bool     _stgLoading = true;
 
   @override
@@ -53,7 +55,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       // request. Backlogged: 4.0.7.30-stg-resolver-audit (other
       // readers still request goal_text and survive via catch blocks).
       final rows = await GoalsQuery(client: _supabase)
-          .stgReads('specific, target_behavior')
+          .stgReads('id, specific, target_behavior')
           .eq('client_id', widget.clientId)
           .eq('status', 'active')
           .limit(1);
@@ -66,6 +68,7 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
             : null;
         setState(() {
           _activeStg   = (text != null && text.isNotEmpty) ? text : null;
+          _activeStgId = row?['id'] as String?;
           _stgLoading  = false;
         });
       }
@@ -190,6 +193,18 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Progress brief — mounts once the active STG id
+                      // resolves; when there is no active STG there is
+                      // nothing to brief on and the STG card below
+                      // already carries the empty-state invitation.
+                      if (_activeStgId != null) ...[
+                        ProgressBrief(
+                          stgId:      _activeStgId!,
+                          clientId:   widget.clientId,
+                          clientName: widget.clientName,
+                        ),
+                        const SizedBox(height: 32),
+                      ],
                       _buildStgCard(),
                       const SizedBox(height: 32),
                       _buildDatePicker(),
