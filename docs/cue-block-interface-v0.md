@@ -48,8 +48,9 @@ When does a position count as *held / mastered / advanced* — the rule that tur
   - Consecutive over **what**? CAS counts consecutive *sessions*, and a level not recorded in the previous session breaks the chain (in `assemble_cas_progress_brief`, the `acc2` CTE joins latest×prev on level). Correct for CAS, where every worked level gets a dial each session.
   - For a `set` block, contexts **rotate** — nobody probes "high-pressure situation" every session. Under consecutive-over-sessions, a rotated context could *never* promote. Set blocks likely need consecutive-over-**observations-of-that-position**.
   - So the axis is: `consecutive_over: sessions | observations`. CAS: `sessions`. **FLUENCY is this axis's hardest test** — it will hit it before feeding does.
-- **THE SAFETY-GATING FLAG** `[solid that this field must exist — two blocks already differ on it, and the structure already exists in code]`:
-  - `safety_gated: bool` — does a hard safety signal OVERRIDE progress regardless of performance?
+- **THE SAFETY-GATING FLAG** `[RESOLVED 2026-07-10 by the feeding skeleton — no longer a provisional bool]`:
+  - `safety_gated` resolved into a **PRE-FORK VETO LAYER**: for a safety-gated block, `next_move` checks safety signals BEFORE the performance fork; a present safety sign overrides the fork entirely with a single "hold — safety flag present" (plus the sign's own naming). The veto also joins the promotion rule (a position cannot promote across a session carrying its sign) and excludes sign-marked rows from best_so_far. This is now an **ENGINE capability — authored once, inherited free by every future safety-gated block**. A non-gated block (CAS: `safety_gated: false`) simply skips the layer.
+  - Original question the field answered: does a hard safety signal OVERRIDE progress regardless of performance? Feeding: yes, structurally.
   - **CAS:** `false` — no safety off-ramp; progress is purely performance.
   - **Feeding:** `true` — aspiration signs (wet vocal quality, cough, distress) HALT advancement no matter how well tolerance looks. A safety-gated block's promotion rule has a veto layer a non-gated block doesn't.
   - **This is not hypothetical — the structure already shipped.** The feeding assessment surface's off-ramp binding clause (CLAUDE.md; `feeding_assessment_surface.dart`) is `safety_gated: true` in built form: trigger signals (airway signs), a veto layer (self-gating card reading the FULL row set, display filters never affect the trigger), and a can't-mount-without-it guarantee (the bare content is library-private; every public mount builds the off-ramp in unconditionally, no opt-out parameter exists). Expect this interface field to be that structure, not a bare bool.
@@ -101,7 +102,7 @@ Which of the brief's memory slots this block has capture fields for — the inve
 | The specific dials (complexity × accuracy × cue) | **framework** | CAS-specific |
 | The ladder rungs (CV→CVC→…) | **framework** | CAS-specific |
 | The 2-consecutive bar | **framework** | CAS-specific |
-| `safety_gated` flag | **engine** (the field) / **framework** (the value) | CAS: false; feeding: true — structure already shipped as the off-ramp clause |
+| `safety_gated` flag | **engine** (the pre-fork veto layer) / **framework** (the signals) | RESOLVED 2026-07-10: not a bool — a pre-fork veto layer in next_move + promotion + best_so_far; CAS skips it, feeding validated it |
 | `progression_type` | **engine** (the field) / **framework** (the value) | CAS: ladder; fluency: set |
 | `memory_slots` inventory | **engine** (the field) / **framework** (the declared slots) | CAS: what_helps/watch_for exist unfed |
 
@@ -111,12 +112,28 @@ More than half of what felt like "CAS work" is engine — inherited free by ever
 
 ---
 
+## Instance #2 — feeding (skeleton-validated 2026-07-10; Plan B — finding recorded, no code kept)
+
+The generalization thesis was tested with a sandbox-only assembler skeleton: `assemble_feeding_progress_brief(p_stg_id)` over throwaway per-session dial rows (texture × tolerance × support × airway_sign), exercised on live scenarios, then removed. The finding lives here, not in code.
+
+**Measured reuse ~70% — the engine transposed unchanged:** the 3-session window, the verbatim trend matrix, the breakthrough/emerging distinction, the recency rule (2-most-recent-consecutive), the best-so-far tiebreak, and the whole jsonb shape. **The ProgressBrief widget needed ZERO changes to render feeding's JSON — the key result.** The only swaps were framework-specific: feeding's texture ladder (rungs row-inferred via `level_order`, exactly like CAS — no declared structure needed) and its promotion rule (`tolerated` replaces `accurate`; the safety veto joins the promotion join). **Verdict: block #2 cost ~30% of block #1 — the block/engine split is validated.**
+
+The safety gate was proven live in its hardest shape: a texture *tolerated at full support* with an airway sign marked produced `frontier_state: safety_hold` and a single-option hold — performance said advance, the gate said hold. The pre-fork veto layer (field 4) is the reusable form of that result.
+
+**Cracks recorded honestly — they scope the engine debts, they don't break the verdict:**
+- The "universal shape" slot keys are the CAS JSON de facto (`where_he_is`, `accuracy_seq`, `cue_seq`, `cue_level_used`); feeding reused the widget by adopting them. They should be declared as the neutral contract they accidentally are.
+- The widget still hardcodes 'accurate' in two strings (the no-floor line and the floor count) — a small per-block-vocabulary debt before a non-CAS block renders truthfully in every state.
+- The widget has no first-class safety slot yet: the skeleton routed the veto through `frontier_state` + the collapsed `next_move`, which the widget does render — acceptable for a skeleton, but the binding clause demands a slot the renderer cannot ignore before a real gated block ships.
+- Consecutive-over-sessions fragility is feeding's problem too, not just fluency's: a texture not re-probed in the newest session snaps its floor chain, and textures rotate in feeding therapy. `consecutive_over: observations` gains a second motivating block.
+
+---
+
 ## The four fields the second block will test hardest
 
 When the next block gets built, watch these — they are where this one-example interface is most likely to be wrong. Feeding is the maximally-different second instance for three of them; fluency owns the fourth.
 
 1. **`progression_type`** — is feeding's texture progression truly a `ladder`, or is it gated differently (safety overriding order)? If safety-gating reorders how "where they are" works, the interface may need progression and safety to interact, not just coexist.
-2. **`safety_gated`** — feeding is the first `true`. The off-ramp binding clause says the answer is a structure (trigger signals + veto layer + structural binding), not a bool — the feeding block will confirm whether that structure generalizes into the interface or stays surface-local.
+2. **`safety_gated`** — **CONFIRMED AND RESOLVED (2026-07-10, feeding skeleton).** The off-ramp binding clause's prediction held: the answer is a structure, not a bool — now specified as the pre-fork veto layer in field 4 and validated live (a texture *tolerated* at full support with an airway sign marked produced a hold, not a celebration). The overall verdict from instance #2: **block #2 cost ~30% of block #1** — the block/engine split is validated, not just asserted.
 3. **`detection_signature`** — feeding's signature (swallow/texture/aspiration language) is the first *contrast* signature. Only with two can we test whether "match against signatures" actually discriminates, or whether CAS and feeding data blur.
 4. **`consecutive_over` (sessions vs. observations)** — **fluency's test.** Rotating contexts break consecutive-over-sessions promotion entirely (a context not probed in a session snaps the chain). If fluency needs consecutive-over-observations, the recency rule splits into an engine principle (most-recent, no cherry-picking) and a framework denominator (recent *what*).
 
@@ -126,7 +143,7 @@ When the next block gets built, watch these — they are where this one-example 
 
 1. **CAS block** — instance #1, both halves built: read path committed (`3297b58`) and proven; capture surface (`CasSessionDials` + save-seam wiring) built and sandbox-proven end-to-end (2026-07-09). Still owed: a clinician capturing dials through the running UI.
 2. **This interface** — this document. Instance #1 filled in, guesses marked, as-built caveats stated.
-3. **Feeding block (or a stub)** — instance #2, deliberately the most different (safety-gated, first `true`). Confirms or breaks the provisional fields. Even a thin stub gives the detector a second signature to route against.
+3. **Feeding block (or a stub)** — DONE as a sandbox-only skeleton (2026-07-10, Plan B: finding recorded in this spec, no skeleton code kept, sandbox restored). Instance #2, deliberately the most different (safety-gated, first `true`) — it confirmed the provisional fields and resolved `safety_gated`; see "Instance #2 — feeding" below. The real feeding block (authored texture ladder, capture surface, detection signature) remains future work.
 4. **The detector** — reads incoming data, matches against the ≥2 declared `detection_signature`s, proposes a block. Inherits the domain-detection provenance pattern already on `clients` (confidence / source / version / `is_slp_authoritative`). Testable only once step 3 gives it a second shape.
 
 Building the detector before step 3 = a router with one road. This document + a second signature is the minimum that makes detection real.
