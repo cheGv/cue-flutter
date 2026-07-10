@@ -29,6 +29,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../constants/cas_levels.dart';
 import '../../services/cas_assessment_service.dart';
 
 // Palette — reused verbatim from the ped_dysarthria capture surface so
@@ -74,18 +75,10 @@ const Map<String, String> _kAccuracyValueToLabel = {
 };
 
 // Canonical length-gradient rows (level_order 1–5). Persisted to
-// cas_length_gradient; `display` is the SLP-facing row label.
-const List<({int order, String label, String tokens, String display})>
-    _kCasLevels = [
-  (order: 1, label: 'CV', tokens: 'ba, mu', display: 'CV — ba, mu'),
-  (order: 2, label: 'CVC', tokens: 'cup, dog', display: 'CVC — cup, dog'),
-  (order: 3, label: 'bisyllabic', tokens: 'baby, water',
-      display: 'Bisyllabic — baby, water'),
-  (order: 4, label: 'trisyllabic', tokens: 'banana',
-      display: 'Trisyllabic — banana'),
-  (order: 5, label: 'polysyllabic_phrase', tokens: 'butterfly, "I want more"',
-      display: 'Polysyllabic / phrase — butterfly, "I want more"'),
-];
+// cas_length_gradient; `display` is the SLP-facing row label. The list
+// itself lives in constants/cas_levels.dart (shared with the CAS
+// session-dial capture surface); this alias keeps call sites unchanged.
+const List<CasComplexityLevel> _kCasLevels = kCasComplexityLevels;
 
 // DDK task rows. pa/ta/ka feed AMR; pataka feeds SMR.
 const List<String> _kDdkTasks = ['pa', 'ta', 'ka', 'pataka'];

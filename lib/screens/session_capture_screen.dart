@@ -39,11 +39,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../repositories/cas_session_progress_repository.dart';
 import '../services/session_archive_service.dart';
 import '../services/clients_query.dart';
+import '../services/goals_query.dart';
 import '../theme/cue_color_scheme.dart';
 import '../theme/cue_phase4_tokens.dart';
 import '../widgets/app_layout.dart';
+import '../widgets/cas_session_dials.dart';
 import '../widgets/domain_pill.dart';
 import '../widgets/recall_assistant/recall_pill_safe_area.dart';
 import '../widgets/voice_note_sheet.dart';
@@ -236,6 +239,15 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
 
   late DateTime _selectedDate;
   String? _clinicalArea;
+  // ── CAS session dials (resumption-loop write half) ─────────────────
+  // Mount gate: clients.clinical_area == 'pediatric-cas' AND an active
+  // STG resolves — the same resolver AddSessionScreen uses to mount the
+  // ProgressBrief, so the read and write halves point at the SAME stg.
+  // Dial state lives in its own controller (NOT _fieldCtrls /
+  // population_payload — dials write to cas_session_progress).
+  String? _casStgId;
+  final _casDials = CasSessionDialsController();
+  final _casProgressRepo = CasSessionProgressRepository();
   bool    _detailsExpanded = false;
   int?    _draftSessionId;
   Timer?  _autosaveTimer;
@@ -268,8 +280,10 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
     _selectedDate = widget.selectedDate ?? DateTime.now();
     _loadClinicalArea();
     _autosaveTimer = Timer.periodic(_autoSavePeriod, (_) => _autoSaveTick());
-    // Empty-save annotation is dismissed by any input event.
+    // Empty-save annotation is dismissed by any input event — including
+    // a dial tap (touched dials count as save content).
     _proseCtrl.addListener(_onAnyInputChanged);
+    _casDials.addListener(_onAnyInputChanged);
 
     // Phase 4.0.7.31c — edit-mode hydration. CRITICAL INVARIANT:
     // _draftSessionId MUST be set SYNCHRONOUSLY here, before any auto-
@@ -378,6 +392,8 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
 
   bool get _hasSaveContent {
     if (_proseCtrl.text.trim().isNotEmpty) return true;
+    // Touched dials are clinical content — a dial-only session saves.
+    if (_casDials.hasAnyTouched) return true;
     for (final c in _fieldCtrls.values) {
       if (c.text.trim().isNotEmpty) return true;
     }
@@ -388,6 +404,7 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
   void dispose() {
     _autosaveTimer?.cancel();
     _proseCtrl.dispose();
+    _casDials.dispose();
     for (final c in _fieldCtrls.values) {
       c.dispose();
     }
@@ -402,9 +419,29 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
           .maybeSingle();
       if (!mounted) return;
       setState(() => _clinicalArea = row?['clinical_area'] as String?);
+      if (_clinicalArea == 'pediatric-cas') await _loadCasStg();
     } catch (_) {
       if (!mounted) return;
       setState(() => _clinicalArea = null); // falls through to ALL OTHERS
+    }
+  }
+
+  // Resolves the active STG the dials attach to. Mirrors
+  // AddSessionScreen._loadActiveStg (the ProgressBrief's resolver):
+  // active status, soft-archived excluded via stgReads, limit(1). No STG
+  // ⇒ _casStgId stays null ⇒ dials never mount; prose capture unaffected.
+  Future<void> _loadCasStg() async {
+    try {
+      final rows = await GoalsQuery(client: _supabase)
+          .stgReads('id')
+          .eq('client_id', widget.clientId)
+          .eq('status', 'active')
+          .limit(1);
+      if (!mounted) return;
+      setState(() =>
+          _casStgId = rows.isNotEmpty ? rows.first['id'] as String? : null);
+    } catch (_) {
+      // Resolver failure is non-fatal — the screen works without dials.
     }
   }
 
@@ -564,6 +601,20 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
     _onAutoSaveSuccess();
     if (sessionId == null) {
       throw StateError('Insert returned no id');
+    }
+    // CAS dials — one upsert for the TOUCHED levels, after the session
+    // row is complete (rows FK sessions.id). Untouched levels produce no
+    // draft. A throw here surfaces through the caller's catch like any
+    // save failure, and retry converges: _draftSessionId is already set
+    // (the session re-save takes the UPDATE branch) and the unique
+    // (session_id, stg_id, level_order) makes the re-upsert overwrite in
+    // place rather than duplicate.
+    if (_casStgId != null && _casDials.hasAnyTouched) {
+      await _casProgressRepo.upsertLevels(_casDials.buildDraftRows(
+        stgId: _casStgId!,
+        sessionId: sessionId,
+        clientId: widget.clientId,
+      ));
     }
     return sessionId;
   }
@@ -793,6 +844,14 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
                       _buildDateRow(),
                       const SizedBox(height: 28),
                       _buildProseSection(),
+                      // CAS dials — the structured per-level capture,
+                      // between prose and the details affordances. Mounts
+                      // only when the pediatric-cas gate + active-STG
+                      // resolver both pass (see _loadCasStg).
+                      if (_casStgId != null) ...[
+                        const SizedBox(height: 16),
+                        CasSessionDials(controller: _casDials),
+                      ],
                       const SizedBox(height: 12),
                       _buildDictateAndDetailsRow(),
                       if (_detailsExpanded) ...[

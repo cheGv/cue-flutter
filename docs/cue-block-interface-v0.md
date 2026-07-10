@@ -2,7 +2,7 @@
 
 *What every framework block must declare, so a detector can route to it and the engine can render it.*
 
-**Status:** living draft, v0 — reverse-engineered from ONE half-worked block (CAS: READ-proven, CAPTURE-unproven; see build order). Every field is tagged `[solid]` (confident it's universal) or `[provisional]` (a CAS assumption not yet confirmed by a second block). The provisional fields are the ones feeding/fluency will prove or break. That's the point: this spec's job is not to be right — it's to be explicit enough that the second block fails *loudly* against it, not silently.
+**Status:** living draft, v0 — reverse-engineered from ONE block (CAS: READ-proven; CAPTURE built and sandbox-proven end-to-end — write → dirty trigger → brief — 2026-07-09; the clinician-through-the-UI tap path remains unproven pending a running app). Every field is tagged `[solid]` (confident it's universal) or `[provisional]` (a CAS assumption not yet confirmed by a second block). The provisional fields are the ones feeding/fluency will prove or break. That's the point: this spec's job is not to be right — it's to be explicit enough that the second block fails *loudly* against it, not silently.
 
 **Lockstep rule:** this document updates in the same commit as the code that changes what it describes. The rot this prevents is already in the repo: `client_brief_phrasing.dart` still says "Cue holds no gender field" — false since `clients.gender` existed, doubly false since `clients.pronoun` landed (2026-07-05). A spec that drifts from schema becomes a liability that *sounds* authoritative. This one is either current or it is deleted.
 
@@ -12,7 +12,7 @@
 
 Cue does not hand-build a brief per disorder. It runs a fixed **engine** (the slot-driven brief skeleton — read half built and committed for CAS, `3297b58` on intern-scaffold) fed by a swappable **block** (the disorder's validated clinical logic). A **detector** reads incoming patient data and routes it to the right block.
 
-The detector is impossible to build until a "block" has a defined shape — otherwise it's a router with one road, classifying everything into the single block that exists. This document defines that shape. CAS is filled in as instance #1 — **with the honest caveat that instance #1 has exercised only half the interface.** The CAS brief renders real assembled data, but the capture surface that writes `cas_session_progress` from the UI is not built; every dial row so far was written by SQL. The read path is proven; the dials-as-captured-by-a-clinician path is not.
+The detector is impossible to build until a "block" has a defined shape — otherwise it's a router with one road, classifying everything into the single block that exists. This document defines that shape. CAS is filled in as instance #1 — both halves now built. The capture surface (`CasSessionDials` in `session_capture_screen.dart`, gated `pediatric-cas` + active STG) writes `cas_session_progress` through `upsertLevels`, and the full loop is sandbox-proven end-to-end (the exact capture payload → rows → dirty trigger → assembled brief, 2026-07-09). Remaining honest caveat: no clinician has captured a dial through the running UI yet — the capture *ergonomics* are unvalidated, the capture *path* is not.
 
 **The non-negotiable floor:** blocks are human-authored and grounded in validated sources (ASHA, and ISHA/AIISH for Indian practice). The detector *matches* incoming data to a block's signature; it NEVER invents a block, a ladder, or a clinical position. Detection, not generation. Same law as everywhere else in Cue: the system reads back what's real, or stays silent.
 
@@ -25,7 +25,7 @@ The small set of things captured per session — the raw observations that accum
 - **Universal:** every block has a small set of per-session dials. `[solid]`
 - **Varies:** how many, and what type (ordinal? enum? free-text evidence line?). `[provisional]`
 - **CAS:** `complexity` (which level worked), `accuracy` (accurate | partial | inaccurate), `cue_level` (independent | minimal | moderate | maximal | hand_over_hand).
-- **Caveat:** CAS's dials are read-proven only — no clinician has captured one through the UI yet. The dial *shapes* are validated; the dial *capture ergonomics* are not.
+- **Caveat (narrowed 2026-07-10):** the dial write path is sandbox-proven end-to-end; the dial *capture ergonomics* (a clinician tapping through the running UI) are still unvalidated.
 
 ### 2. `progression_type` `[solid that it's a variable — this is the field we built as first-class BECAUSE disorders differ here]`
 How the dials organize into "where they are." **This is the field most likely to break a naive interface, so it is a variable from line one.**
@@ -36,7 +36,7 @@ How the dials organize into "where they are." **This is the field most likely to
 
 ### 3. `progression_structure` `[provisional — the concrete rungs or contexts]`
 The actual ordered rungs (if `ladder`) or the set of contexts (if `set`).
-- **CAS (`ladder`):** CV → CVC → bisyllabic → trisyllabic → polysyllabic. Borrowed from the CAS assessment surface's length-gradient rung list (app-side constants in `cas_assessment_surface.dart`; captured rows live in the `cas_length_gradient` table). Not a DB enum — `level_label`/`level_order` are free per-row, so the structure is editable per practice without a migration.
+- **CAS (`ladder`):** CV → CVC → bisyllabic → trisyllabic → polysyllabic. The rung list is the app-side constant `kCasComplexityLevels` in `lib/constants/cas_levels.dart` — extracted from `cas_assessment_surface.dart`'s private copy when the session-dial capture surface became its second consumer (assessment seeds `cas_length_gradient`; capture writes `cas_session_progress`). Not a DB enum — `level_label`/`level_order` are free per-row, so the structure is editable per practice without a migration.
 - **As-built nuance:** the brief engine never consumes this field declaratively — it infers order from `level_order` arriving in the data. A block *declaring* its structure vs. the engine *inferring* it from rows is an open seam; the declarative form becomes necessary the moment the detector needs to describe a block it hasn't seen data for.
 - **Open question for `set` blocks:** what defines the context set for fluency? Situations by demand level? This is unanswerable from CAS — it's exactly what the fluency block will define.
 
@@ -107,6 +107,8 @@ Which of the brief's memory slots this block has capture fields for — the inve
 
 More than half of what felt like "CAS work" is engine — inherited free by every future block. That's the ratio that makes the detector worth building: each new disorder is a *block definition filling this schema*, not a bespoke rebuild.
 
+**Fork-derivation bug, found by the first real capture (2026-07-09, fixed 2026-07-10 — `20260710160000_fix_cas_brief_floor_null_fork.sql`).** The next_move floor-null branch fired for *every* no-floor window and hardcoded "no level accurate in the most recent session" — self-contradictory for a first-session breakthrough (the sentence printed the frontier's own 'accurate') and offering only the down-fork to a child who had just broken through. Floor-null has two causes the branch conflated: genuinely nothing accurate, and a breakthrough inside a window too short to promote (every first session lands there). Fixed by splitting on `frontier_state`. The general lesson for every block's fork derivation: **branch conditions must be stated in terms of what the data shows, not in terms of which engine artifacts (floor/frontier) happen to be null** — engine-artifact nullability overloads causes.
+
 ---
 
 ## The four fields the second block will test hardest
@@ -122,7 +124,7 @@ When the next block gets built, watch these — they are where this one-example 
 
 ## The build order this implies
 
-1. **CAS block** — instance #1, HALF-worked: read path built, committed (`3297b58`), and proven against real assembled data; capture surface (the UI that writes `cas_session_progress`) still owed. The dials have never been captured by a clinician.
+1. **CAS block** — instance #1, both halves built: read path committed (`3297b58`) and proven; capture surface (`CasSessionDials` + save-seam wiring) built and sandbox-proven end-to-end (2026-07-09). Still owed: a clinician capturing dials through the running UI.
 2. **This interface** — this document. Instance #1 filled in, guesses marked, as-built caveats stated.
 3. **Feeding block (or a stub)** — instance #2, deliberately the most different (safety-gated, first `true`). Confirms or breaks the provisional fields. Even a thin stub gives the detector a second signature to route against.
 4. **The detector** — reads incoming data, matches against the ≥2 declared `detection_signature`s, proposes a block. Inherits the domain-detection provenance pattern already on `clients` (confidence / source / version / `is_slp_authoritative`). Testable only once step 3 gives it a second shape.
