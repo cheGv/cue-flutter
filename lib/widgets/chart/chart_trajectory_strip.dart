@@ -14,6 +14,12 @@ import 'chart_format.dart';
 class ChartTrajectoryStrip extends StatelessWidget {
   final List<ShortTermGoal> activeStgs;
   final List<Session> sessions;
+  // CAS dial data (cas_session_progress rows) keyed by session id → the STG
+  // ids the dials were captured against. Second progress source: the CAS
+  // capture path writes dials here and never stamps sessions.outcome, so
+  // outcome-only counting reads real dial data as "no progress logged".
+  // Empty (the default) reproduces pre-merge behavior exactly.
+  final Map<int, Set<String>> casStgIdsBySession;
   final DateTime? earliestSessionDate;
   final Map<String, String> stgNumbers;
   final void Function(int sessionId)? onTickTap;
@@ -23,6 +29,7 @@ class ChartTrajectoryStrip extends StatelessWidget {
     super.key,
     required this.activeStgs,
     required this.sessions,
+    this.casStgIdsBySession = const {},
     required this.earliestSessionDate,
     this.stgNumbers = const {},
     this.onTickTap,
@@ -31,9 +38,16 @@ class ChartTrajectoryStrip extends StatelessWidget {
 
   static const _windowDays = 56; // 8 weeks
 
-  int get _progress => sessions
-      .where((s) => s.outcome?.toDbValue() == 'progress')
-      .length;
+  // The merge rule, in one place: an explicit sessions.outcome always wins
+  // (the clinician's call is never overridden); a session with dial rows
+  // but NO explicit outcome counts — and colors — as 'progress', because
+  // captured dial levels ARE logged progress.
+  String? _effectiveOutcomeDb(Session s) =>
+      s.outcome?.toDbValue() ??
+      (casStgIdsBySession.containsKey(s.id) ? 'progress' : null);
+
+  int get _progress =>
+      sessions.where((s) => _effectiveOutcomeDb(s) == 'progress').length;
   int get _revised => sessions
       .where((s) => s.outcome?.toDbValue() == 'plan_revised')
       .length;
@@ -185,7 +199,7 @@ class ChartTrajectoryStrip extends StatelessWidget {
     final total = sessions.length;
     if (total == 0) return 'No sessions on record yet.';
     final latest = sessions.first; // newest-first
-    final label = switch (latest.outcome?.toDbValue()) {
+    final label = switch (_effectiveOutcomeDb(latest)) {
       'progress' => 'progress',
       'plan_revised' => 'plan revised',
       'holding' => 'holding',
@@ -256,17 +270,22 @@ class ChartTrajectoryStrip extends StatelessWidget {
     final ticks = <_TickSpec>[];
     final start = earliestSessionDate;
     for (final s in sessions) {
-      if (s.shortTermGoalId != stg.id) continue;
+      // A session belongs on this track via the classic FK OR via its CAS
+      // dial rows (the capture path never stamps short_term_goal_id, so
+      // dial-only sessions would otherwise vanish from every track).
+      final casLinked = casStgIdsBySession[s.id]?.contains(stg.id) ?? false;
+      if (s.shortTermGoalId != stg.id && !casLinked) continue;
       final date = s.date ?? s.createdAt;
       double pct = 0;
       if (start != null) {
         pct = (date.difference(start).inDays / _windowDays).clamp(0.0, 1.0);
       }
+      final db = _effectiveOutcomeDb(s);
       ticks.add(_TickSpec(
         sessionId: s.id,
         pct: pct,
-        db: s.outcome?.toDbValue(),
-        hollow: s.outcome == null,
+        db: db,
+        hollow: db == null,
         isToday: isToday(s.date),
       ));
     }

@@ -87,4 +87,72 @@ void main() {
       findsOneWidget,
     );
   });
+
+  // ── CAS dial-data merge (cas_session_progress as second progress source) ──
+
+  Session casSess(int id, DateTime date) => Session(
+        id: id,
+        clientId: 'c-1',
+        createdAt: date,
+        date: date,
+        // The CAS capture path stamps neither outcome nor shortTermGoalId —
+        // dial rows in cas_session_progress are the only progress record.
+        outcome: null,
+        shortTermGoalId: null,
+        durationMinutes: 45,
+        soapNote: 'note',
+      );
+
+  testWidgets('dial-only session (no outcome, no FK) counts as logged '
+      'progress and renders a solid tick on its CAS-linked track', (t) async {
+    final past = DateTime.now().subtract(const Duration(days: 10));
+    await _pump(
+      t,
+      ChartTrajectoryStrip(
+        activeStgs: [_stg()],
+        sessions: [casSess(7, past)],
+        casStgIdsBySession: const {
+          7: {'stg-1'},
+        },
+        earliestSessionDate: past,
+      ),
+    );
+
+    // Counted: "1 of 1 sessions logged progress", not 0.
+    expect(find.textContaining('1 of 1 session'), findsOneWidget);
+    // On the track (would previously be skipped — no shortTermGoalId), and
+    // solid, not hollow (dial data is logged progress).
+    expect(
+      find.byKey(const ValueKey('traj-tick-7-solid-past')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('explicit outcome is never overridden by dial data', (t) async {
+    final past = DateTime.now().subtract(const Duration(days: 10));
+    final s = Session(
+      id: 8,
+      clientId: 'c-1',
+      createdAt: past,
+      date: past,
+      outcome: SessionOutcome.holding,
+      shortTermGoalId: 'stg-1',
+      durationMinutes: 45,
+      soapNote: 'note',
+    );
+    await _pump(
+      t,
+      ChartTrajectoryStrip(
+        activeStgs: [_stg()],
+        sessions: [s],
+        casStgIdsBySession: const {
+          8: {'stg-1'},
+        },
+        earliestSessionDate: past,
+      ),
+    );
+
+    // The clinician's explicit 'holding' call wins over the dial rows.
+    expect(find.textContaining('0 of 1 session'), findsOneWidget);
+  });
 }

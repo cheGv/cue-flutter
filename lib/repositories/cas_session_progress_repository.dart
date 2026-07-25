@@ -52,6 +52,26 @@ class CasSessionProgressRepository {
     return _mapRows(rows);
   }
 
+  /// STG ids keyed by session id across every progress row of one client —
+  /// the chart-side merge input. A session id present in the map has dial
+  /// data (logged progress) even when its `sessions.outcome` is NULL, and
+  /// the value set says which STG track(s) it belongs on. Empty map when
+  /// the client has no dial history (uses idx_cas_session_progress_client).
+  Future<Map<int, Set<String>>> stgIdsBySessionForClient(
+    String clientId,
+  ) async {
+    final rows = await _client
+        .from(_table)
+        .select('session_id, stg_id')
+        .eq('client_id', clientId);
+    final out = <int, Set<String>>{};
+    for (final r in rows) {
+      final sid = (r['session_id'] as num).toInt();
+      (out[sid] ??= <String>{}).add(r['stg_id'] as String);
+    }
+    return out;
+  }
+
   /// Thin RPC passthrough to the TREND assembler (assemble_cas_progress) —
   /// the verbatim session-grouped dial dump, NOT the brief. Shape:
   /// { stg_id, assembled_at, sessions: [ { session_id, session_date,

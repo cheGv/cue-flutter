@@ -22,6 +22,7 @@ import '../models/client_chart_state.dart';
 import '../models/session.dart';
 import '../models/short_term_goal.dart';
 import '../models/stg_session_metric.dart';
+import '../repositories/cas_session_progress_repository.dart';
 import '../repositories/citations_repository.dart';
 import '../repositories/client_chart_state_repository.dart';
 import '../repositories/client_view_log_repository.dart';
@@ -75,6 +76,12 @@ class _ChartData {
   final Map<String, String> stgNumbers;
   final String? initialFocusId;
   final List<Session> sessions;
+  // CAS dial data (cas_session_progress) keyed by session id → STG ids.
+  // Merge input for the trajectory strip: dial-only sessions carry no
+  // sessions.outcome, so without this they'd read as "never logged
+  // progress". Empty for non-CAS clients (and on read failure — additive,
+  // never blocks the chart load).
+  final Map<int, Set<String>> casStgIdsBySession;
   final DateTime? earliestSessionDate;
   final DateTime? firstSessionDate;
   final bool sessionToday;
@@ -102,6 +109,7 @@ class _ChartData {
     required this.stgNumbers,
     required this.initialFocusId,
     required this.sessions,
+    required this.casStgIdsBySession,
     required this.earliestSessionDate,
     required this.firstSessionDate,
     required this.sessionToday,
@@ -234,6 +242,12 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       LtgRepository().listForClient(_clientId),
       CitationsRepository().loadCitationsForClient(_clientId),
       StgRepository().loadFocusedStgForClient(_clientId),
+      // CAS dial-data merge input. Best-effort: a failure yields an empty
+      // map (chart falls back to outcome-only counting) rather than
+      // failing the whole profile load.
+      CasSessionProgressRepository()
+          .stgIdsBySessionForClient(_clientId)
+          .catchError((Object _) => <int, Set<String>>{}),
     ]);
 
     final state = (results[0] as ClientChartState?) ?? _fallbackState();
@@ -242,6 +256,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
     final ltgs = results[3] as List<Map<String, dynamic>>;
     final citations = results[4] as List<Citation>;
     final focused = results[5] as ShortTermGoal?;
+    final casStgIdsBySession = results[6] as Map<int, Set<String>>;
 
     // allStgs already excludes archived (StgRepository filters deleted_at).
     // Split the remainder by clinical status into the active working set and
@@ -336,6 +351,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
       stgNumbers: stgNumbers,
       initialFocusId: initialFocusId,
       sessions: sessions,
+      casStgIdsBySession: casStgIdsBySession,
       earliestSessionDate: earliest,
       firstSessionDate: earliest,
       sessionToday: sessionToday,
@@ -779,6 +795,7 @@ class _ClientProfileScreenState extends State<ClientProfileScreen> {
                   // All non-archived STGs so completed/closed history persists.
                   activeStgs: d.visibleStgs,
                   sessions: d.sessions,
+                  casStgIdsBySession: d.casStgIdsBySession,
                   earliestSessionDate: d.earliestSessionDate,
                   stgNumbers: d.stgNumbers,
                   onTickTap: (id) =>
