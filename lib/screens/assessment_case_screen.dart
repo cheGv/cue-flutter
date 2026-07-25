@@ -27,6 +27,7 @@ import '../widgets/app_layout.dart';
 import '../widgets/assessment/ald_capture_section.dart';
 import '../widgets/assessment/cas_assessment_surface.dart';
 import '../widgets/assessment/ped_dysarthria_capture_section.dart';
+import '../widgets/assessment/ped_language_capture_surface.dart';
 import '../widgets/assessment/ssd_capture_section.dart';
 import '../widgets/assessment/voice_capture_section.dart';
 import '../widgets/trial_run_banner.dart';
@@ -597,6 +598,11 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     // 4.0.7.28 — Pediatric CAS surface (dysarthria's closest differential).
     if (area == 'pediatric-cas') {
       return CasAssessmentSurface(clientId: clientId);
+    }
+    // Pediatric Language — ASHA milestone check, birth-5, band-matched
+    // to the child's age on file.
+    if (area == 'pediatric-language') {
+      return PedLanguageCaptureSurface(clientId: clientId);
     }
     return Container(
       padding: const EdgeInsets.all(14),

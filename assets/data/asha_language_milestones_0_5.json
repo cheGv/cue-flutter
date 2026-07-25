@@ -1,0 +1,123 @@
+{
+  "instrument": "Pediatric Language Assessment — developmental milestone check",
+  "source": "Milestones sourced verbatim from ASHA Communication Milestones (asha.org/public/developmental-milestones). Examples authored by Cue in Indian English for familiarity. This is a structured developmental reference informing clinical judgment, not a standalone diagnostic tool.",
+  "sections": ["speech", "language", "literacy"],
+  "rating_options": ["present", "emerging", "absent"],
+  "evidence_basis": ["observed", "parent_reported"],
+  "age_bands": [
+    {
+      "band_id": "birth_to_1y",
+      "label": "Birth to 12 months",
+      "note": "Pre-verbal band — almost entirely social communication and early sound play. Language and literacy sections are minimal by design; this is developmentally correct.",
+      "speech": [
+        { "milestone": "Coos — makes sounds like ooooo, aahh, mmmmm", "example": "Baby makes soft vowel sounds when content, lying down or being held" },
+        { "milestone": "Babbles long strings of sounds, like mamamama, bababa, upup", "example": "Child repeats syllables in a string — 'ba-ba-ba', 'ma-ma-ma' — during play" },
+        { "milestone": "Makes sounds that differ depending on whether happy or upset", "example": "You can tell from the sound alone whether the child is pleased or distressed" }
+      ],
+      "language": [
+        { "milestone": "Alerts to sound", "example": "Child turns or stills when you clap or call from behind" },
+        { "milestone": "Quiets or smiles when you talk", "example": "Child settles or smiles when amma speaks softly" },
+        { "milestone": "Makes sounds back and forth with you", "example": "Child 'takes turns' — you make a sound, child answers with a sound" },
+        { "milestone": "Points, waves, and shows or gives objects", "example": "Child gives you a toy, waves bye-bye, or points at the fan" }
+      ],
+      "literacy": [
+        { "milestone": "Looks at pictures when you read", "example": "Child looks at a bright picture book while you name what's on the page" }
+      ]
+    },
+    {
+      "band_id": "13_to_18m",
+      "label": "13 to 18 months",
+      "speech": [
+        { "milestone": "Uses a lot of new sounds, so babbling sounds more like real speech", "example": "Child's babble starts to have the rhythm and tune of a sentence" }
+      ],
+      "language": [
+        { "milestone": "Follows directions — like 'Give me the ball', 'Come here', 'Show me your nose'", "example": "Child gives the ball when asked, or points to their nose on request" },
+        { "milestone": "Uses first words", "example": "Child uses a few true words — 'amma', 'ball', 'no', 'more'" },
+        { "milestone": "Points to ask a question or to show you something", "example": "Child points at the dog and looks at you to share it" }
+      ],
+      "literacy": [
+        { "milestone": "Shows interest in books and pictures", "example": "Child brings you a book or turns pages to look at pictures" }
+      ]
+    },
+    {
+      "band_id": "19_to_24m",
+      "label": "19 to 24 months",
+      "speech": [
+        { "milestone": "Speech may not always be clear — like 'du' for shoe or 'dah' for dog", "example": "Child's words are recognisable to family but sounds are still simplified" }
+      ],
+      "language": [
+        { "milestone": "Uses and understands at least 50 different words for food, toys, animals, and body parts", "example": "Child names or points to roti, ball, dog, eyes, and many more on request" },
+        { "milestone": "Puts two or more words together — like 'more water' or 'go outside'", "example": "Child combines words — 'more water', 'amma come', 'go out'" },
+        { "milestone": "Follows two-step directions — like 'Get the spoon and put it on the table'", "example": "Child does both parts — 'pick up the ball and give it to me'" }
+      ],
+      "literacy": [
+        { "milestone": "Turns pages of a book", "example": "Child turns the pages one at a time while you read together" }
+      ]
+    },
+    {
+      "band_id": "2_to_3y",
+      "label": "2 to 3 years",
+      "speech": [
+        { "milestone": "Correctly produces p, b, m, h, w, d, and n in words", "example": "Child says these sounds clearly in words like 'papa', 'ball', 'mango', 'hand'" },
+        { "milestone": "Correctly produces most vowels in words", "example": "Vowel sounds in the child's words are clear and correct" },
+        { "milestone": "Speech is becoming clearer but may not be understandable to unfamiliar listeners", "example": "Family understands the child, but a stranger may not catch everything" }
+      ],
+      "language": [
+        { "milestone": "Uses word combinations often, but may occasionally repeat some words or phrases, like 'baby-baby-baby sit down' or 'I want-I want juice'", "example": "Child speaks mostly in phrases, with some normal repetition — 'I want-I want water'" },
+        { "milestone": "Tries to get your attention by saying 'Look at me!'", "example": "Child calls out to make you watch — 'amma, see!'" },
+        { "milestone": "Says their name when asked", "example": "Child tells you their name when you ask 'What is your name?'" },
+        { "milestone": "Uses some plural words like 'birds' or 'toys'", "example": "Child adds -s for more than one — 'balls', 'dogs'" },
+        { "milestone": "Uses -ing verbs like 'eating' or 'running'; adds -ed for past actions, like 'looked' or 'played'", "example": "Child says 'eating', 'running', and 'I played', 'amma went'" },
+        { "milestone": "Gives reasons for things and events, like needing a coat when it's cold", "example": "Child explains — 'I want sweater because cold'" },
+        { "milestone": "Asks 'why' and 'how'", "example": "Child asks 'why?' and 'how?' about everyday things" },
+        { "milestone": "Answers questions like 'What do you do when you are sleepy?'", "example": "Child answers simple reasoning questions — 'What do you do when you are hungry?'" }
+      ],
+      "literacy": [
+        { "milestone": "Understands that letters and pictures mean something", "example": "Child points at their name or a familiar picture and knows it 'says' something" }
+      ]
+    },
+    {
+      "band_id": "3_to_4y",
+      "label": "3 to 4 years",
+      "speech": [
+        { "milestone": "Correctly produces t, k, g, f, y, and -ing in words", "example": "Child says these sounds clearly — 'table', 'cat', 'go', 'fan', 'yellow'" },
+        { "milestone": "Says all the syllables in a word", "example": "Child says the whole word — 'banana', not 'nana'" },
+        { "milestone": "Says the sounds at the beginning, middle, and end of words", "example": "Child produces first, middle, and last sounds — the 't' in 'cat', not just 'ca'" },
+        { "milestone": "By age 4, talks smoothly — does not repeat sounds, words, or phrases most of the time", "example": "Child speaks in a smooth flow without frequent repeating or getting stuck" },
+        { "milestone": "By age 4, speaks so people can understand most of what they say (may still miss l, r, sh, ch, s, v, z, th)", "example": "A stranger understands most of what the child says; later sounds may still be off" }
+      ],
+      "language": [
+        { "milestone": "Compares things, with words like 'bigger' or 'shorter'", "example": "Child compares — 'this ball is bigger', 'my pencil is shorter'" },
+        { "milestone": "Tells you a story from a book or a video", "example": "Child retells what happened in a story or a cartoon they watched" },
+        { "milestone": "Understands and uses more location words, like 'inside', 'on', and 'under'", "example": "Child follows and uses 'put it inside the box', 'the cat is under the chair'" },
+        { "milestone": "Uses words like 'a' or 'the' when talking, like 'a book' or 'the dog'", "example": "Child uses small connecting words — 'the dog', 'a ball' — in sentences" }
+      ],
+      "literacy": [
+        { "milestone": "Pretends to read alone or with others", "example": "Child holds a book and 'reads' it aloud from memory or by looking at pictures" },
+        { "milestone": "Recognizes signs and logos like STOP", "example": "Child recognises familiar signs and logos — a STOP sign, a known shop name" },
+        { "milestone": "Pretends to write or spell and can write some letters", "example": "Child scribbles 'writing' and can form a few real letters" }
+      ]
+    },
+    {
+      "band_id": "4_to_5y",
+      "label": "4 to 5 years",
+      "speech": [
+        { "milestone": "Produces most consonants correctly, and speech is understandable in conversation", "example": "The child is clear to most listeners in everyday conversation" },
+        { "milestone": "Blends word parts, like cup + cake = cupcake; identifies some rhyming words", "example": "Child joins parts — 'foot + ball = football' — and spots rhymes like 'cat' and 'hat'" }
+      ],
+      "language": [
+        { "milestone": "Produces grammatically correct sentences; sentences are longer and more complex", "example": "Child speaks in full, correct sentences that join ideas together" },
+        { "milestone": "Tells stories with main characters, settings, and connecting words like 'and'", "example": "Child tells a story with who, where, and 'and then...' linking events" },
+        { "milestone": "Uses at least one irregular plural form, like 'feet' or 'men'", "example": "Child uses irregular plurals — 'feet', not 'foots'" },
+        { "milestone": "Understands and uses location words, like 'behind', 'beside', and 'between'", "example": "Child follows 'stand behind amma', 'sit between us'" },
+        { "milestone": "Uses more words for time — like 'yesterday' and 'tomorrow' — correctly", "example": "Child uses time words correctly — 'we went yesterday', 'school is tomorrow'" },
+        { "milestone": "Follows simple directions and rules to play games", "example": "Child follows the rules of a simple game like snakes-and-ladders or a turn-taking game" }
+      ],
+      "literacy": [
+        { "milestone": "Recognizes and names 10 or more letters and can usually write their own name", "example": "Child names at least 10 letters and writes their own name" },
+        { "milestone": "Locates the front of a book and its title", "example": "Child knows which way the book opens and points to the title" },
+        { "milestone": "Imitates reading and writing from left to right", "example": "Child moves finger left-to-right while 'reading' and writing" }
+      ]
+    }
+  ]
+}
