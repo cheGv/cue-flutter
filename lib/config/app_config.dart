@@ -25,11 +25,19 @@
 
 import 'package:flutter/foundation.dart';
 
-/// Selected environment: 'sandbox' (default) or 'prod' (explicit opt-in).
+/// Selected environment: 'sandbox' (default), 'prod' (explicit opt-in), or
+/// 'demo' (explicit opt-in — a release-legal SANDBOX-backed build for public
+/// SLP feedback deploys; synthetic data only).
 const String kAppEnv = String.fromEnvironment('APP_ENV', defaultValue: 'sandbox');
 
 /// True only when this build explicitly opted into production.
 const bool kIsProd = kAppEnv == 'prod';
+
+/// True only when this build explicitly opted into the demo register: a
+/// release artifact that targets the SANDBOX. Resolves to the sandbox
+/// URL/key below through the existing non-prod branch — 'demo' exists so the
+/// release guard can bless the target EXPLICITLY, never via a dropped define.
+const bool kIsDemo = kAppEnv == 'demo';
 
 /// Cue proxy base URL. Defaults to the deployed proxy; overridable at build
 /// time for LOCAL testing — e.g. --dart-define=PROXY_BASE=http://localhost:3001.
@@ -67,16 +75,20 @@ const String kSandboxProjectRef = 'uuqhusmgoiaxdvtgbmwh';
 
 // ── Build-time release guard ─────────────────────────────────────────────────
 // A --release build const-folds kReleaseMode to true. If such a build is
-// produced WITHOUT APP_ENV=prod, the const assertion in this constructor
-// evaluates to false at compile time and aborts `flutter build`. Local debug
-// runs (kReleaseMode == false) are unaffected and default to sandbox.
+// produced WITHOUT an explicit APP_ENV of 'prod' or 'demo', the const
+// assertion in this constructor evaluates to false at compile time and aborts
+// `flutter build`. The guard blesses NAMED targets only — a release with no
+// define (a dropped CI env-pin) still fails loud. Local debug runs
+// (kReleaseMode == false) are unaffected and default to sandbox.
 class _ReleaseEnvGuard {
   const _ReleaseEnvGuard()
       : assert(
-          !(kReleaseMode && !kIsProd),
+          !(kReleaseMode && !(kIsProd || kIsDemo)),
           'BUILD GUARD: a --release build must be compiled with '
-          '--dart-define=APP_ENV=prod. Refusing to produce a release artifact '
-          'that targets the sandbox database (a CI prod-pin was likely dropped).',
+          '--dart-define=APP_ENV=prod (production) or APP_ENV=demo '
+          '(sandbox-backed feedback build). Refusing to produce a release '
+          'artifact with no explicit environment (a CI env-pin was likely '
+          'dropped).',
         );
 }
 
