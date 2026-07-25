@@ -54,6 +54,36 @@ const Map<String, String> _kSectionLabels = {
   'literacy': 'Literacy',
 };
 
+/// Header derivation line — the band and HOW the age that chose it was
+/// derived, rendered verbatim from the stored derived_age_months /
+/// age_source. Top-level and pure so tests pin the header against the
+/// stored derivation. DOB states the exact age; a stated age names the
+/// midpoint assumption instead of dressing it up as exact.
+String pedLanguageAgeDerivationLine({
+  required AshaAgeBand band,
+  required int derivedAgeMonths,
+  required String ageSource,
+}) {
+  final range = 'Band ${band.minMonths}–${band.maxMonths} m';
+  if (ageSource == 'dob') {
+    return '$range · exact age ${formatAgeMonths(derivedAgeMonths)} '
+        'from date of birth';
+  }
+  final statedYears = (derivedAgeMonths - 6) ~/ 12;
+  return '$range · from stated age $statedYears y, '
+      'assumed $derivedAgeMonths m';
+}
+
+/// '34' → '2 y 10 m'; exact years and under-1 collapse ('24' → '2 y',
+/// '6' → '6 m').
+String formatAgeMonths(int months) {
+  final y = months ~/ 12;
+  final m = months % 12;
+  if (y == 0) return '$m m';
+  if (m == 0) return '$y y';
+  return '$y y $m m';
+}
+
 class PedLanguageCaptureSurface extends StatefulWidget {
   final String clientId;
   const PedLanguageCaptureSurface({super.key, required this.clientId});
@@ -344,8 +374,14 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
             style: GoogleFonts.dmSans(
                 fontSize: 17, fontWeight: FontWeight.w700, color: _ink)),
         const SizedBox(height: 3),
-        Text(_ageLine(),
-            style: GoogleFonts.dmSans(fontSize: 12, color: _inkGhost)),
+        if (_ageMonths != null && _ageSource != null)
+          Text(
+              pedLanguageAgeDerivationLine(
+                band: band,
+                derivedAgeMonths: _ageMonths!,
+                ageSource: _ageSource!,
+              ),
+              style: GoogleFonts.dmSans(fontSize: 12, color: _inkGhost)),
         const SizedBox(height: 8),
         Text(_source,
             style: GoogleFonts.dmSans(

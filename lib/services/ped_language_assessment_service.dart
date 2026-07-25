@@ -59,10 +59,11 @@ class PedLanguageBootstrap {
   /// then milestone_order. Set when state == ready.
   final List<Map<String, dynamic>> rows;
 
-  /// Resolved age in months (set for ready and outOfAgeRange).
+  /// Resolved age in months (set for ready and outOfAgeRange) — the
+  /// value the band lookup actually used (derived_age_months).
   final int? ageMonths;
 
-  /// 'dob' | 'stated_years' (set whenever ageMonths is).
+  /// 'dob' | 'stated_years_midpoint' (set whenever ageMonths is).
   final String? ageSource;
 
   /// Dataset provenance sentence, surfaced verbatim in the UI.
@@ -90,6 +91,50 @@ class PedLanguageAssessmentService {
     var months = (now.year - dob.year) * 12 + (now.month - dob.month);
     if (now.day < dob.day) months -= 1;
     return months;
+  }
+
+  /// Pure age derivation — exactly what gets persisted as
+  /// derived_age_months / age_source, extracted so both paths are
+  /// testable without a Supabase client. DOB wins over a stated age
+  /// and is exact full months; a stated age is the year's midpoint
+  /// (years*12 + 6) under the honest name 'stated_years_midpoint'.
+  /// Future-dated DOB is invalidDob (data-entry slip, named — never a
+  /// nonsense positive age); statedYears <= 0 is noAge, because 0 is
+  /// the codebase's missing-age placeholder (trial runs write a
+  /// literal 0) and a real under-1 infant is better served by a DOB.
+  static ({PedLanguageBootstrapState state, int? ageMonths, String? ageSource})
+      resolveAge({
+    required String? dobIso,
+    required int? statedYears,
+    required DateTime now,
+  }) {
+    if (dobIso != null && dobIso.isNotEmpty) {
+      final months = ageMonthsFromDob(DateTime.parse(dobIso), now);
+      if (months < 0) {
+        return (
+          state: PedLanguageBootstrapState.invalidDob,
+          ageMonths: null,
+          ageSource: null,
+        );
+      }
+      return (
+        state: PedLanguageBootstrapState.ready,
+        ageMonths: months,
+        ageSource: 'dob',
+      );
+    }
+    if (statedYears != null && statedYears > 0) {
+      return (
+        state: PedLanguageBootstrapState.ready,
+        ageMonths: statedYears * 12 + 6,
+        ageSource: 'stated_years_midpoint',
+      );
+    }
+    return (
+      state: PedLanguageBootstrapState.noAge,
+      ageMonths: null,
+      ageSource: null,
+    );
   }
 
   /// Loads the most recent assessment for the client, or creates one
@@ -133,7 +178,7 @@ class PedLanguageAssessmentService {
         assessment: assessment,
         band: band,
         rows: rows,
-        ageMonths: assessment['age_months_at_capture'] as int?,
+        ageMonths: assessment['derived_age_months'] as int?,
         ageSource: assessment['age_source'] as String?,
         source: library.source,
       );
@@ -146,35 +191,19 @@ class PedLanguageAssessmentService {
         .eq('id', clientId)
         .single();
 
-    final int ageMonths;
-    final String ageSource;
-    final dob = client['date_of_birth'];
-    final statedYears = client['age'];
-    if (dob is String && dob.isNotEmpty) {
-      ageMonths = ageMonthsFromDob(DateTime.parse(dob), DateTime.now());
-      ageSource = 'dob';
-      if (ageMonths < 0) {
-        // Future-dated DOB — a data-entry slip (the AI intake path has
-        // no future-date guard). Name the error; don't fold it into
-        // the out-of-range message with a nonsense positive age.
-        return PedLanguageBootstrap(
-          state: PedLanguageBootstrapState.invalidDob,
-          source: library.source,
-        );
-      }
-    } else if (statedYears is int && statedYears > 0) {
-      // Midpoint of the stated year: "3 years old" reads as 3y6m.
-      // age <= 0 falls through to noAge — 0 is the codebase's missing-
-      // age placeholder (trial runs write a literal 0), and a real
-      // under-1 infant is better served by asking for a DOB.
-      ageMonths = statedYears * 12 + 6;
-      ageSource = 'stated_years';
-    } else {
+    final resolved = resolveAge(
+      dobIso: client['date_of_birth'] as String?,
+      statedYears: client['age'] as int?,
+      now: DateTime.now(),
+    );
+    if (resolved.state != PedLanguageBootstrapState.ready) {
       return PedLanguageBootstrap(
-        state: PedLanguageBootstrapState.noAge,
+        state: resolved.state,
         source: library.source,
       );
     }
+    final ageMonths = resolved.ageMonths!;
+    final ageSource = resolved.ageSource!;
 
     final band = library.bandForAgeMonths(ageMonths);
     if (band == null) {
@@ -189,11 +218,11 @@ class PedLanguageAssessmentService {
     final inserted = await _sb
         .from('ped_language_assessments')
         .insert({
-          'client_id':             clientId,
-          'clinician_id':          _sb.auth.currentUser?.id,
-          'band_key':              band.bandId,
-          'age_months_at_capture': ageMonths,
-          'age_source':            ageSource,
+          'client_id':          clientId,
+          'clinician_id':       _sb.auth.currentUser?.id,
+          'band_key':           band.bandId,
+          'derived_age_months': ageMonths,
+          'age_source':         ageSource,
         })
         .select()
         .single();
