@@ -54,10 +54,20 @@ class _AddSessionScreenState extends State<AddSessionScreen> {
       // does not exist on short_term_goals — selecting it 400s the
       // request. Backlogged: 4.0.7.30-stg-resolver-audit (other
       // readers still request goal_text and survive via catch blocks).
+      //
+      // INTERIM: single-STG attachment is a known-wrong assumption; real
+      // CAS sessions work multiple goals; pending SLP review +
+      // rearchitecture. The created_at/id ordering below only makes the
+      // pick deterministic (first-authored active STG), matching
+      // SessionCaptureScreen._loadCasStg — the WRITE half of the CAS
+      // resumption loop — so both halves resolve the same STG. Any change
+      // to this ordering must land at BOTH resolver sites.
       final rows = await GoalsQuery(client: _supabase)
           .stgReads('id, specific, target_behavior')
           .eq('client_id', widget.clientId)
           .eq('status', 'active')
+          .order('created_at', ascending: true)
+          .order('id', ascending: true)
           .limit(1);
       if (mounted) {
         final row = rows.isNotEmpty ? rows.first : null;

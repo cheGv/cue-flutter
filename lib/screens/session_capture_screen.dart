@@ -428,14 +428,24 @@ class _SessionCaptureScreenState extends State<SessionCaptureScreen> {
 
   // Resolves the active STG the dials attach to. Mirrors
   // AddSessionScreen._loadActiveStg (the ProgressBrief's resolver):
-  // active status, soft-archived excluded via stgReads, limit(1). No STG
-  // ⇒ _casStgId stays null ⇒ dials never mount; prose capture unaffected.
+  // active status, soft-archived excluded via stgReads, first-authored
+  // order, limit(1). No STG ⇒ _casStgId stays null ⇒ dials never mount;
+  // prose capture unaffected.
+  //
+  // INTERIM: single-STG attachment is a known-wrong assumption; real CAS
+  // sessions work multiple goals; pending SLP review + rearchitecture.
+  // The created_at/id ordering below only makes the pick deterministic
+  // (first-authored active STG) so the READ and WRITE halves of the
+  // resumption loop agree — it does not make single-STG right. Any change
+  // to this ordering must land at BOTH resolver sites.
   Future<void> _loadCasStg() async {
     try {
       final rows = await GoalsQuery(client: _supabase)
           .stgReads('id')
           .eq('client_id', widget.clientId)
           .eq('status', 'active')
+          .order('created_at', ascending: true)
+          .order('id', ascending: true)
           .limit(1);
       if (!mounted) return;
       setState(() =>
