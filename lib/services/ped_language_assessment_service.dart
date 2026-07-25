@@ -125,7 +125,7 @@ class PedLanguageAssessmentService {
         // makes a concurrent double-seed loud, and a seeded assessment
         // never has zero rows (every band has milestones in every
         // section).
-        await _seedBand(assessment['id'] as String, band);
+        await _seedBand(assessment['id'] as String, band, library);
         rows = await _loadRows(assessment['id'] as String);
       }
       return PedLanguageBootstrap(
@@ -200,7 +200,7 @@ class PedLanguageAssessmentService {
     final assessment = Map<String, dynamic>.from(inserted);
     final assessmentId = assessment['id'] as String;
 
-    await _seedBand(assessmentId, band);
+    await _seedBand(assessmentId, band, library);
 
     return PedLanguageBootstrap(
       state: PedLanguageBootstrapState.ready,
@@ -213,11 +213,14 @@ class PedLanguageAssessmentService {
     );
   }
 
-  /// Seeds the band's full milestone set in one bulk insert,
-  /// snapshotting the dataset text. The unique constraint makes an
-  /// accidental re-seed a loud failure rather than silent duplication.
-  Future<void> _seedBand(String assessmentId, AshaAgeBand band) async {
-    final seedRows = <Map<String, dynamic>>[
+  /// The exact row set a seed writes — pure and static so tests can
+  /// pin the provenance stamping without a Supabase client. Every row
+  /// snapshots the dataset text AND its provenance: norm_reference is
+  /// the dataset's source sentence verbatim, library_version the
+  /// dataset's parsed (loud-fail) version.
+  static List<Map<String, dynamic>> seedRowsFor(
+      String assessmentId, AshaAgeBand band, AshaMilestoneLibrary library) {
+    return <Map<String, dynamic>>[
       for (final section in kAshaSections)
         for (final m in band.sections[section]!)
           {
@@ -226,9 +229,20 @@ class PedLanguageAssessmentService {
             'milestone_order': m.order,
             'milestone_text':  m.milestone,
             'example_text':    m.example,
+            'norm_reference':  library.source,
+            'library_version': library.version,
           },
     ];
-    await _sb.from('ped_language_milestones').insert(seedRows);
+  }
+
+  /// Seeds the band's full milestone set in one bulk insert. The
+  /// unique constraint makes an accidental re-seed a loud failure
+  /// rather than silent duplication.
+  Future<void> _seedBand(
+      String assessmentId, AshaAgeBand band, AshaMilestoneLibrary library) async {
+    await _sb
+        .from('ped_language_milestones')
+        .insert(seedRowsFor(assessmentId, band, library));
   }
 
   /// Rows in dataset order — kAshaSections order, then milestone_order.

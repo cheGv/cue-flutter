@@ -100,7 +100,13 @@ class AshaMilestoneLibrary {
   /// The dataset's own provenance sentence, surfaced verbatim in the UI.
   final String source;
 
-  const AshaMilestoneLibrary({required this.bands, required this.source});
+  /// Dataset version (strict major.minor.patch), stamped onto every
+  /// seeded milestone row as library_version so a persisted capture
+  /// records exactly which parse of the reference set it came from.
+  final String version;
+
+  const AshaMilestoneLibrary(
+      {required this.bands, required this.source, required this.version});
 
   // Never invalidated by design: the asset is immutable at runtime and
   // assignment happens only after a successful parse. Dev note: this
@@ -138,6 +144,17 @@ class AshaMilestoneLibrary {
           'ASHA milestone dataset missing its `source` provenance field');
     }
 
+    // Version is provenance, not decoration: missing or malformed is a
+    // hard failure — never defaulted, so an unversioned dataset can
+    // never stamp rows.
+    final version = json['version'];
+    if (version is! String ||
+        !RegExp(r'^\d+\.\d+\.\d+$').hasMatch(version)) {
+      throw const FormatException(
+          'ASHA milestone dataset `version` missing or malformed '
+          '(expected major.minor.patch)');
+    }
+
     final rawBands = json['age_bands'];
     if (rawBands is! List) {
       throw const FormatException(
@@ -164,7 +181,8 @@ class AshaMilestoneLibrary {
       }
     }
 
-    return AshaMilestoneLibrary(bands: List.unmodifiable(bands), source: source);
+    return AshaMilestoneLibrary(
+        bands: List.unmodifiable(bands), source: source, version: version);
   }
 
   static AshaAgeBand _parseBand(Map<String, dynamic> json) {

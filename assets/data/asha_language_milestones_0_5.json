@@ -1,5 +1,6 @@
 {
   "instrument": "Pediatric Language Assessment — developmental milestone check",
+  "version": "1.0.0",
   "source": "Milestones sourced verbatim from ASHA Communication Milestones (asha.org/public/developmental-milestones). Examples authored by Cue in Indian English for familiarity. This is a structured developmental reference informing clinical judgment, not a standalone diagnostic tool.",
   "sections": ["speech", "language", "literacy"],
   "rating_options": ["present", "emerging", "absent"],

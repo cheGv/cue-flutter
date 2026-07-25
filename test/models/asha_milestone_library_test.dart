@@ -41,6 +41,10 @@ void main() {
       expect(lib.source, contains('ASHA'));
     });
 
+    test('carries the dataset version', () {
+      expect(lib.version, '1.0.0');
+    });
+
     test('per-band section counts match the source dataset', () {
       Map<String, int> counts(String bandId) {
         final band = lib.bandById(bandId)!;
@@ -126,6 +130,21 @@ void main() {
       final json = decodeRealAsset()..remove('source');
       expect(() => AshaMilestoneLibrary.fromJson(json),
           throwsFormatException);
+    });
+
+    test('version-less dataset throws — never defaults', () {
+      final json = decodeRealAsset()..remove('version');
+      expect(() => AshaMilestoneLibrary.fromJson(json),
+          throwsFormatException);
+    });
+
+    test('malformed version throws — every non-major.minor.patch shape', () {
+      for (final bad in ['v1.0.0', '1.0', '', '1.0.0-beta', 1, null]) {
+        final json = decodeRealAsset();
+        json['version'] = bad;
+        expect(() => AshaMilestoneLibrary.fromJson(json),
+            throwsFormatException, reason: 'version = $bad');
+      }
     });
 
     test('unknown band_id throws', () {
