@@ -67,3 +67,10 @@ sandbox.json
 
 # Supabase CLI local state
 supabase/.temp/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
