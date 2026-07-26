@@ -285,6 +285,34 @@ async function main() {
     owner = users.rows[0].id;
     console.log(`# owner identity: ${owner}  intruder: ${INTRUDER} (no user row needed)`);
 
+    // ── Catalog-diff invariant ──────────────────────────────────────
+    // Every public table must be sealed (rowsecurity=true) OR carry an
+    // explicit reason in rls_allowlist.json. A table that is neither —
+    // including one created after this harness was written — fails the
+    // run. Stale allowlist entries (now sealed, or dropped) warn.
+    console.log('# catalog-diff invariant');
+    {
+      const allow = require('./rls_allowlist.json').tables;
+      const cat = await q(
+        `select tablename, rowsecurity from pg_tables
+         where schemaname = 'public' order by tablename`);
+      const live = new Set(cat.rows.map((r) => r.tablename));
+      const uncovered = cat.rows
+        .filter((r) => !r.rowsecurity && !(r.tablename in allow))
+        .map((r) => r.tablename);
+      const stale = [
+        ...cat.rows.filter((r) => r.rowsecurity && r.tablename in allow)
+          .map((r) => `${r.tablename} (now sealed)`),
+        ...Object.keys(allow).filter((t) => !live.has(t))
+          .map((t) => `${t} (no longer exists)`),
+      ];
+      assertEq(uncovered.join(', '), '',
+        'catalog diff: every public table is sealed or allowlisted');
+      if (stale.length) {
+        console.log(`# warning: stale allowlist entries: ${stale.join(', ')}`);
+      }
+    }
+
     // ── Pre-clean (idempotent reruns) + fixture spine ───────────────
     await removeFixtures();
     await q('reset role');
