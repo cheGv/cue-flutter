@@ -4,21 +4,17 @@
     "audit_log_saved_filters": "Tier 2 pending — per-SLP saved filters, slp_owns_row candidate",
     "citations": "Tier 2 pending — per-STG evidence ladder rows, ownership via short_term_goals",
     "clinic_profile": "Tier 2 pending — single-row clinic config; ownership shape undecided (borderline reference)",
-    "clinical_event_log": "Task F in flight — INSERT/SELECT-only seal to preserve chain_hash integrity",
     "detection_failure_log": "Tier 2 pending — diagnostic log, ownership shape undecided",
     "detection_insufficient_input_log": "Tier 2 pending — diagnostic log, ownership shape undecided",
     "notification_inbox": "Tier 2 pending — slp_owns_row candidate",
     "security_failed_attempts": "Tier 2 pending — security log; may need service-role-only shape",
     "security_login_history": "Tier 2 pending — security log; may need service-role-only shape",
-    "security_trusted_devices": "Task F in flight — slp_owns_row seal",
     "settings_audit_log": "Tier 2 pending — audit log; append-only shape likely",
     "signed_document_snapshots": "Tier 2 pending — slp_owns_row candidate (document_id alongside)",
     "stg_session_metrics": "Tier 2 pending — ownership via short_term_goals.user_id",
     "substrate_cells": "Awaiting explicit go — per-patient clinical data, slp_owns_via_client shape (reported 2026-07-26)",
     "substrate_sources": "Awaiting explicit go — ownership via substrate_cells join (reported 2026-07-26)",
     "substrate_tags": "Awaiting explicit go — ownership via substrate_cells join (reported 2026-07-26)",
-    "support_tickets": "Tier 2 pending — slp ownership plus support-staff read path undecided",
-    "_ltg_seq_repair_backup": "Task F in flight — approved DROP",
-    "_priya_cleanup_backup_20260516": "Task F in flight — approved DROP"
+    "support_tickets": "Tier 2 pending — slp ownership plus support-staff read path undecided"
   }
 }
