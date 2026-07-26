@@ -67,3 +67,7 @@ sandbox.json
 
 # Supabase CLI local state
 supabase/.temp/
+
+# RLS regression harness deps (test/rls — Node, not Flutter)
+test/rls/node_modules/
+test/rls/package-lock.json

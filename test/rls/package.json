@@ -1,0 +1,11 @@
+{
+  "name": "cue-rls-regression-harness",
+  "private": true,
+  "description": "RLS regression harness for the sealed sandbox table families. Run: CUE_SANDBOX_DB_URL=<sandbox session-pooler URI> npm test",
+  "scripts": {
+    "test": "node rls_regression_harness.js"
+  },
+  "dependencies": {
+    "pg": "^8.11.0"
+  }
+}
