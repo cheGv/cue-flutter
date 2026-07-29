@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // test/rls/rls_regression_harness.js
 //
-// STATUS (2026-07-28): kept for FUTURE CI USE. This Node edition needs
-// CUE_SANDBOX_DB_URL (a direct sandbox Postgres URI) and HAS NOT been
-// executed that way — the URI is not available in the dev environment.
-// The VALIDATED harness is the connector edition alongside this file,
-// test/rls/rls_regression_harness.sql (first green run 2026-07-28,
-// 55/55; mutation-validated: dropping clinician_reads_own_generations
-// failed exactly the one expected assertion). The two editions assert
-// the same surface; keep their assertion lists and the allowlist in
-// sync when either changes.
+// STATUS (2026-07-28): UNVALIDATED CI STUB. This Node edition has
+// NEVER been executed (it needs CUE_SANDBOX_DB_URL, a direct sandbox
+// Postgres URI, which is not available in the dev environment) and it
+// makes NO claim of matching the validated assertion surface. The
+// AUTHORITATIVE harness is test/rls/rls_regression_harness.sql —
+// before using this stub in CI, RE-DERIVE its assertions from that
+// file and validate the run (green + mutation) from scratch.
+//
+// The catalog-diff allowlist is the versioned public.rls_allowlist
+// table (single source; the repo json was removed 2026-07-28).
 //
 // RLS regression harness for the sealed sandbox table families:
 //   ped_language_, feeding_, ssd_, cas_ (incl. cas_session_progress,
@@ -297,23 +298,25 @@ async function main() {
 
     // ── Catalog-diff invariant ──────────────────────────────────────
     // Every public table must be sealed (rowsecurity=true) OR carry an
-    // explicit reason in rls_allowlist.json. A table that is neither —
-    // including one created after this harness was written — fails the
-    // run. Stale allowlist entries (now sealed, or dropped) warn.
+    // explicit reason in the versioned public.rls_allowlist table (the
+    // single source). A table that is neither — including one created
+    // after this harness was written — fails the run. Stale allowlist
+    // entries (now sealed, or dropped) warn.
     console.log('# catalog-diff invariant');
     {
-      const allow = require('./rls_allowlist.json').tables;
+      const allowRows = await q(`select table_name from public.rls_allowlist`);
+      const allow = new Set(allowRows.rows.map((r) => r.table_name));
       const cat = await q(
         `select tablename, rowsecurity from pg_tables
          where schemaname = 'public' order by tablename`);
       const live = new Set(cat.rows.map((r) => r.tablename));
       const uncovered = cat.rows
-        .filter((r) => !r.rowsecurity && !(r.tablename in allow))
+        .filter((r) => !r.rowsecurity && !allow.has(r.tablename))
         .map((r) => r.tablename);
       const stale = [
-        ...cat.rows.filter((r) => r.rowsecurity && r.tablename in allow)
+        ...cat.rows.filter((r) => r.rowsecurity && allow.has(r.tablename))
           .map((r) => `${r.tablename} (now sealed)`),
-        ...Object.keys(allow).filter((t) => !live.has(t))
+        ...[...allow].filter((t) => !live.has(t))
           .map((t) => `${t} (no longer exists)`),
       ];
       assertEq(uncovered.join(', '), '',

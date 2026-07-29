@@ -1,6 +1,10 @@
 -- test/rls/rls_regression_harness.sql
 --
--- RLS regression harness — CONNECTOR EDITION (the validated one).
+-- RLS regression harness — THE AUTHORITATIVE EDITION. This file is the
+-- source of truth for the RLS assertion surface; any other runner
+-- (including the unvalidated Node CI stub alongside it) must be
+-- re-derived from this file before use.
+--
 -- Runs as a single SQL batch through any owner-level Postgres channel
 -- (Supabase management-API SQL, supabase db execute, or psql as
 -- postgres). One transaction end to end: fixtures are created, every
@@ -23,8 +27,10 @@
 -- ped_language_assessment_tables migration exists (never applied to
 -- prod); (3) pg_try_advisory_xact_lock forbids concurrent runs.
 --
--- Coverage: catalog-diff against the allowlist (INLINED in the DO
--- block's `allow` constant — keep in sync with rls_allowlist.json);
+-- Coverage: catalog-diff against public.rls_allowlist (the versioned
+-- in-database allowlist, migration 20260728: rls_allowlist_table —
+-- the ONLY source; add/remove rows by migration in the same commit
+-- that creates or seals a table);
 -- ped_language_, feeding_, ssd_, cas_ (assessment trio +
 -- cas_session_progress + cas_progress_brief SELECT-only wall + the
 -- SECURITY DEFINER dirty-trigger writing through it), generations
@@ -39,11 +45,7 @@ declare
   v_r jsonb := '[]'::jsonb;
   v_probe text; v_n bigint; v_n2 bigint; v_n3 bigint; v_t text; v_b boolean;
   v_uncovered text; v_stale text; v_fail int := 0; v_tot int := 0; e jsonb;
-  -- KEEP IN SYNC with rls_allowlist.json (the Node harness reads the
-  -- json directly; this inlined copy is the connector edition's).
-  allow constant text[] := array['audit_log_saved_filters','citations','clinic_profile',
-    'detection_failure_log','detection_insufficient_input_log','security_failed_attempts',
-    'security_login_history','settings_audit_log','stg_session_metrics','support_tickets'];
+  allow text[];
   c_client constant uuid := 'a11ce5ed-0000-4000-8000-000000000001';
   c_ltg    constant uuid := 'a11ce5ed-0000-4000-8000-000000000002';
   c_stg    constant uuid := 'a11ce5ed-0000-4000-8000-000000000003';
@@ -81,7 +83,10 @@ begin
   select id into v_owner from auth.users order by created_at asc limit 1;
   if v_owner is null then raise exception 'GUARD: no auth.users identity'; end if;
 
-  -- Catalog-diff invariant
+  -- Catalog-diff invariant, against the single-source in-database
+  -- allowlist (public.rls_allowlist).
+  select coalesce(array_agg(table_name), '{}'::text[]) into allow
+    from public.rls_allowlist;
   select string_agg(tablename, ', ') into v_uncovered from pg_tables
    where schemaname='public' and not rowsecurity and tablename <> all (allow);
   v_r := v_r || jsonb_build_object('t', case when v_uncovered is null then 'ok' else 'not ok' end,
