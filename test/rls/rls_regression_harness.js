@@ -1,6 +1,16 @@
 #!/usr/bin/env node
 // test/rls/rls_regression_harness.js
 //
+// STATUS (2026-07-28): kept for FUTURE CI USE. This Node edition needs
+// CUE_SANDBOX_DB_URL (a direct sandbox Postgres URI) and HAS NOT been
+// executed that way — the URI is not available in the dev environment.
+// The VALIDATED harness is the connector edition alongside this file,
+// test/rls/rls_regression_harness.sql (first green run 2026-07-28,
+// 55/55; mutation-validated: dropping clinician_reads_own_generations
+// failed exactly the one expected assertion). The two editions assert
+// the same surface; keep their assertion lists and the allowlist in
+// sync when either changes.
+//
 // RLS regression harness for the sealed sandbox table families:
 //   ped_language_, feeding_, ssd_, cas_ (incl. cas_session_progress,
 //   cas_progress_brief, cas_ddk_norms), generations, and the
