@@ -59,9 +59,14 @@
 //     convention).
 //   - Surface gate states (noAge, invalidDob, …) live OUTSIDE: the
 //     controller is only ever constructed in the ready world.
-//   - Open-ended surfaces (feeding, SSD today) may adopt the queue +
-//     seed halves without completion semantics; the controller never
-//     forces a lifecycle onto them.
+//   - Open-ended surfaces (feeding, SSD today) adopt the queue + seed
+//     core WITHOUT completion semantics: completion is an optional
+//     capability (SectionalCompletionSpec + a
+//     SectionalCompletionCapableStore), split out 2026-07-29 when the
+//     feeding retrofit showed a completion-less adopter would
+//     otherwise have to stub a lifecycle it does not have. Without the
+//     spec, complete()/markedCount() throw StateError — a wiring bug,
+//     never a runtime state.
 //
 // R is the surface's own mutable row type. The controller never mutates
 // R except through the two completion-fill callbacks the surface
@@ -71,11 +76,34 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+/// The completion half, as an OPTIONAL capability (split 2026-07-29,
+/// forced by the feeding retrofit — the queue + seed core must be
+/// adoptable by open-ended surfaces without stubbing a lifecycle they
+/// do not have). A surface without a spec can never complete anything:
+/// complete() and markedCount() throw StateError, loudly, because
+/// calling them is a wiring bug, not a runtime condition.
+class SectionalCompletionSpec<R> {
+  /// Rows completion turns into an explicit record ("unmarked").
+  final bool Function(R) isUnmarked;
+
+  /// Applied optimistically to every unmarked row at completion
+  /// (ped_language: status = 'absent') …
+  final void Function(R) applyCompletionFill;
+
+  /// … and reverted on a failed completion (ped_language: status = null).
+  final void Function(R) revertCompletionFill;
+
+  const SectionalCompletionSpec({
+    required this.isUnmarked,
+    required this.applyCompletionFill,
+    required this.revertCompletionFill,
+  });
+}
+
 /// What a surface tells the controller about its rows and sections.
 class SectionalCaptureConfig<R> {
-  /// Ordered section ids; drives navigation, progress, and completion.
-  /// May be empty for open-ended adopters (queue + seed halves only) —
-  /// complete() then has nothing it could ever be asked to do.
+  /// Ordered section ids; drives navigation, progress, and (when a
+  /// completion spec is present) completion.
   final List<String> sectionIds;
 
   /// Server row id — the update-by-id key and the dirty-set key.
@@ -93,15 +121,10 @@ class SectionalCaptureConfig<R> {
   /// never deletes.
   final Set<Object> expectedSeedKeys;
 
-  /// Rows completion turns into an explicit record ("unmarked").
-  final bool Function(R) isUnmarked;
-
-  /// Applied optimistically to every unmarked row at completion
-  /// (ped_language: status = 'absent') …
-  final void Function(R) applyCompletionFill;
-
-  /// … and reverted on a failed completion (ped_language: status = null).
-  final void Function(R) revertCompletionFill;
+  /// The completion lifecycle — null for open-ended adopters (feeding),
+  /// which get the queue, dirty set, retry, and seed reconciliation
+  /// with no Done, no stamps, no rollback.
+  final SectionalCompletionSpec<R>? completion;
 
   const SectionalCaptureConfig({
     required this.sectionIds,
@@ -109,9 +132,7 @@ class SectionalCaptureConfig<R> {
     required this.sectionOf,
     required this.seedKey,
     required this.expectedSeedKeys,
-    required this.isUnmarked,
-    required this.applyCompletionFill,
-    required this.revertCompletionFill,
+    this.completion,
   });
 }
 
@@ -125,18 +146,24 @@ class SectionalSnapshot<R> {
   const SectionalSnapshot({required this.rows, required this.completedAt});
 }
 
-/// Persistence adapter the surface's service implements. The store owns
-/// every table name and column; the controller owns lifecycle only.
+/// Persistence adapter the surface's service implements — the CORE
+/// contract every adopter needs. The store owns every table name and
+/// column; the controller owns lifecycle only.
 abstract interface class SectionalCaptureStore<R> {
-  /// Rows + per-section completion stamps. Surface gate states are
-  /// resolved BEFORE the controller exists — load() only ever runs in
-  /// the ready world.
+  /// Rows + per-section completion stamps (all-null for open-ended
+  /// adopters). Surface gate states are resolved BEFORE the controller
+  /// exists — load() only ever runs in the ready world.
   Future<SectionalSnapshot<R>> load();
 
   /// Self-heal: insert rows for exactly these missing seed keys. MUST
   /// be loud on duplicates (unique constraint), never silent.
   Future<void> insertSeedRows(Set<Object> missingSeedKeys);
+}
 
+/// The completion-capable store — implemented only by surfaces that
+/// carry a SectionalCompletionSpec. complete() requires BOTH.
+abstract interface class SectionalCompletionCapableStore<R>
+    implements SectionalCaptureStore<R> {
   /// The completion write. unmarkedRowIds is the EXPLICIT id list
   /// computed from screen state — a store must never substitute a
   /// server-side status-IS-NULL filter for it.
@@ -217,8 +244,17 @@ class SectionalCaptureController<R> extends ChangeNotifier {
   String get currentSectionId => config.sectionIds[_currentIndex];
   int get currentIndex => _currentIndex;
 
-  int markedCount(String sectionId) =>
-      rowsIn(sectionId).where((r) => !config.isUnmarked(r)).length;
+  /// Progress against the completion lifecycle — meaningless without
+  /// one, so a completion-less adopter calling it is a wiring bug.
+  int markedCount(String sectionId) {
+    final spec = config.completion;
+    if (spec == null) {
+      throw StateError(
+          'markedCount() needs a SectionalCompletionSpec — this adopter is '
+          'open-ended (queue + seed only)');
+    }
+    return rowsIn(sectionId).where((r) => !spec.isUnmarked(r)).length;
+  }
 
   void goTo(String sectionId) {
     final i = config.sectionIds.indexOf(sectionId);
@@ -350,6 +386,14 @@ class SectionalCaptureController<R> extends ChangeNotifier {
   /// unmarked-id list; and on a store failure revert all three and
   /// report rolledBack.
   Future<SectionalCompletionResult> complete(String sectionId) async {
+    final spec = config.completion;
+    final completionStore = store;
+    if (spec == null || completionStore is! SectionalCompletionCapableStore<R>) {
+      throw StateError(
+          'complete() called on a completion-less SectionalCapture — this '
+          'adopter has no SectionalCompletionSpec and/or its store does not '
+          'implement SectionalCompletionCapableStore');
+    }
     if (!config.sectionIds.contains(sectionId)) {
       throw ArgumentError.value(
           sectionId, 'sectionId', 'not a configured section');
@@ -379,10 +423,10 @@ class SectionalCaptureController<R> extends ChangeNotifier {
             dirtyRowIds: dirtyHere);
       }
 
-      final flipped = rowsIn(sectionId).where(config.isUnmarked).toList();
+      final flipped = rowsIn(sectionId).where(spec.isUnmarked).toList();
       final indexBefore = _currentIndex;
       for (final r in flipped) {
-        config.applyCompletionFill(r);
+        spec.applyCompletionFill(r);
       }
       _completedAt[sectionId] = DateTime.now();
       if (_currentIndex < config.sectionIds.length - 1) {
@@ -390,7 +434,7 @@ class SectionalCaptureController<R> extends ChangeNotifier {
       }
       _notify();
       try {
-        await store.persistCompletion(
+        await completionStore.persistCompletion(
           sectionId: sectionId,
           unmarkedRowIds: [for (final r in flipped) config.rowId(r)],
         );
@@ -401,7 +445,7 @@ class SectionalCaptureController<R> extends ChangeNotifier {
         // recorded it — revert fill, stamp, and position so the Done
         // affordance returns.
         for (final r in flipped) {
-          config.revertCompletionFill(r);
+          spec.revertCompletionFill(r);
         }
         _completedAt[sectionId] = null;
         _currentIndex = indexBefore;

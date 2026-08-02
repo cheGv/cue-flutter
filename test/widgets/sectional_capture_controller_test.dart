@@ -23,7 +23,7 @@ class TestRow {
 
 typedef SeedKey = (String, int);
 
-class FakeStore implements SectionalCaptureStore<TestRow> {
+class FakeStore implements SectionalCompletionCapableStore<TestRow> {
   final List<TestRow> serverRows = [];
   final Map<String, DateTime?> completedAt = {
     'speech': null,
@@ -87,9 +87,46 @@ SectionalCaptureConfig<TestRow> config() => SectionalCaptureConfig<TestRow>(
         ('speech', 2),
         ('language', 1),
       },
-      isUnmarked: (r) => r.status == null,
-      applyCompletionFill: (r) => r.status = 'absent',
-      revertCompletionFill: (r) => r.status = null,
+      completion: SectionalCompletionSpec<TestRow>(
+        isUnmarked: (r) => r.status == null,
+        applyCompletionFill: (r) => r.status = 'absent',
+        revertCompletionFill: (r) => r.status = null,
+      ),
+    );
+
+/// A core-only store: load + seed, no completion capability — the
+/// open-ended adopter shape (feeding).
+class CoreOnlyStore implements SectionalCaptureStore<TestRow> {
+  final List<TestRow> serverRows = [];
+  int _nextId = 500;
+
+  @override
+  Future<SectionalSnapshot<TestRow>> load() async => SectionalSnapshot(
+        rows: List.of(serverRows),
+        completedAt: const {'speech': null, 'language': null},
+      );
+
+  @override
+  Future<void> insertSeedRows(Set<Object> missingSeedKeys) async {
+    for (final k in missingSeedKeys) {
+      final key = k as SeedKey;
+      serverRows.add(TestRow('r${_nextId++}', key.$1, key.$2));
+    }
+  }
+}
+
+SectionalCaptureConfig<TestRow> coreOnlyConfig() =>
+    SectionalCaptureConfig<TestRow>(
+      sectionIds: const ['speech', 'language'],
+      rowId: (r) => r.id,
+      sectionOf: (r) => r.section,
+      seedKey: (r) => (r.section, r.order),
+      expectedSeedKeys: const {
+        ('speech', 1),
+        ('speech', 2),
+        ('language', 1),
+      },
+      // No completion spec — open-ended.
     );
 
 /// Pump the microtask/timer queue a few turns.
@@ -487,6 +524,59 @@ void main() {
       expect(await c.retryDirty(), isEmpty);
       expect(persisted, ['v2']); // the retry ran v2's closure, never v1's
       expect(c.dirtyRowIds, isEmpty);
+    });
+  });
+
+  group('completion-less adopters (the open-ended shape, e.g. feeding)', () {
+    late CoreOnlyStore store;
+    late SectionalCaptureController<TestRow> c;
+
+    setUp(() async {
+      store = CoreOnlyStore();
+      c = SectionalCaptureController(config: coreOnlyConfig(), store: store);
+      await c.bootstrap();
+    });
+
+    test('the queue + seed core stands alone: reconciliation, tracking, '
+        'dirty, and retry all work without a completion spec', () async {
+      // Seed reconciliation ran.
+      expect(c.rowsIn('speech').length, 2);
+      expect(c.rowsIn('language').length, 1);
+
+      // Queue + dirty + retained-closure retry.
+      var online = false;
+      final rowId = c.rowsIn('speech').first.id;
+      await expectLater(
+          c.trackRowSave(rowId, () async {
+            if (!online) throw StateError('offline');
+          }),
+          throwsA(isA<StateError>()));
+      expect(c.dirtyRowIds, {rowId});
+      online = true;
+      expect(await c.retryDirty(), isEmpty);
+      expect(c.dirtyRowIds, isEmpty);
+      await c.drainPendingSaves();
+    });
+
+    test('complete() without a spec is a LOUD wiring bug, not a silent '
+        'no-op', () {
+      expect(() => c.complete('speech'), throwsStateError);
+    });
+
+    test('markedCount() without a spec is likewise loud', () {
+      expect(() => c.markedCount('speech'), throwsStateError);
+    });
+
+    test('a spec without a completion-capable store is also refused',
+        () async {
+      // Spec present, but the store cannot persist a completion — the
+      // guard must catch the half-wired case too.
+      final halfWired = SectionalCaptureController(
+        config: config(), // has a spec
+        store: CoreOnlyStore(), // core-only
+      );
+      await halfWired.bootstrap();
+      expect(() => halfWired.complete('speech'), throwsStateError);
     });
   });
 }
