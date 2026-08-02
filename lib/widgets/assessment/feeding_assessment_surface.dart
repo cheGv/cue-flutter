@@ -200,6 +200,12 @@ class _FeedingAssessmentSurfaceState extends State<FeedingAssessmentSurface> {
           // (renders nothing while inactive), pre-refactor position.
           FeedingOffRampCard(
               controller: _controller, onOpenSwallow: widget.onOpenSwallow),
+          // Unsaved-state banner: visible whenever any save has failed,
+          // with the explicit way out. Never silent, never automatic.
+          if (_controller.hasUnsaved) ...[
+            const SizedBox(height: 12),
+            _unsavedBanner(),
+          ],
           const SizedBox(height: 16),
           _footerLink(),
           // Bottom breathing room — the off-ramp / caveat must never sit
@@ -208,6 +214,41 @@ class _FeedingAssessmentSurfaceState extends State<FeedingAssessmentSurface> {
         ],
       );
     });
+  }
+
+  /// Names the unsaved count and offers Retry — the clinician sees the
+  /// state and has a way to act (the dirty rows also carry their own
+  /// "not saved" markers in the layers).
+  Widget _unsavedBanner() {
+    final n = _controller.unsavedUnits.length;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: _coral.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _coral.withValues(alpha: 0.5)),
+      ),
+      child: Row(children: [
+        Expanded(
+          child: Text('$n change${n == 1 ? '' : 's'} not saved.',
+              style: GoogleFonts.inter(
+                  fontSize: 12.5, fontWeight: FontWeight.w600, color: _ink)),
+        ),
+        TextButton(
+          onPressed: () async {
+            final still = await _controller.retryUnsaved();
+            if (still.isNotEmpty && mounted) {
+              _toast(context,
+                  'Still not saved — check the connection and retry.');
+            }
+          },
+          style: TextButton.styleFrom(foregroundColor: _coral),
+          child: Text('Retry',
+              style: GoogleFonts.inter(
+                  fontSize: 12.5, fontWeight: FontWeight.w700)),
+        ),
+      ]),
+    );
   }
 
   Widget _footerLink() {

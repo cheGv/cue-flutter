@@ -16,7 +16,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:cue/constants/feeding_ladder_content.dart';
 import 'package:cue/services/feeding_assessment_service.dart';
 import 'package:cue/widgets/assessment/feeding_assessment_surface.dart';
 
@@ -37,6 +36,12 @@ class _FakeFeedingService implements FeedingAssessmentService {
   final int? ageMonths;
   final List<Map<String, dynamic>> behaviorRows;
 
+  /// Stateful ladder storage: since the ensureLadderBands deletion, the
+  /// sectional store seeds via insertRow and re-loads via loadRows —
+  /// the fake must remember what was seeded, like the DB does.
+  final List<Map<String, dynamic>> _ladderRows = [];
+  int _nextId = 0;
+
   @override
   Future<Map<String, dynamic>> loadOrCreate({required String clientId}) async =>
       {
@@ -48,34 +53,26 @@ class _FakeFeedingService implements FeedingAssessmentService {
       };
 
   @override
-  Future<List<Map<String, dynamic>>> ensureLadderBands(
-          String assessmentId) async =>
-      [
-        for (final b in kFeedingLadderBands)
-          {
-            'id': 'band-${b.order}',
-            ...FeedingAssessmentService.seedRowFor(b),
-            'clinician_marking': null,
-            'notes': null,
-          },
-      ];
-
-  @override
   Future<List<Map<String, dynamic>>> loadRows(String table, String assessmentId,
           {String orderBy = 'created_at', bool ascending = true}) async =>
       table == 'feeding_behaviors'
           ? [for (final r in behaviorRows) Map<String, dynamic>.from(r)]
-          : [];
+          : List.of(_ladderRows);
 
   @override
   Future<void> saveAssessmentColumns(
       {required String assessmentId, required Map<String, dynamic> data}) async {}
   @override
   Future<String> insertRow(
-          {required String table,
-          required String assessmentId,
-          required Map<String, dynamic> data}) async =>
-      'new-row';
+      {required String table,
+      required String assessmentId,
+      required Map<String, dynamic> data}) async {
+    final id = 'row-${_nextId++}';
+    if (table == 'feeding_ladder_bands') {
+      _ladderRows.add({'id': id, ...data, 'clinician_marking': null, 'notes': null});
+    }
+    return id;
+  }
   @override
   Future<void> updateRow(
       {required String table,

@@ -21,6 +21,40 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../constants/feeding_ladder_content.dart';
+import '../widgets/assessment/sectional_capture.dart';
+
+/// Feeding's SectionalCapture wiring — the OPEN-ENDED shape: queue,
+/// dirty set, retained-closure retry, and per-key seed reconciliation
+/// for the ladder bands, with NO completion spec (no Done, no stamps,
+/// no rollback — feeding stays open-ended by design). Only ladder rows
+/// live in the controller's registry: feeding_behaviors are
+/// clinician-added AFTER bootstrap and the registry is bootstrap-
+/// static, so behaviour rows stay in FeedingAssessmentController's own
+/// cache — their SAVES still ride the queue/dirty set, which is
+/// id-based and does not require registered rows. Top-level and pure
+/// so the generalisation is testable headlessly.
+SectionalCaptureConfig<Map<String, dynamic>> feedingSectionalConfig() {
+  return SectionalCaptureConfig<Map<String, dynamic>>(
+    sectionIds: const ['ladder'],
+    rowId: (r) => r['id'] as String,
+    sectionOf: (_) => 'ladder',
+    seedKey: (r) => r['band_key'] as String,
+    expectedSeedKeys: {for (final b in kFeedingLadderBands) b.key},
+    // No completion spec — open-ended.
+  );
+}
+
+/// One dirty-set unit = one persist unit = one (owner, field-group)
+/// pair — NOT one row. Feeding saves are per-field-group PATCHES, so
+/// retaining only a row's latest closure would lose an earlier failed
+/// field; per-unit ids keep every failed patch independently
+/// retryable. `owner` is a row id, or 'parent' for parent columns.
+String feedingSaveUnitId(String owner, Map<String, dynamic> data) =>
+    '$owner::${(data.keys.toList()..sort()).join('+')}';
+
+/// Whether a dirty-set unit belongs to [ownerId] (a row id or 'parent').
+bool feedingUnsavedUnitMatchesOwner(String unit, String ownerId) =>
+    unit == ownerId || unit.startsWith('$ownerId::');
 
 class FeedingAssessmentService {
   FeedingAssessmentService._([this._injectedClient]);
@@ -163,33 +197,51 @@ class FeedingAssessmentService {
         'off_ramp_band': band.offRampBand,
       };
 
-  /// Seeds the seven ladder bands if absent (keyed by band_key — band
-  /// identity, not list position, is the invariant); returns them ordered.
-  Future<List<Map<String, dynamic>>> ensureLadderBands(
-      String assessmentId) async {
-    final rows = await loadRows('feeding_ladder_bands', assessmentId,
-        orderBy: 'band_order', ascending: true);
-    final byKey = <String, Map<String, dynamic>>{};
-    for (final r in rows) {
-      final k = r['band_key'];
-      if (k is String) byKey[k] = r;
-    }
-    for (final band in kFeedingLadderBands) {
-      if (byKey.containsKey(band.key)) continue;
-      await insertRow(
-        table: 'feeding_ladder_bands',
-        assessmentId: assessmentId,
-        data: seedRowFor(band),
-      );
-    }
-    return loadRows('feeding_ladder_bands', assessmentId,
-        orderBy: 'band_order', ascending: true);
-  }
-
   void _assertChild(String table) {
     if (!childTables.contains(table)) {
       throw ArgumentError(
           'FeedingAssessmentService: $table is not a feeding child table');
+    }
+  }
+}
+
+/// Core-only SectionalCaptureStore for the ladder bands (no completion
+/// capability — feeding is open-ended). Replaces the old
+/// ensureLadderBands: the per-key reconciliation now lives in
+/// SectionalCaptureController.bootstrap, the one and only seed path;
+/// this store just loads and inserts. Band identity, not list
+/// position, remains the invariant (band_key seed keys).
+class FeedingLadderSectionalStore
+    implements SectionalCaptureStore<Map<String, dynamic>> {
+  final String assessmentId;
+  final FeedingAssessmentService _service;
+
+  FeedingLadderSectionalStore({
+    required this.assessmentId,
+    FeedingAssessmentService? service,
+  }) : _service = service ?? FeedingAssessmentService.instance;
+
+  @override
+  Future<SectionalSnapshot<Map<String, dynamic>>> load() async {
+    return SectionalSnapshot(
+      rows: await _service.loadRows('feeding_ladder_bands', assessmentId,
+          orderBy: 'band_order', ascending: true),
+      completedAt: const {'ladder': null}, // open-ended: never stamped
+    );
+  }
+
+  @override
+  Future<void> insertSeedRows(Set<Object> missingSeedKeys) async {
+    // Sequential, matching the pre-refactor seeding exactly. The seed
+    // payload carries ONLY structural/reference fields (seedRowFor's
+    // contract): clinician_marking / notes are never fabricated.
+    for (final band in kFeedingLadderBands) {
+      if (!missingSeedKeys.contains(band.key)) continue;
+      await _service.insertRow(
+        table: 'feeding_ladder_bands',
+        assessmentId: assessmentId,
+        data: FeedingAssessmentService.seedRowFor(band),
+      );
     }
   }
 }

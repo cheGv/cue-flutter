@@ -212,6 +212,15 @@ class _FeedingBehaviorsBodyState extends State<_FeedingBehaviorsBody> {
     return _rowCard(
       onRemove: () => _removeBehavior(row),
       children: [
+        if (widget.controller.ownerUnsaved(id))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text('not saved',
+                style: GoogleFonts.inter(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _coral)),
+          ),
         if (freeTyped)
           _rowText('Behaviour', _rc(row, 'behavior_label'),
               hint: 'what you observed, in your words',

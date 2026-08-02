@@ -27,6 +27,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../services/feeding_assessment_service.dart';
+import 'sectional_capture.dart';
 
 class FeedingAssessmentController extends ChangeNotifier {
   FeedingAssessmentController({
@@ -44,6 +45,15 @@ class FeedingAssessmentController extends ChangeNotifier {
   List<Map<String, dynamic>> _ladderBands = [];
   final List<Map<String, dynamic>> _behaviors = [];
   bool _disposed = false;
+
+  /// The queue + seed core (2026-08-02 retrofit): in-flight save
+  /// tracking, the dirty set with retained-closure retry, and per-key
+  /// ladder seed reconciliation. NO completion spec — feeding stays
+  /// open-ended (no Done, no stamps, no rollback). Behaviour rows are
+  /// clinician-added after bootstrap and therefore live outside the
+  /// controller's (bootstrap-static) registry; their saves still ride
+  /// the queue and dirty set, which are id-based.
+  SectionalCaptureController<Map<String, dynamic>>? _sectional;
 
   bool get loading => _loading;
   String? get error => _error;
@@ -92,7 +102,17 @@ class FeedingAssessmentController extends ChangeNotifier {
       final a = await _service.loadOrCreate(clientId: clientId);
       _assessmentId = a['id'] as String;
       _parent = a;
-      _ladderBands = await _service.ensureLadderBands(_assessmentId!);
+      // Ladder rows load + PER-KEY seed reconciliation (partial seeds
+      // heal, not only the empty case) — the one and only seed path.
+      final sectional = SectionalCaptureController<Map<String, dynamic>>(
+        config: feedingSectionalConfig(),
+        store: FeedingLadderSectionalStore(
+            assessmentId: _assessmentId!, service: _service),
+      );
+      await sectional.bootstrap();
+      sectional.addListener(_notify); // dirty-set changes repaint layers
+      _sectional = sectional;
+      _ladderBands = List.of(sectional.rowsIn('ladder'));
       _behaviors
         ..clear()
         ..addAll(await _service.loadRows('feeding_behaviors', _assessmentId!));
@@ -104,27 +124,57 @@ class FeedingAssessmentController extends ChangeNotifier {
     _notify();
   }
 
-  // ── Mutations (optimistic cache + notify, then persist) ──────────────
+  // ── Unsaved state (the dirty set, surfaced) ──────────────────────────
 
+  /// Dirty persist units — one unit per (owner, field-group), see
+  /// feedingSaveUnitId. Empty when everything on screen is on record.
+  Set<String> get unsavedUnits => _sectional?.dirtyRowIds ?? const {};
+
+  bool get hasUnsaved => unsavedUnits.isNotEmpty;
+
+  /// Whether any failed save belongs to [ownerId] (a row id, or
+  /// 'parent' for the oral-motor parent columns).
+  bool ownerUnsaved(String ownerId) => unsavedUnits
+      .any((u) => feedingUnsavedUnitMatchesOwner(u, ownerId));
+
+  /// The explicit path out of a failed save: re-runs every retained
+  /// persist closure; returns the units STILL dirty (empty = clean).
+  /// Never throws — the calling layer owns any toast.
+  Future<Set<String>> retryUnsaved() async =>
+      _sectional == null ? const {} : await _sectional!.retryDirty();
+
+  // ── Mutations (optimistic cache + notify, then tracked persist) ──────
+
+  /// Optimistic cache + notify first, then the persist rides the
+  /// sectional queue: tracked (so any future completion-style drain
+  /// sees it), dirty-marked on failure, retryable via retryUnsaved().
+  /// The returned future still rethrows to the calling layer, which
+  /// owns the toast — the pre-refactor contract, unchanged.
   Future<void> saveParentColumns(Map<String, dynamic> data) {
     _parent.addAll(data);
     _notify();
-    return _service.saveAssessmentColumns(
-        assessmentId: _requireId(), data: data);
+    final id = _requireId();
+    return _requireSectional().trackRowSave(
+        feedingSaveUnitId('parent', data),
+        () => _service.saveAssessmentColumns(assessmentId: id, data: data));
   }
 
   Future<void> saveBandRow(String rowId, Map<String, dynamic> data) {
     _ladderBands.firstWhere((r) => r['id'] == rowId).addAll(data);
     _notify();
-    return _service.updateRow(
-        table: 'feeding_ladder_bands', rowId: rowId, data: data);
+    return _requireSectional().trackRowSave(
+        feedingSaveUnitId(rowId, data),
+        () => _service.updateRow(
+            table: 'feeding_ladder_bands', rowId: rowId, data: data));
   }
 
   Future<void> saveBehaviorRow(String rowId, Map<String, dynamic> data) {
     _behaviors.firstWhere((r) => r['id'] == rowId).addAll(data);
     _notify();
-    return _service.updateRow(
-        table: 'feeding_behaviors', rowId: rowId, data: data);
+    return _requireSectional().trackRowSave(
+        feedingSaveUnitId(rowId, data),
+        () => _service.updateRow(
+            table: 'feeding_behaviors', rowId: rowId, data: data));
   }
 
   /// Awaits the insert (the row needs its server id), then appends + notifies.
@@ -156,6 +206,15 @@ class FeedingAssessmentController extends ChangeNotifier {
     return id;
   }
 
+  SectionalCaptureController<Map<String, dynamic>> _requireSectional() {
+    final s = _sectional;
+    if (s == null) {
+      throw StateError(
+          'FeedingAssessmentController used before bootstrap() completed');
+    }
+    return s;
+  }
+
   void _notify() {
     if (!_disposed) notifyListeners();
   }
@@ -163,6 +222,8 @@ class FeedingAssessmentController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _sectional?.removeListener(_notify);
+    _sectional?.dispose();
     super.dispose();
   }
 }

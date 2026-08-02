@@ -189,6 +189,15 @@ class _FeedingLadderBodyState extends State<_FeedingLadderBody> {
                                   fontSize: 13.5,
                                   fontWeight: FontWeight.w600,
                                   color: _ink)),
+                          if (widget.controller
+                              .ownerUnsaved(row['id'] as String)) ...[
+                            const SizedBox(width: 8),
+                            Text('not saved',
+                                style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: _coral)),
+                          ],
                           if (isMatched) ...[
                             const SizedBox(width: 8),
                             Container(

@@ -23,6 +23,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:cue/config/app_config.dart';
 import 'package:cue/services/feeding_assessment_service.dart';
+import 'package:cue/widgets/assessment/sectional_capture.dart';
 
 void main() {
   final online = Platform.environment['FEEDING_SANDBOX'] == '1';
@@ -30,10 +31,29 @@ void main() {
   test(
     'service <-> sandbox round-trip: seed, mark, behaviours, cascade cleanup',
     () async {
-      // Direct sandbox client (no Supabase.initialize / auth needed — RLS is
-      // off on the feeding_* tables, captured-as-is like the SSD siblings).
+      // Direct sandbox client. STALE-GATE NOTE (2026-08-02): the feeding_*
+      // tables were RLS-sealed on the sandbox 2026-07-26 (authenticated-only,
+      // slp_owns_via_client), so this raw anon client will now be DENIED when
+      // the FEEDING_SANDBOX gate is opened — the next online run needs a
+      // signed-in session (or a service-role channel) before it can pass.
+      // Kept as-is offline; the gate keeps the default suite green.
       final sb = SupabaseClient(kSupabaseUrlSandbox, kSupabaseAnonKeySandbox);
       final svc = FeedingAssessmentService.withClient(sb);
+
+      // The one and only seed path since the ensureLadderBands deletion:
+      // the SectionalCapture per-key reconciliation, driven exactly as the
+      // production controller drives it.
+      Future<List<Map<String, dynamic>>> ensureBands(String assessmentId) async {
+        final c = SectionalCaptureController<Map<String, dynamic>>(
+          config: feedingSectionalConfig(),
+          store: FeedingLadderSectionalStore(
+              assessmentId: assessmentId, service: svc),
+        );
+        await c.bootstrap();
+        final rows = List.of(c.rowsIn('ladder'));
+        c.dispose();
+        return rows;
+      }
 
       // An existing client to satisfy the FK. `clients` is RLS-guarded for a
       // raw anon client (no session), so we use a known id (overridable via
@@ -52,7 +72,7 @@ void main() {
 
       try {
         // ── Ladder seeding: 7 bands, EMPTY STAYS EMPTY on the real DB ──────
-        final bands = await svc.ensureLadderBands(id);
+        final bands = await ensureBands(id);
         expect(bands, hasLength(7));
         for (var i = 0; i < bands.length; i++) {
           expect(bands[i]['band_order'], i + 1);
@@ -66,7 +86,7 @@ void main() {
         expect(bands.where((b) => b['off_ramp_band'] == true), hasLength(3));
 
         // Re-seed is idempotent — still exactly 7.
-        final again = await svc.ensureLadderBands(id);
+        final again = await ensureBands(id);
         expect(again, hasLength(7));
 
         // ── Parent patch through the allowlist; untouched stays NULL ──────
@@ -93,7 +113,7 @@ void main() {
           rowId: band5['id'] as String,
           data: {'clinician_marking': 'below_level', 'notes': 'marked in test'},
         );
-        final reread = await svc.ensureLadderBands(id);
+        final reread = await ensureBands(id);
         expect(
             reread.firstWhere((b) => b['band_key'] == '18_24mo')[
                 'clinician_marking'],
