@@ -1,7 +1,7 @@
 // lib/widgets/assessment/ped_language_capture_surface.dart
 //
-// Pediatric Language capture surface (Step 5) — ASHA developmental
-// milestone check, birth-5. Wired on clinical_area 'pediatric-language'.
+// Pediatric Language capture surface — ASHA developmental milestone
+// check, birth-5. Wired on clinical_area 'pediatric-language'.
 //
 // Shape: one section at a time (speech → language → literacy) with a
 // three-step progress header. Each milestone is a tappable card — tap
@@ -22,13 +22,20 @@
 // verbatim in the header — milestone wording is ASHA's, the examples
 // are Cue-authored Indian-English familiarity aids.
 //
-// Save model (see PedLanguageAssessmentService): rows are seeded once
-// at assessment creation with dataset text snapshotted; every tap is an
-// optimistic setState + deterministic update-by-id, save-on-change with
-// no debounce — matching the CAS / dysarthria siblings. Palette is the
-// sibling constants (teal migration is a later per-surface pass); the
-// one FilledButton uses kCueAmber with an EXPLICIT white foreground
-// (the polarity-4 lesson, CLAUDE.md).
+// Lifecycle (retrofitted 2026-07-29): the completion machinery — the
+// in-flight save queue, idempotent completion keyed on the section
+// whose Done button was rendered, per-key seed self-heal, rollback on
+// a failed completion, and the dirty-row refusal — is
+// SectionalCaptureController's; this file only renders, mutates its
+// marks optimistically, and hands persists to the controller. Rows a
+// save failed for are VISIBLY marked "not saved" (card chip + step dot
+// + a retry banner above Done); complete() refuses on them
+// (refusedDirty) and the Retry affordance calls retryDirty(). Nothing
+// about failure is silent. Palette is the sibling constants (teal
+// migration is a later per-surface pass); the FilledButton uses
+// kCueAmber with an EXPLICIT white foreground (polarity-4, CLAUDE.md).
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -36,6 +43,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/asha_milestone_library.dart';
 import '../../services/ped_language_assessment_service.dart';
 import '../../theme/cue_phase4_tokens.dart' show kCueAmber;
+import 'sectional_capture.dart';
 
 // Palette — reused verbatim from the CAS / ped_dysarthria capture
 // surfaces so the assessment siblings read identically.
@@ -93,25 +101,6 @@ class PedLanguageCaptureSurface extends StatefulWidget {
       _PedLanguageCaptureSurfaceState();
 }
 
-/// Local mutable mirror of one ped_language_milestones row.
-class _Mark {
-  final String rowId;
-  final int order;
-  final String text;
-  final String? example;
-  String? status;   // present | emerging | absent | null (not yet captured)
-  String? evidence; // observed | parent_reported | null
-
-  _Mark({
-    required this.rowId,
-    required this.order,
-    required this.text,
-    required this.example,
-    required this.status,
-    required this.evidence,
-  });
-}
-
 class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
   final _service = PedLanguageAssessmentService.instance;
 
@@ -119,27 +108,12 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
   String? _error;
 
   PedLanguageBootstrapState? _state;
-  String? _assessmentId;
   AshaAgeBand? _band;
   String _source = '';
   int? _ageMonths;
   String? _ageSource;
 
-  /// section → marks in milestone_order.
-  final Map<String, List<_Mark>> _marks = {};
-
-  /// section → declared-done (from *_completed_at).
-  final Map<String, bool> _completed = {};
-
-  int _sectionIndex = 0;
-
-  /// In-flight per-row saves. Completing a section awaits these so the
-  /// declared record matches what was on screen, not a racing PATCH.
-  final Set<Future<void>> _pendingSaves = {};
-
-  /// Guards _completeSection against double-taps — a second tap 150 ms
-  /// after the first must not complete the NEXT, unreviewed section.
-  bool _completing = false;
+  SectionalCaptureController<PedLanguageMark>? _controller;
 
   @override
   void initState() {
@@ -147,39 +121,39 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
     _bootstrap();
   }
 
+  @override
+  void dispose() {
+    _controller?.removeListener(_onControllerChanged);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
+  }
+
   Future<void> _bootstrap() async {
     try {
-      final b = await _service.loadOrCreate(clientId: widget.clientId);
+      final b = await _service.resolveParent(clientId: widget.clientId);
       _state = b.state;
       _source = b.source;
       _ageMonths = b.ageMonths;
       _ageSource = b.ageSource;
       if (b.state == PedLanguageBootstrapState.ready) {
-        _assessmentId = b.assessment!['id'] as String;
         _band = b.band;
-        for (final section in kAshaSections) {
-          _completed[section] =
-              b.assessment!['${section}_completed_at'] != null;
-          _marks[section] = [
-            for (final r in b.rows)
-              if (r['section'] == section)
-                _Mark(
-                  rowId:    r['id'] as String,
-                  order:    r['milestone_order'] as int,
-                  text:     r['milestone_text'] as String,
-                  example:  r['example_text'] as String?,
-                  status:   r['status'] as String?,
-                  evidence: r['evidence_source'] as String?,
-                ),
-          ]..sort((a, b) => a.order.compareTo(b.order));
-        }
-        // Open on the first section not yet declared done.
-        _sectionIndex = kAshaSections
-            .indexWhere((s) => _completed[s] != true)
-            .clamp(0, kAshaSections.length - 1);
-        if (kAshaSections.every((s) => _completed[s] == true)) {
-          _sectionIndex = 0;
-        }
+        final controller = SectionalCaptureController<PedLanguageMark>(
+          config: pedLanguageSectionalConfig(b.band!),
+          store: PedLanguageSectionalStore(
+            assessmentId: b.assessment!['id'] as String,
+            band: b.band!,
+            library: await AshaMilestoneLibrary.load(),
+          ),
+        );
+        // Seed self-heal + row load + completion hydration — the one
+        // and only bootstrap path.
+        await controller.bootstrap();
+        controller.addListener(_onControllerChanged);
+        _controller = controller;
       }
       if (!mounted) return;
       setState(() => _loading = false);
@@ -192,119 +166,84 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
     }
   }
 
-  bool get _allDone => kAshaSections.every((s) => _completed[s] == true);
+  // ── Saves (optimistic; the controller tracks + dirty-marks) ───────
 
-  String get _currentSection => kAshaSections[_sectionIndex];
-
-  // ── Saves (optimistic, save-on-change, toast on failure) ──────────
-
-  Future<void> _saveMark(_Mark m) {
-    late final Future<void> save;
-    save = () async {
-      try {
-        await _service.updateMilestone(
-          rowId: m.rowId,
-          status: m.status,
-          evidenceSource: m.evidence,
-        );
-      } catch (e) {
-        _toast('Could not save milestone: $e');
-      } finally {
-        _pendingSaves.remove(save);
-      }
-    }();
-    _pendingSaves.add(save);
-    return save;
+  void _save(PedLanguageMark m) {
+    unawaited(_controller!
+        .trackRowSave(
+            m.id,
+            // Reads the mark's CURRENT state at execution, so a retained
+            // retry persists what the clinician sees now.
+            () => _service.updateMilestone(
+                rowId: m.id, status: m.status, evidenceSource: m.evidence))
+        .catchError((Object e) => _toast('Could not save milestone: $e')));
   }
 
   /// Tap on the card body. Before the section is declared done, toggles
   /// present ↔ not-yet-captured. After, toggles present ↔ absent — the
   /// null state no longer exists once the section is a declared record.
-  void _tapCard(_Mark m) {
+  void _tapCard(PedLanguageMark m) {
+    final completed = _controller!.isCompleted(m.section);
     setState(() {
       if (m.status == 'present') {
-        m.status = _completed[_currentSection] == true ? 'absent' : null;
+        m.status = completed ? 'absent' : null;
         m.evidence = null;
       } else {
         m.status = 'present';
         m.evidence ??= 'observed';
       }
     });
-    _saveMark(m);
+    _save(m);
   }
 
   /// The visible Emerging chip. Toggles emerging on/off; off falls back
   /// the same way as unmarking present does.
-  void _tapEmerging(_Mark m) {
+  void _tapEmerging(PedLanguageMark m) {
+    final completed = _controller!.isCompleted(m.section);
     setState(() {
       if (m.status == 'emerging') {
-        m.status = _completed[_currentSection] == true ? 'absent' : null;
+        m.status = completed ? 'absent' : null;
         m.evidence = null;
       } else {
         m.status = 'emerging';
         m.evidence ??= 'observed';
       }
     });
-    _saveMark(m);
+    _save(m);
   }
 
-  void _setEvidence(_Mark m, String evidence) {
+  void _setEvidence(PedLanguageMark m, String evidence) {
     if (m.evidence == evidence) return;
     setState(() => m.evidence = evidence);
-    _saveMark(m);
+    _save(m);
   }
 
-  Future<void> _completeSection() async {
-    // Capture the section BEFORE any state change — and refuse a
-    // re-entry or a tap on an already-declared section outright.
-    final section = _currentSection;
-    final id = _assessmentId;
-    if (id == null || _completing || _completed[section] == true) return;
-    setState(() => _completing = true);
+  // ── Completion + dirty retry (controller-owned semantics) ─────────
 
-    // Let in-flight row saves land so "unmarked" below means exactly
-    // what the screen shows. These futures never throw (they toast).
-    while (_pendingSaves.isNotEmpty) {
-      await Future.wait(_pendingSaves.toList());
+  /// [section] is the section whose Done button was RENDERED — the
+  /// controller keys on it, so a stale tap can never touch a different
+  /// section.
+  Future<void> _onDone(String section) async {
+    final result = await _controller!.complete(section);
+    switch (result.outcome) {
+      case SectionalCompletionOutcome.completed:
+      case SectionalCompletionOutcome.alreadyCompleted:
+      case SectionalCompletionOutcome.refusedBusy:
+        break; // named no-ops; the listener re-renders any advance
+      case SectionalCompletionOutcome.refusedDirty:
+        _toastWithRetry(
+            '${result.dirtyRowIds.length} milestone'
+            '${result.dirtyRowIds.length == 1 ? ' is' : 's are'} not saved '
+            '— retry before declaring this section done.');
+      case SectionalCompletionOutcome.rolledBack:
+        _toast('Could not save section completion: ${result.error}');
     }
-    if (!mounted) return;
+  }
 
-    final flipped =
-        _marks[section]!.where((m) => m.status == null).toList();
-    final sectionIndexBefore = _sectionIndex;
-    setState(() {
-      for (final m in flipped) {
-        m.status = 'absent';
-      }
-      _completed[section] = true;
-      if (_sectionIndex < kAshaSections.length - 1) _sectionIndex += 1;
-    });
-    try {
-      await _service.completeSection(
-        assessmentId: id,
-        section: section,
-        unmarkedRowIds: [for (final m in flipped) m.rowId],
-      );
-    } catch (e) {
-      // Roll the declaration back — a section must never read "on
-      // record" when the DB never recorded it (the ghost note replaces
-      // the Done button, so without this there is no retry path).
-      if (mounted) {
-        setState(() {
-          for (final m in flipped) {
-            m.status = null;
-          }
-          _completed[section] = false;
-          _sectionIndex = sectionIndexBefore;
-        });
-      }
-      _toast('Could not save section completion: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _completing = false);
-      } else {
-        _completing = false;
-      }
+  Future<void> _retryDirty() async {
+    final still = await _controller!.retryDirty();
+    if (still.isNotEmpty && mounted) {
+      _toast('Still not saved — check the connection and retry.');
     }
   }
 
@@ -344,6 +283,7 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
 
   Widget _captureBody() {
     final band = _band!;
+    final c = _controller!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -351,15 +291,19 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
         const SizedBox(height: 12),
         _progressSteps(),
         const SizedBox(height: 14),
-        if (_allDone) ...[
+        if (c.allCompleted) ...[
           _completedSummary(),
           const SizedBox(height: 14),
         ],
-        if (band.note != null && _sectionIndex == 0) ...[
+        if (band.note != null && c.currentIndex == 0) ...[
           _ghostNote(band.note!),
           const SizedBox(height: 10),
         ],
         ..._sectionCards(),
+        if (_dirtyInCurrentSection().isNotEmpty) ...[
+          const SizedBox(height: 6),
+          _dirtyBanner(),
+        ],
         const SizedBox(height: 14),
         _doneButton(),
       ],
@@ -415,14 +359,26 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
     );
   }
 
+  List<PedLanguageMark> _dirtyInSection(String section) {
+    final dirty = _controller!.dirtyRowIds;
+    return [
+      for (final m in _controller!.rowsIn(section))
+        if (dirty.contains(m.id)) m,
+    ];
+  }
+
+  List<PedLanguageMark> _dirtyInCurrentSection() =>
+      _dirtyInSection(_controller!.currentSectionId);
+
   Widget _step(int i) {
+    final c = _controller!;
     final section = kAshaSections[i];
-    final marks = _marks[section]!;
-    final markedCount = marks.where((m) => m.status != null).length;
-    final active = i == _sectionIndex;
-    final done = _completed[section] == true;
+    final marks = c.rowsIn(section);
+    final active = i == c.currentIndex;
+    final done = c.isCompleted(section);
+    final hasDirty = _dirtyInSection(section).isNotEmpty;
     return GestureDetector(
-      onTap: () => setState(() => _sectionIndex = i),
+      onTap: () => c.goTo(section),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 10),
         decoration: BoxDecoration(
@@ -444,12 +400,20 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
                           letterSpacing: 1.4,
                           color: active ? _ink : _inkGhost)),
                 ),
+                if (hasDirty)
+                  Container(
+                    width: 7,
+                    height: 7,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: const BoxDecoration(
+                        color: _coral, shape: BoxShape.circle),
+                  ),
                 if (done)
                   const Icon(Icons.check_rounded, size: 14, color: _teal),
               ],
             ),
             const SizedBox(height: 3),
-            Text('$markedCount of ${marks.length}',
+            Text('${c.markedCount(section)} of ${marks.length}',
                 style: GoogleFonts.dmSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -462,7 +426,7 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
   }
 
   List<Widget> _sectionCards() {
-    final marks = _marks[_currentSection]!;
+    final marks = _controller!.rowsIn(_controller!.currentSectionId);
     return [
       for (final m in marks) ...[
         _milestoneCard(m),
@@ -471,17 +435,20 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
     ];
   }
 
-  Widget _milestoneCard(_Mark m) {
+  Widget _milestoneCard(PedLanguageMark m) {
     final present = m.status == 'present';
     final emerging = m.status == 'emerging';
     final absent = m.status == 'absent';
     final marked = present || emerging;
+    final dirty = _controller!.dirtyRowIds.contains(m.id);
 
-    final Color border = present
-        ? _teal
-        : emerging
-            ? _amber
-            : _line;
+    final Color border = dirty
+        ? _coral
+        : present
+            ? _teal
+            : emerging
+                ? _amber
+                : _line;
     final Color? fill = present
         ? _tealSoft.withValues(alpha: 0.35)
         : emerging
@@ -514,7 +481,13 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
                           color: absent ? _inkGhost : _ink)),
                 ),
                 const SizedBox(width: 8),
-                if (present)
+                if (dirty)
+                  Text('not saved',
+                      style: GoogleFonts.dmSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _coral))
+                else if (present)
                   const Icon(Icons.check_circle_rounded,
                       size: 18, color: _teal)
                 else if (emerging)
@@ -602,21 +575,57 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
     );
   }
 
+  /// Visible, actionable unsaved-state: names the count, offers Retry.
+  Widget _dirtyBanner() {
+    final dirty = _dirtyInCurrentSection();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: _coral.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _coral.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+                '${dirty.length} milestone${dirty.length == 1 ? '' : 's'} '
+                'not saved.',
+                style: GoogleFonts.dmSans(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: _ink)),
+          ),
+          TextButton(
+            onPressed: _retryDirty,
+            style: TextButton.styleFrom(foregroundColor: _coral),
+            child: Text('Retry',
+                style: GoogleFonts.dmSans(
+                    fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _doneButton() {
-    final section = _currentSection;
-    if (_completed[section] == true) {
+    final c = _controller!;
+    final section = c.currentSectionId;
+    if (c.isCompleted(section)) {
       // Reviewing a declared-done section — nothing to declare again.
-      return _ghostNote(_allDone
+      return _ghostNote(c.allCompleted
           ? 'All three sections are on record. Tap any milestone to revise.'
           : 'This section is on record. Tap any milestone to revise, or '
               'pick the next section above.');
     }
-    final last = _sectionIndex == kAshaSections.length - 1;
+    final last = c.currentIndex == kAshaSections.length - 1;
     final next = last
         ? 'finish capture'
-        : 'next: ${_kSectionLabels[kAshaSections[_sectionIndex + 1]]}';
+        : 'next: ${_kSectionLabels[kAshaSections[c.currentIndex + 1]]}';
     return FilledButton(
-      onPressed: _completing ? null : _completeSection,
+      // The section is captured at RENDER time and the controller keys
+      // on it — a stale tap cannot complete a different section.
+      onPressed: c.completing ? null : () => _onDone(section),
       style: FilledButton.styleFrom(
         backgroundColor: kCueAmber,
         // Explicit — never inherit the active brightness default
@@ -666,7 +675,7 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
   }
 
   String _summaryLine(String section) {
-    final marks = _marks[section]!;
+    final marks = _controller!.rowsIn(section);
     int count(String s) => marks.where((m) => m.status == s).length;
     final parts = <String>[
       '${count('present')} present',
@@ -711,6 +720,15 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
     if (mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
+  void _toastWithRetry(String msg) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        action: SnackBarAction(label: 'RETRY', onPressed: _retryDirty),
+      ));
     }
   }
 }

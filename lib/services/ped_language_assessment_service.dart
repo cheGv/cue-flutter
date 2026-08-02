@@ -1,35 +1,35 @@
 // lib/services/ped_language_assessment_service.dart
 //
-// Pediatric Language capture surface (Step 4) — parent record + milestone
-// row persistence. Mirrors the CasAssessmentService shape (loadOrCreate
-// parent keyed on client_id, seed-once child rows, deterministic
-// update-by-id) with two differences:
-//   1. The canonical row set comes from the ASHA dataset asset
-//      (AshaMilestoneLibrary), band-matched to the child's age — and the
-//      milestone/example text is SNAPSHOTTED into each row so the
-//      clinical record survives future dataset edits.
-//   2. ped_language_milestones DOES carry a unique constraint on
-//      (assessment, section, milestone_order), so double-seeding fails
-//      loudly instead of duplicating rows.
+// Pediatric Language capture — parent record + milestone persistence,
+// retrofitted (2026-07-29) onto the shared SectionalCapture primitive.
+// The completion lifecycle (in-flight save queue, idempotent completion
+// keyed on section id, per-key seed self-heal, rollback on failed
+// completion, dirty-row refusal + retry) lives in
+// SectionalCaptureController; this file owns ONLY:
+//   - the gate: age resolution + band lock + parent loadOrCreate
+//     (resolveParent — returns a state, never rows),
+//   - the SQL: row load/update, seed insert, completion write,
+//   - the SectionalCaptureStore adapter and the surface's config.
+// There is deliberately NO seeding or self-heal here anymore — that
+// single path is the controller's bootstrap.
 //
-// Age resolution: clients.date_of_birth → exact months; else
-// clients.age (years) → midpoint months (years*12 + 6). No age on file
-// means NO capture — the surface asks for an age instead of guessing a
-// band. The band locks onto the parent row at creation; a later
-// birthday never silently migrates an in-progress capture.
+// Data doctrine (unchanged): milestone/example text and provenance
+// (norm_reference = the dataset's source sentence, library_version =
+// its loud-fail-parsed version) are SNAPSHOTTED into every row; the
+// unique constraint on (assessment, section, milestone_order) makes a
+// double-seed loud; status NULL = not yet captured, and 'absent' is
+// only written by the completion the SLP declares.
 //
-// status NULL = not yet captured. 'absent' is only written by
-// completeSection — the SLP declaring the section done is what turns
-// "unselected" into an explicit clinical record.
-//
-// RLS is off in the sandbox (prototype convention); clinician_id is set
-// from the authenticated user when present, as on cas_assessments.
+// RLS: both tables sealed 2026-07-25 (slp_owns_via_client /
+// slp_owns_via_assessment); clinician_id set from the authenticated
+// user, as on the sibling surfaces.
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/asha_milestone_library.dart';
+import '../widgets/assessment/sectional_capture.dart';
 
-/// Why loadOrCreate could not produce a capture-ready assessment.
+/// Why resolveParent could not produce a capture-ready assessment.
 enum PedLanguageBootstrapState {
   ready,
 
@@ -48,16 +48,13 @@ enum PedLanguageBootstrapState {
   outOfAgeRange,
 }
 
+/// Gate result only — rows are the controller's business now.
 class PedLanguageBootstrap {
   final PedLanguageBootstrapState state;
 
   /// Set when state == ready.
   final Map<String, dynamic>? assessment;
   final AshaAgeBand? band;
-
-  /// Milestone rows from the DB, ordered by section (dataset order)
-  /// then milestone_order. Set when state == ready.
-  final List<Map<String, dynamic>> rows;
 
   /// Resolved age in months (set for ready and outOfAgeRange) — the
   /// value the band lookup actually used (derived_age_months).
@@ -73,11 +70,60 @@ class PedLanguageBootstrap {
     required this.state,
     this.assessment,
     this.band,
-    this.rows = const [],
     this.ageMonths,
     this.ageSource,
     required this.source,
   });
+}
+
+/// The surface's mutable mirror of one ped_language_milestones row.
+class PedLanguageMark {
+  final String id;
+  final String section;
+  final int order;
+  final String text;
+  final String? example;
+  String? status;   // present | emerging | absent | null (not yet captured)
+  String? evidence; // observed | parent_reported | null
+
+  PedLanguageMark({
+    required this.id,
+    required this.section,
+    required this.order,
+    required this.text,
+    required this.example,
+    required this.status,
+    required this.evidence,
+  });
+}
+
+/// Seed identity within the assessment: (section, milestone_order).
+typedef PedLanguageSeedKey = (String, int);
+
+/// The surface's SectionalCapture wiring — top-level and pure so the
+/// four async findings are re-verifiable headlessly against the REAL
+/// config (test/widgets/ped_language_sectional_test.dart).
+SectionalCaptureConfig<PedLanguageMark> pedLanguageSectionalConfig(
+    AshaAgeBand band) {
+  return SectionalCaptureConfig<PedLanguageMark>(
+    sectionIds: kAshaSections,
+    rowId: (m) => m.id,
+    sectionOf: (m) => m.section,
+    seedKey: (m) => (m.section, m.order),
+    expectedSeedKeys: {
+      for (final section in kAshaSections)
+        for (final m in band.sections[section]!) (section, m.order),
+    },
+    isUnmarked: (m) => m.status == null,
+    applyCompletionFill: (m) {
+      m.status = 'absent';
+      m.evidence = null;
+    },
+    revertCompletionFill: (m) {
+      m.status = null;
+      m.evidence = null;
+    },
+  );
 }
 
 class PedLanguageAssessmentService {
@@ -137,10 +183,12 @@ class PedLanguageAssessmentService {
     );
   }
 
-  /// Loads the most recent assessment for the client, or creates one
-  /// with the band locked from the child's age and the band's full
-  /// milestone set seeded (status NULL).
-  Future<PedLanguageBootstrap> loadOrCreate({required String clientId}) async {
+  /// The GATE half of bootstrap: loads the most recent assessment for
+  /// the client, or creates one with the band locked from the child's
+  /// age. Returns state + parent + band — NEVER rows and NEVER seeds;
+  /// row loading and per-key seed self-heal are the
+  /// SectionalCaptureController's bootstrap, the one and only path.
+  Future<PedLanguageBootstrap> resolveParent({required String clientId}) async {
     final library = await AshaMilestoneLibrary.load();
 
     // An existing assessment wins outright — its band_key is locked and
@@ -162,22 +210,10 @@ class PedLanguageAssessmentService {
             'ped_language_assessments.band_key `${assessment['band_key']}` '
             'not present in the shipped ASHA dataset');
       }
-      var rows = await _loadRows(assessment['id'] as String);
-      if (rows.isEmpty) {
-        // Self-heal a partial bootstrap: the parent insert and the seed
-        // are two requests, so a drop between them leaves a parent with
-        // zero rows. Re-seeding here is safe — the unique constraint
-        // makes a concurrent double-seed loud, and a seeded assessment
-        // never has zero rows (every band has milestones in every
-        // section).
-        await _seedBand(assessment['id'] as String, band, library);
-        rows = await _loadRows(assessment['id'] as String);
-      }
       return PedLanguageBootstrap(
         state: PedLanguageBootstrapState.ready,
         assessment: assessment,
         band: band,
-        rows: rows,
         ageMonths: assessment['derived_age_months'] as int?,
         ageSource: assessment['age_source'] as String?,
         source: library.source,
@@ -226,23 +262,18 @@ class PedLanguageAssessmentService {
         })
         .select()
         .single();
-    final assessment = Map<String, dynamic>.from(inserted);
-    final assessmentId = assessment['id'] as String;
-
-    await _seedBand(assessmentId, band, library);
 
     return PedLanguageBootstrap(
       state: PedLanguageBootstrapState.ready,
-      assessment: assessment,
+      assessment: Map<String, dynamic>.from(inserted),
       band: band,
-      rows: await _loadRows(assessmentId),
       ageMonths: ageMonths,
       ageSource: ageSource,
       source: library.source,
     );
   }
 
-  /// The exact row set a seed writes — pure and static so tests can
+  /// The exact row set a FULL seed writes — pure and static so tests
   /// pin the provenance stamping without a Supabase client. Every row
   /// snapshots the dataset text AND its provenance: norm_reference is
   /// the dataset's source sentence verbatim, library_version the
@@ -264,37 +295,18 @@ class PedLanguageAssessmentService {
     ];
   }
 
-  /// Seeds the band's full milestone set in one bulk insert. The
-  /// unique constraint makes an accidental re-seed a loud failure
-  /// rather than silent duplication.
-  Future<void> _seedBand(
-      String assessmentId, AshaAgeBand band, AshaMilestoneLibrary library) async {
-    await _sb
-        .from('ped_language_milestones')
-        .insert(seedRowsFor(assessmentId, band, library));
-  }
-
-  /// Rows in dataset order — kAshaSections order, then milestone_order.
-  /// (The section column is text, so a server-side order would be
-  /// alphabetical; the dataset ordering is applied here.)
-  Future<List<Map<String, dynamic>>> _loadRows(String assessmentId) async {
-    final rows = await _sb
-        .from('ped_language_milestones')
-        .select()
-        .eq('ped_language_assessment_id', assessmentId);
-    final list = (rows as List)
-        .whereType<Map>()
-        .map((m) => Map<String, dynamic>.from(m))
-        .toList();
-    int sectionRank(Object? s) => kAshaSections.indexOf(s as String? ?? '');
-    list.sort((a, b) {
-      final bySection =
-          sectionRank(a['section']).compareTo(sectionRank(b['section']));
-      if (bySection != 0) return bySection;
-      return (a['milestone_order'] as int)
-          .compareTo(b['milestone_order'] as int);
-    });
-    return list;
+  /// The seed payloads for exactly [keys] — the store's insertSeedRows
+  /// input, pure for the same reason. A key the band does not know is
+  /// simply absent from the result (the controller only ever passes
+  /// keys from expectedSeedKeys, which came from the same band).
+  static List<Map<String, dynamic>> seedRowsForKeys(String assessmentId,
+      AshaAgeBand band, AshaMilestoneLibrary library, Set<Object> keys) {
+    return [
+      for (final row in seedRowsFor(assessmentId, band, library))
+        if (keys.contains(
+            (row['section'] as String, row['milestone_order'] as int)))
+          row,
+    ];
   }
 
   /// Updates one milestone row by id. status null clears the mark back
@@ -312,12 +324,11 @@ class PedLanguageAssessmentService {
     }).eq('id', rowId);
   }
 
-  /// Declares a section done: the rows the SLP left unmarked — passed
-  /// as an EXPLICIT id list computed from what was on her screen —
-  /// become 'absent', and the parent's completion stamp is set. The
-  /// explicit list (rather than a server-side status-IS-NULL filter)
-  /// keeps the persisted record identical to the declared screen state
-  /// even if an earlier per-row save failed or is still in flight.
+  /// The completion write: the rows the SLP left unmarked — the
+  /// EXPLICIT id list the controller computed from her screen after
+  /// draining every in-flight save — become 'absent', and the parent's
+  /// completion stamp is set. Never a server-side status-IS-NULL
+  /// filter.
   Future<void> completeSection({
     required String assessmentId,
     required String section,
@@ -339,5 +350,87 @@ class PedLanguageAssessmentService {
       '${section}_completed_at': nowIso,
       'updated_at':              nowIso,
     }).eq('id', assessmentId);
+  }
+}
+
+/// SectionalCaptureStore adapter — the SQL half the controller drives.
+/// Constructed only in the ready world (after resolveParent gating).
+class PedLanguageSectionalStore
+    implements SectionalCaptureStore<PedLanguageMark> {
+  final String assessmentId;
+  final AshaAgeBand band;
+  final AshaMilestoneLibrary library;
+  final PedLanguageAssessmentService _service;
+
+  PedLanguageSectionalStore({
+    required this.assessmentId,
+    required this.band,
+    required this.library,
+    PedLanguageAssessmentService? service,
+  }) : _service = service ?? PedLanguageAssessmentService.instance;
+
+  SupabaseClient get _sb => Supabase.instance.client;
+
+  @override
+  Future<SectionalSnapshot<PedLanguageMark>> load() async {
+    final parent = await _sb
+        .from('ped_language_assessments')
+        .select()
+        .eq('id', assessmentId)
+        .single();
+    final rows = await _sb
+        .from('ped_language_milestones')
+        .select()
+        .eq('ped_language_assessment_id', assessmentId);
+    final marks = [
+      for (final r in (rows as List).whereType<Map>())
+        PedLanguageMark(
+          id:       r['id'] as String,
+          section:  r['section'] as String,
+          order:    r['milestone_order'] as int,
+          text:     r['milestone_text'] as String,
+          example:  r['example_text'] as String?,
+          status:   r['status'] as String?,
+          evidence: r['evidence_source'] as String?,
+        ),
+    ];
+    // Dataset order — the section column is text, so a server-side
+    // order would be alphabetical.
+    int rank(String s) => kAshaSections.indexOf(s);
+    marks.sort((a, b) {
+      final bySection = rank(a.section).compareTo(rank(b.section));
+      if (bySection != 0) return bySection;
+      return a.order.compareTo(b.order);
+    });
+    return SectionalSnapshot(
+      rows: marks,
+      completedAt: {
+        for (final section in kAshaSections)
+          section: parent['${section}_completed_at'] == null
+              ? null
+              : DateTime.parse(parent['${section}_completed_at'] as String),
+      },
+    );
+  }
+
+  @override
+  Future<void> insertSeedRows(Set<Object> missingSeedKeys) async {
+    // The unique constraint makes a concurrent double-seed loud rather
+    // than silent duplication — required by the store contract.
+    await _sb.from('ped_language_milestones').insert(
+        PedLanguageAssessmentService.seedRowsForKeys(
+            assessmentId, band, library, missingSeedKeys));
+  }
+
+  @override
+  Future<void> persistCompletion({
+    required String sectionId,
+    required List<String> unmarkedRowIds,
+  }) {
+    return _service.completeSection(
+      assessmentId: assessmentId,
+      section: sectionId,
+      unmarkedRowIds: unmarkedRowIds,
+    );
   }
 }
