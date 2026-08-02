@@ -56,11 +56,16 @@ const Color _amber     = Color(0xFFD68A2B);
 const Color _amberSoft = Color(0xFFF4E4C4);
 const Color _coral     = Color(0xFFC25450);
 
-const Map<String, String> _kSectionLabels = {
+/// Section id -> SLP-facing label. Public so a refusal elsewhere (the
+/// draft gate) can NAME the affected section rather than print an
+/// internal key — one label source, not two.
+const Map<String, String> kPedLanguageSectionLabels = {
   'speech':   'Speech',
   'language': 'Language',
   'literacy': 'Literacy',
 };
+
+const Map<String, String> _kSectionLabels = kPedLanguageSectionLabels;
 
 /// Header derivation line — the band and HOW the age that chose it was
 /// derived, rendered verbatim from the stored derived_age_months /
@@ -92,9 +97,28 @@ String formatAgeMonths(int months) {
   return '$y y $m m';
 }
 
+/// The sentence shown when a section is stamped done but rows in it never
+/// saved. Top-level and pure so the copy is pinned by test without
+/// mounting the surface. States the fact and the repair; no apology, and
+/// no narrating the tool's own carefulness.
+String pedLanguageAnomalyLine(String sectionLabel, int unmarkedCount) =>
+    '$sectionLabel is marked done, but $unmarkedCount '
+    'milestone${unmarkedCount == 1 ? '' : 's'} in it never saved. '
+    'Re-run Done for that section to finish the record.';
+
 class PedLanguageCaptureSurface extends StatefulWidget {
   final String clientId;
-  const PedLanguageCaptureSurface({super.key, required this.clientId});
+
+  /// Reports record defects upward (see CaptureSurfaceBuilder). The
+  /// controller is the single place they are computed; this only
+  /// forwards. Fires after bootstrap and on every controller change.
+  final ValueChanged<List<SectionalCompletionAnomaly>>? onAnomaliesChanged;
+
+  const PedLanguageCaptureSurface({
+    super.key,
+    required this.clientId,
+    this.onAnomaliesChanged,
+  });
 
   @override
   State<PedLanguageCaptureSurface> createState() =>
@@ -130,6 +154,14 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
 
   void _onControllerChanged() {
     if (mounted) setState(() {});
+    _reportAnomalies();
+  }
+
+  /// Forwards the controller's anomalies — never recomputed here.
+  void _reportAnomalies() {
+    final cb = widget.onAnomaliesChanged;
+    if (cb == null) return;
+    cb(_controller?.completionAnomalies ?? const []);
   }
 
   Future<void> _bootstrap() async {
@@ -154,6 +186,10 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
         await controller.bootstrap();
         controller.addListener(_onControllerChanged);
         _controller = controller;
+        // Report on load — she sees the defect when she opens the case,
+        // not weeks later at report time. NEVER auto-repaired: the
+        // controller only reports, and the banner below is the action.
+        _reportAnomalies();
       }
       if (!mounted) return;
       setState(() => _loading = false);
@@ -247,6 +283,27 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
     }
   }
 
+  /// Repairs one anomalous section by re-running its completion fill —
+  /// the SAME store write completion uses, not a second mechanism. Only
+  /// ever from her tap.
+  Future<void> _repairSection(String sectionId) async {
+    final result = await _controller!.repairCompletion(sectionId);
+    if (!mounted) return;
+    switch (result.outcome) {
+      case SectionalCompletionOutcome.completed:
+      case SectionalCompletionOutcome.alreadyCompleted:
+      case SectionalCompletionOutcome.refusedBusy:
+        break; // the listener re-renders; a cleared banner is the signal
+      case SectionalCompletionOutcome.refusedDirty:
+        _toastWithRetry(
+            '${result.dirtyRowIds.length} milestone'
+            '${result.dirtyRowIds.length == 1 ? ' is' : 's are'} not saved '
+            '— retry before repairing this section.');
+      case SectionalCompletionOutcome.rolledBack:
+        _toast('Could not repair the section: ${result.error}');
+    }
+  }
+
   // ── Build ─────────────────────────────────────────────────────────
 
   @override
@@ -289,6 +346,12 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
       children: [
         _header(band),
         const SizedBox(height: 12),
+        // On load, before anything else: a section stamped done whose rows
+        // never saved. She sees it and acts; nothing self-repairs.
+        for (final a in c.completionAnomalies) ...[
+          _anomalyBanner(a),
+          const SizedBox(height: 10),
+        ],
         _progressSteps(),
         const SizedBox(height: 14),
         if (c.allCompleted) ...[
@@ -571,6 +634,41 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
                 fontSize: 11,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 color: selected ? _ink : _inkGhost)),
+      ),
+    );
+  }
+
+  /// A section stamped done whose rows never saved. Same visual idiom as
+  /// the unsaved-row banner — one repair language, not two.
+  Widget _anomalyBanner(SectionalCompletionAnomaly a) {
+    final label = _kSectionLabels[a.sectionId] ?? a.sectionId;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: _coral.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: _coral.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+                pedLanguageAnomalyLine(label, a.unmarkedRowIds.length),
+                style: GoogleFonts.dmSans(
+                    fontSize: 12.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                    color: _ink)),
+          ),
+          const SizedBox(width: 8),
+          TextButton(
+            onPressed: () => _repairSection(a.sectionId),
+            style: TextButton.styleFrom(foregroundColor: _coral),
+            child: Text('Repair',
+                style: GoogleFonts.dmSans(
+                    fontSize: 12.5, fontWeight: FontWeight.w700)),
+          ),
+        ],
       ),
     );
   }

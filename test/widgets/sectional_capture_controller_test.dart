@@ -597,6 +597,93 @@ void main() {
     });
   });
 
+  group('repairCompletion — the ONLY repair path, never automatic', () {
+    Future<(SectionalCaptureController<TestRow>, FakeStore)> anomalous() async {
+      final store = FakeStore()
+        ..serverRows.addAll([
+          TestRow('a', 'speech', 1, 'present'),
+          TestRow('b', 'speech', 2), // unmarked inside a done section
+          TestRow('c', 'language', 1),
+        ])
+        ..completedAt['speech'] = DateTime(2026);
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+      return (c, store);
+    }
+
+    test('bootstrap does NOT auto-repair — the row is untouched until she '
+        'acts', () async {
+      final (c, store) = await anomalous();
+      expect(c.completionAnomalies, isNotEmpty);
+      expect(c.rowsIn('speech').firstWhere((r) => r.id == 'b').status,
+          isNull);
+      expect(store.calls.where((x) => x.startsWith('complete(')), isEmpty,
+          reason: 'no completion write may be issued by bootstrap');
+    });
+
+    test('repair fills the unmarked rows, re-persists through the SAME '
+        'store write, and clears the anomaly', () async {
+      final (c, store) = await anomalous();
+      final r = await c.repairCompletion('speech');
+      expect(r.outcome, SectionalCompletionOutcome.completed);
+      expect(c.completionAnomalies, isEmpty);
+      expect(c.rowsIn('speech').firstWhere((x) => x.id == 'b').status,
+          'absent');
+      expect(store.lastUnmarkedRowIds, ['b'],
+          reason: 'explicit id list, exactly the rows that were unmarked');
+      expect(store.calls.where((x) => x.startsWith('complete(')).length, 1);
+    });
+
+    test('a failed repair rolls the fill back and KEEPS the anomaly — it '
+        'must not look fixed', () async {
+      final (c, store) = await anomalous();
+      store.failCompletion = true;
+      final r = await c.repairCompletion('speech');
+      expect(r.outcome, SectionalCompletionOutcome.rolledBack);
+      expect(c.rowsIn('speech').firstWhere((x) => x.id == 'b').status,
+          isNull);
+      expect(c.completionAnomalies, isNotEmpty);
+    });
+
+    test('a dirty row blocks repair, naming it — same rule as completion',
+        () async {
+      final (c, _) = await anomalous();
+      await expectLater(
+          c.trackRowSave('a', () async => throw StateError('offline')),
+          throwsA(isA<StateError>()));
+      final r = await c.repairCompletion('speech');
+      expect(r.outcome, SectionalCompletionOutcome.refusedDirty);
+      expect(r.dirtyRowIds, ['a']);
+      expect(c.completionAnomalies, isNotEmpty);
+    });
+
+    test('repairing a clean section is a no-op, not a spurious write',
+        () async {
+      final store = FakeStore()
+        ..serverRows.addAll([
+          TestRow('a', 'speech', 1, 'present'),
+          TestRow('b', 'speech', 2, 'absent'),
+          TestRow('c', 'language', 1),
+        ])
+        ..completedAt['speech'] = DateTime(2026);
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+      final r = await c.repairCompletion('speech');
+      expect(r.outcome, SectionalCompletionOutcome.alreadyCompleted);
+      expect(store.calls.where((x) => x.startsWith('complete(')), isEmpty);
+    });
+
+    test('repair refuses an UNSTAMPED section — that is ordinary capture, '
+        'and belongs to complete()', () async {
+      final store = FakeStore();
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+      final r = await c.repairCompletion('speech');
+      expect(r.outcome, SectionalCompletionOutcome.alreadyCompleted);
+      expect(store.calls.where((x) => x.startsWith('complete(')), isEmpty);
+    });
+  });
+
   group('completion-less adopters (the open-ended shape, e.g. feeding)', () {
     late CoreOnlyStore store;
     late SectionalCaptureController<TestRow> c;

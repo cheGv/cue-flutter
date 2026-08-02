@@ -18,7 +18,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../models/format_template.dart';
-import '../protocols/protocol_manifest.dart';
+import '../protocols/draft_gate.dart';
 import '../repositories/format_templates_repository.dart';
 import '../services/format_drafter_service.dart';
 import '../theme/cue_color_scheme.dart';
@@ -27,6 +27,7 @@ import '../widgets/assessment/ald_capture_section.dart';
 import '../widgets/assessment/cas_assessment_surface.dart';
 import '../widgets/assessment/ped_dysarthria_capture_section.dart';
 import '../widgets/assessment/ped_language_capture_surface.dart';
+import '../widgets/assessment/sectional_capture.dart';
 import '../widgets/assessment/ssd_capture_section.dart';
 import '../widgets/assessment/voice_capture_section.dart';
 import '../widgets/trial_run_banner.dart';
@@ -67,6 +68,11 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   // (which encoded the same two protocols a second time) are both gone —
   // the manifest entry carries its own assessment-id resolver.
   bool _drafting = false;
+
+  /// Record defects reported UP by the capture surface. Computed in
+  /// exactly one place — SectionalCaptureController — and only forwarded
+  /// here; this screen never re-derives them.
+  List<SectionalCompletionAnomaly> _captureAnomalies = const [];
 
   @override
   void initState() {
@@ -345,36 +351,11 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   /// the plain reason. REASON 1 only — the two data-dependent reasons (no
   /// confirmed format; nothing captured) are answered later, in their own
   /// words, and are never folded into this one.
-  ({bool canDraft, String? reason, ProtocolManifestEntry? entry})
-      get _draftGate {
-    final area = _client['clinical_area'] as String? ?? '';
-    if (area.isEmpty) {
-      return (
-        canDraft: false,
-        reason: 'No clinical area set for this case.',
-        entry: null,
+  DraftGateDecision get _draftGate => evaluateDraftGate(
+        clinicalArea: _client['clinical_area'] as String?,
+        anomalies: _captureAnomalies,
+        sectionLabels: kPedLanguageSectionLabels,
       );
-    }
-    final protocols = protocolsForArea(area);
-    if (protocols.isEmpty) {
-      return (
-        canDraft: false,
-        reason: 'No capture protocol for ${clinicalAreaLabel(area)} in '
-            'this build.',
-        entry: null,
-      );
-    }
-    final draftable = protocols.where((p) => p.isDraftable).toList();
-    if (draftable.isEmpty) {
-      return (
-        canDraft: false,
-        reason: 'This protocol captures to the record; it does not draft a '
-            'report yet.',
-        entry: null,
-      );
-    }
-    return (canDraft: true, reason: null, entry: draftable.first);
-  }
 
   void _toast(String msg) {
     if (!mounted) return;
@@ -627,7 +608,22 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     // Pediatric Language — ASHA milestone check, birth-5, band-matched
     // to the child's age on file.
     if (area == 'pediatric-language') {
-      return PedLanguageCaptureSurface(clientId: clientId);
+      // The ONE anomaly channel: the surface's controller computes record
+      // defects, the surface shows them to her, and forwards the same list
+      // here so the draft gate refuses on the same state. Nothing is
+      // recomputed on this side.
+      return PedLanguageCaptureSurface(
+        clientId: clientId,
+        onAnomaliesChanged: (a) {
+          if (!mounted) return;
+          if (a.length == _captureAnomalies.length &&
+              a.every((x) => _captureAnomalies
+                  .any((y) => y.sectionId == x.sectionId))) {
+            return; // no change — avoid a rebuild loop
+          }
+          setState(() => _captureAnomalies = a);
+        },
+      );
     }
     return Container(
       padding: const EdgeInsets.all(14),

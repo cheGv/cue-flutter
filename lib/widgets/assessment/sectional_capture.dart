@@ -433,6 +433,86 @@ class SectionalCaptureController<R> extends ChangeNotifier {
 
   // ── Completion ────────────────────────────────────────────────────
 
+  /// Repairs a [SectionalCompletionAnomaly]: a section already stamped
+  /// complete whose rows are still unmarked. complete() cannot do this —
+  /// it returns alreadyCompleted for a stamped section by design — so
+  /// repair is its own named entry point. It re-runs the SAME fill and
+  /// the SAME store write; there is no second repair mechanism.
+  ///
+  /// Never silent: the surface wires this to a visible affordance, the
+  /// way retryDirty is wired. Refuses if the section has no anomaly
+  /// (nothing to repair), and rolls the fill back if the store throws.
+  Future<SectionalCompletionResult> repairCompletion(String sectionId) async {
+    final spec = config.completion;
+    final completionStore = store;
+    if (spec == null ||
+        completionStore is! SectionalCompletionCapableStore<R>) {
+      throw StateError(
+          'repairCompletion() called on a completion-less SectionalCapture');
+    }
+    if (!config.sectionIds.contains(sectionId)) {
+      throw ArgumentError.value(
+          sectionId, 'sectionId', 'not a configured section');
+    }
+    if (_completing) {
+      return const SectionalCompletionResult._(
+          SectionalCompletionOutcome.refusedBusy);
+    }
+    // Only a stamped section can be anomalous; an unstamped one is
+    // ordinary in-progress capture and belongs to complete().
+    if (!isCompleted(sectionId)) {
+      return const SectionalCompletionResult._(
+          SectionalCompletionOutcome.alreadyCompleted);
+    }
+    _completing = true;
+    _notify();
+    try {
+      await drainPendingSaves();
+      final dirtyHere = rowsIn(sectionId)
+          .map(config.rowId)
+          .where(_dirtyRowIds.contains)
+          .toList();
+      if (dirtyHere.isNotEmpty) {
+        return SectionalCompletionResult._(
+            SectionalCompletionOutcome.refusedDirty,
+            dirtyRowIds: dirtyHere);
+      }
+      final flipped = rowsIn(sectionId).where(spec.isUnmarked).toList();
+      if (flipped.isEmpty) {
+        // Nothing to repair — recompute so a stale banner clears.
+        _recomputeAnomalies();
+        return const SectionalCompletionResult._(
+            SectionalCompletionOutcome.alreadyCompleted);
+      }
+      for (final r in flipped) {
+        spec.applyCompletionFill(r);
+      }
+      _recomputeAnomalies();
+      _notify();
+      try {
+        await completionStore.persistCompletion(
+          sectionId: sectionId,
+          unmarkedRowIds: [for (final r in flipped) config.rowId(r)],
+        );
+        _recomputeAnomalies();
+        return const SectionalCompletionResult._(
+            SectionalCompletionOutcome.completed);
+      } catch (e) {
+        for (final r in flipped) {
+          spec.revertCompletionFill(r);
+        }
+        _recomputeAnomalies();
+        _notify();
+        return SectionalCompletionResult._(
+            SectionalCompletionOutcome.rolledBack,
+            error: e);
+      }
+    } finally {
+      _completing = false;
+      _notify();
+    }
+  }
+
   /// Keyed on [sectionId] — the section whose Done button was actually
   /// pressed. Guard order: unknown section throws (a wiring bug);
   /// a completion in flight → refusedBusy — checked BEFORE the
