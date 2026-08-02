@@ -129,10 +129,18 @@ SectionalCaptureConfig<PedLanguageMark> pedLanguageSectionalConfig(
 }
 
 class PedLanguageAssessmentService {
-  PedLanguageAssessmentService._();
+  PedLanguageAssessmentService._([this._injectedClient]);
   static final instance = PedLanguageAssessmentService._();
 
-  SupabaseClient get _sb => Supabase.instance.client;
+  /// Test seam, mirroring FeedingAssessmentService.withClient: a service
+  /// bound to a specific Supabase client. Production uses [instance],
+  /// which reads Supabase.instance.client.
+  factory PedLanguageAssessmentService.withClient(SupabaseClient client) =>
+      PedLanguageAssessmentService._(client);
+
+  final SupabaseClient? _injectedClient;
+
+  SupabaseClient get _sb => _injectedClient ?? Supabase.instance.client;
 
   /// Full months elapsed from [dob] to [now] (day-of-month aware).
   static int ageMonthsFromDob(DateTime dob, DateTime now) {
@@ -311,6 +319,43 @@ class PedLanguageAssessmentService {
     ];
   }
 
+  /// The parent row by id. Moved here from PedLanguageSectionalStore
+  /// (2026-08-02) so ALL database access for this protocol goes through
+  /// the service — the shape FeedingAssessmentService already has, and
+  /// what makes a single injected service a sufficient test seam. Same
+  /// query, same order, same errors as before; no behaviour changed.
+  Future<Map<String, dynamic>> loadAssessmentRow(String assessmentId) async {
+    final row = await _sb
+        .from('ped_language_assessments')
+        .select()
+        .eq('id', assessmentId)
+        .single();
+    return Map<String, dynamic>.from(row);
+  }
+
+  /// Every milestone row for an assessment, unordered (the store applies
+  /// dataset order — the section column is text, so a server-side sort
+  /// would be alphabetical).
+  Future<List<Map<String, dynamic>>> loadMilestoneRows(
+      String assessmentId) async {
+    final rows = await _sb
+        .from('ped_language_milestones')
+        .select()
+        .eq('ped_language_assessment_id', assessmentId);
+    return (rows as List)
+        .whereType<Map>()
+        .map((m) => Map<String, dynamic>.from(m))
+        .toList();
+  }
+
+  /// Bulk-inserts seed rows. The unique constraint makes a concurrent
+  /// double-seed loud rather than silent duplication — the store
+  /// contract's requirement.
+  Future<void> insertMilestoneRows(List<Map<String, dynamic>> rows) async {
+    if (rows.isEmpty) return;
+    await _sb.from('ped_language_milestones').insert(rows);
+  }
+
   /// Updates one milestone row by id. status null clears the mark back
   /// to not-yet-captured; evidenceSource must be null unless status is
   /// present/emerging (the DB check enforces what the UI promises).
@@ -371,21 +416,13 @@ class PedLanguageSectionalStore
     PedLanguageAssessmentService? service,
   }) : _service = service ?? PedLanguageAssessmentService.instance;
 
-  SupabaseClient get _sb => Supabase.instance.client;
-
   @override
   Future<SectionalSnapshot<PedLanguageMark>> load() async {
-    final parent = await _sb
-        .from('ped_language_assessments')
-        .select()
-        .eq('id', assessmentId)
-        .single();
-    final rows = await _sb
-        .from('ped_language_milestones')
-        .select()
-        .eq('ped_language_assessment_id', assessmentId);
+    // All DB access goes through the service — see loadAssessmentRow.
+    final parent = await _service.loadAssessmentRow(assessmentId);
+    final rows = await _service.loadMilestoneRows(assessmentId);
     final marks = [
-      for (final r in (rows as List).whereType<Map>())
+      for (final r in rows)
         PedLanguageMark(
           id:       r['id'] as String,
           section:  r['section'] as String,
@@ -416,10 +453,8 @@ class PedLanguageSectionalStore
   }
 
   @override
-  Future<void> insertSeedRows(Set<Object> missingSeedKeys) async {
-    // The unique constraint makes a concurrent double-seed loud rather
-    // than silent duplication — required by the store contract.
-    await _sb.from('ped_language_milestones').insert(
+  Future<void> insertSeedRows(Set<Object> missingSeedKeys) {
+    return _service.insertMilestoneRows(
         PedLanguageAssessmentService.seedRowsForKeys(
             assessmentId, band, library, missingSeedKeys));
   }

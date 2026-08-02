@@ -109,15 +109,21 @@ String pedLanguageAnomalyLine(String sectionLabel, int unmarkedCount) =>
 class PedLanguageCaptureSurface extends StatefulWidget {
   final String clientId;
 
-  /// Reports record defects upward (see CaptureSurfaceBuilder). The
-  /// controller is the single place they are computed; this only
-  /// forwards. Fires after bootstrap and on every controller change.
+  /// Reports record defects upward. The controller is the single place
+  /// they are computed; this only forwards. Fires after bootstrap and on
+  /// every controller change.
   final ValueChanged<List<SectionalCompletionAnomaly>>? onAnomaliesChanged;
+
+  /// Test seam, mirroring FeedingAssessmentSurface.service: inject a
+  /// service (e.g. an in-memory fake) so the surface can be rendered
+  /// headlessly. Defaults to the shared singleton in production.
+  final PedLanguageAssessmentService? service;
 
   const PedLanguageCaptureSurface({
     super.key,
     required this.clientId,
     this.onAnomaliesChanged,
+    this.service,
   });
 
   @override
@@ -126,7 +132,8 @@ class PedLanguageCaptureSurface extends StatefulWidget {
 }
 
 class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
-  final _service = PedLanguageAssessmentService.instance;
+  late final PedLanguageAssessmentService _service =
+      widget.service ?? PedLanguageAssessmentService.instance;
 
   bool _loading = true;
   String? _error;
@@ -179,6 +186,8 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
             assessmentId: b.assessment!['id'] as String,
             band: b.band!,
             library: await AshaMilestoneLibrary.load(),
+            // Carries the injected service through to every DB call.
+            service: _service,
           ),
         );
         // Seed self-heal + row load + completion hydration — the one
