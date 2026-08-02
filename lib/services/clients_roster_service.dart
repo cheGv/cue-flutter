@@ -394,14 +394,25 @@ class ClientRosterEntry {
     return today.difference(refDay).inDays;
   }
 
-  static String _relative(DateTime ref, {required bool short}) {
-    final d = _wholeDaysAgo(ref);
-    if (d <= 0) return 'today';
-    if (d == 1) return 'yesterday';
-    if (d < 14) return short ? '${d}d ago' : '$d days ago';
-    final w = (d / 7).floor();
-    return short ? '${w}w ago' : '$w weeks ago';
-  }
+  static String _relative(DateTime ref, {required bool short}) =>
+      cueRelativeDayLabel(ref, short: short);
+}
+
+/// "today" / "yesterday" / "{n} days ago" / "{n} weeks ago" (or the short
+/// "{n}d ago" / "{n}w ago"). Extracted top-level 2026-08-02 so the
+/// Assessing list's last-touched line uses this one implementation rather
+/// than a second copy; the roster model's recencyLong/recencyShort
+/// delegate here and are unchanged.
+String cueRelativeDayLabel(DateTime ref, {bool short = false}) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final refDay = DateTime(ref.year, ref.month, ref.day);
+  final d = today.difference(refDay).inDays;
+  if (d <= 0) return 'today';
+  if (d == 1) return 'yesterday';
+  if (d < 14) return short ? '${d}d ago' : '$d days ago';
+  final w = (d / 7).floor();
+  return short ? '${w}w ago' : '$w weeks ago';
 }
 
 /// Phase 4.1.8 — consequence signal applied to a draft session. The

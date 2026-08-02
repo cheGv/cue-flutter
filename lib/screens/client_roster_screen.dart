@@ -18,6 +18,7 @@
 import 'package:flutter/material.dart';
 
 import '../animation/cue_motion.dart';
+import '../config/app_config.dart' show kShowDevAffordances;
 import '../constants/app_routes.dart';
 import '../services/clients_roster_service.dart';
 import '../theme/cue_text_styles.dart';
@@ -203,7 +204,9 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
     return ListView(
       padding: padding,
       children: [
-        if (_fixtureVisibleCount > 0) ...[
+        // Dev scaffolding — sandbox env only. Never in a demo build handed
+        // to another clinician, never in prod (see kShowDevAffordances).
+        if (kShowDevAffordances && _fixtureVisibleCount > 0) ...[
           _devFixtureBanner(text),
           const SizedBox(height: 16),
         ],

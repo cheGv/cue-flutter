@@ -39,6 +39,14 @@ const bool kIsProd = kAppEnv == 'prod';
 /// release guard can bless the target EXPLICITLY, never via a dropped define.
 const bool kIsDemo = kAppEnv == 'demo';
 
+/// Dev-only affordances (fixture banners and similar scaffolding) render
+/// ONLY in the default sandbox dev environment — never in a demo artifact
+/// handed to another clinician, and never in prod. Keyed on APP_ENV rather
+/// than kDebugMode deliberately: a demo build is normally RUN in debug
+/// (`flutter run --dart-define=APP_ENV=demo`), so a kDebugMode gate would
+/// still show scaffolding in exactly the build being handed over.
+const bool kShowDevAffordances = kAppEnv == 'sandbox';
+
 /// Cue proxy base URL. Defaults to the deployed proxy; overridable at build
 /// time for LOCAL testing — e.g. --dart-define=PROXY_BASE=http://localhost:3001.
 /// A build with NO --dart-define resolves to the real proxy, so production /

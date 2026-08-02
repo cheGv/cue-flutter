@@ -13,9 +13,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
+import '../services/clients_roster_service.dart' show cueRelativeDayLabel;
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
 import '../services/clients_query.dart';
+import '../widgets/clients_roster_filter_chips.dart';
+import '../widgets/clients_roster_search_bar.dart';
 // 4.0.7.27c-split — assessment intake split out of AddClientScreen
 // (which is now therapy-only). NewAssessmentCaseScreen is the slim
 // 10-field intake; control reaches it via the '/new-assessment' named
@@ -46,12 +49,52 @@ class _AssessingScreenState extends State<AssessingScreen> {
   List<Map<String, dynamic>> _trialCases = [];
   bool _creatingTrial = false;
 
+  // Clients-idiom list controls (2026-08-02): search + status tabs.
+  final _searchCtrl = TextEditingController();
+  String _query = '';
+  String _filter = 'all';
+
   @override
   void initState() {
     super.initState();
+    _searchCtrl.addListener(() {
+      final q = _searchCtrl.text.trim().toLowerCase();
+      if (q != _query) setState(() => _query = q);
+    });
     _load();
     _loadTrials();
   }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Cases matching the active tab + search box. Both filters run over
+  /// rows already in memory — no extra queries.
+  List<Map<String, dynamic>> get _visibleCases {
+    var out = _cases;
+    if (_filter == 'active') {
+      out = out
+          .where((c) => c['engagement_status'] == 'in_assessment')
+          .toList();
+    }
+    if (_query.isNotEmpty) {
+      out = out.where((c) {
+        final hay = [
+          (c['name'] as String?) ?? '',
+          clinicalAreaLabel(c['clinical_area'] as String?),
+          (c['primary_concern_verbatim'] as String?) ?? '',
+        ].join(' ').toLowerCase();
+        return hay.contains(_query);
+      }).toList();
+    }
+    return out;
+  }
+
+  int get _inAssessmentCount =>
+      _cases.where((c) => c['engagement_status'] == 'in_assessment').length;
 
   Future<void> _load() async {
     setState(() {
@@ -234,21 +277,40 @@ class _AssessingScreenState extends State<AssessingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final visible = _visibleCases;
     return AppLayout(
-      title:       'Assessing',
+      // Title intentionally empty — the sidebar names this surface and the
+      // hero below carries its identity (Clients idiom).
+      title:       '',
       activeRoute: 'assessing',
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 60),
+          // Bottom padding clears the global CueStudyFab (52px orb pinned
+          // bottom-left), which otherwise sits over the last row's name.
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _header(),
-              const SizedBox(height: 20),
-              _addButton(),
-              const SizedBox(height: 10),
-              _trialRunButton(),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
+              if (!_loading && _error == null && _cases.isNotEmpty) ...[
+                ClientsRosterSearchBar(
+                  controller: _searchCtrl,
+                  onNewClient: _openAdd,
+                ),
+                const SizedBox(height: 16),
+                ClientsRosterTabs(
+                  activeFilter: _filter,
+                  onFilter: (v) => setState(() => _filter = v),
+                  allCount: _cases.length,
+                  activeCount: _inAssessmentCount,
+                  // Discharged/converted cases are excluded by _load()'s
+                  // query, so this tab self-hides (the widget drops
+                  // zero-count tabs).
+                  dischargedCount: 0,
+                ),
+                const SizedBox(height: 24),
+              ],
               if (_loading)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 32),
@@ -258,16 +320,18 @@ class _AssessingScreenState extends State<AssessingScreen> {
                 _errorBanner()
               else if (_cases.isEmpty)
                 _emptyState()
+              else if (visible.isEmpty)
+                _noMatchState()
               else
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    for (var i = 0; i < _cases.length; i++) ...[
+                    for (var i = 0; i < visible.length; i++) ...[
                       _AssessmentCaseCard(
-                        client: _cases[i],
-                        onTap: () => _openCase(_cases[i]),
+                        client: visible[i],
+                        onTap: () => _openCase(visible[i]),
                       ),
-                      if (i != _cases.length - 1)
+                      if (i != visible.length - 1)
                         const SizedBox(height: 10),
                     ],
                   ],
@@ -281,88 +345,48 @@ class _AssessingScreenState extends State<AssessingScreen> {
     );
   }
 
+  /// One naming only: the hero. The sidebar already says "Assessing",
+  /// AppLayout's title is empty, and the eyebrow + explanatory subtitle
+  /// were removed (2026-08-02) — the screen announced itself four times.
   Widget _header() {
     final cue = CueColorsResolved.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'ASSESSMENT CASES',
-          style: GoogleFonts.syne(
-            fontSize:      10,
-            fontWeight:    FontWeight.w600,
-            color:         cue.amber,
-            letterSpacing: 1.6,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Diagnostic engagements',
-          style: GoogleFonts.playfairDisplay(
-            fontSize:    28,
-            fontWeight:  FontWeight.w400,
-            fontStyle:   FontStyle.italic,
-            color:       cue.textPrimary,
-            height:      1.05,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Cases here run on the assessment workflow until you '
-          'discharge them or convert to therapy.',
-          style: GoogleFonts.dmSans(
-              fontSize: 13, color: cue.textSecondary, height: 1.45),
-        ),
-      ],
-    );
-  }
-
-  Widget _addButton() {
-    final cue = CueColorsResolved.of(context);
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        onPressed: _openAdd,
-        icon: Icon(Icons.add_rounded, size: 18, color: cue.amber),
-        label: Text(
-          'New assessment case',
-          style: GoogleFonts.dmSans(
-              fontSize: 14, color: cue.amber, fontWeight: FontWeight.w500),
-        ),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: cue.amber,
-          side: BorderSide(color: cue.amber.withValues(alpha: 0.45)),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
-        ),
+    return Text(
+      'Diagnostic engagements',
+      style: GoogleFonts.playfairDisplay(
+        fontSize:    28,
+        fontWeight:  FontWeight.w400,
+        fontStyle:   FontStyle.italic,
+        color:       cue.textPrimary,
+        height:      1.05,
       ),
     );
   }
 
-  // Stage 2B — secondary, visually-muted CTA (distinct from the amber primary
-  // "New assessment case"). Opens an area picker, then creates + opens a trial.
-  Widget _trialRunButton() {
+  // Stage 2B, demoted 2026-08-02 — a quiet text affordance inside the
+  // TRIAL RUNS section it belongs to, no longer a full-width bar at
+  // near-equal weight to the primary "+" action. Trial runs stay
+  // available in every environment (clinicians on the demo build use
+  // synthetic data deliberately); only the visual weight changed.
+  Widget _trialRunLink() {
     final cue = CueColorsResolved.of(context);
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
         onPressed: _creatingTrial ? null : _startTrialRun,
         icon: Icon(Icons.science_outlined,
-            size: 18, color: cue.textSecondary),
+            size: 15, color: cue.textSecondary),
         label: Text(
           _creatingTrial ? 'Starting trial run…' : 'Start a trial run',
           style: GoogleFonts.dmSans(
-              fontSize: 14,
+              fontSize: 12.5,
               color: cue.textSecondary,
               fontWeight: FontWeight.w500),
         ),
-        style: OutlinedButton.styleFrom(
+        style: TextButton.styleFrom(
           foregroundColor: cue.textSecondary,
-          side: BorderSide(color: cue.border),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10)),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          minimumSize: Size.zero,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
     );
@@ -402,10 +426,12 @@ class _AssessingScreenState extends State<AssessingScreen> {
           style: GoogleFonts.dmSans(
               fontSize: 13, color: cue.textSecondary, height: 1.45),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        _trialRunLink(),
+        const SizedBox(height: 12),
         if (_trialCases.isEmpty)
           Text(
-            'No trial runs yet — tap "Start a trial run" above to explore one.',
+            'No trial runs yet — "Start a trial run" opens one.',
             style: GoogleFonts.dmSans(
                 fontSize: 13,
                 color: cue.textSecondary,
@@ -426,6 +452,21 @@ class _AssessingScreenState extends State<AssessingScreen> {
             ],
           ),
       ],
+    );
+  }
+
+  /// Cases exist, but the search box / tab filtered them all out.
+  Widget _noMatchState() {
+    final cue = CueColorsResolved.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Text(
+        _query.isNotEmpty
+            ? 'No assessment cases match "$_query".'
+            : 'No cases in this view.',
+        style: GoogleFonts.dmSans(
+            fontSize: 13, color: cue.textSecondary),
+      ),
     );
   }
 
@@ -482,13 +523,26 @@ class _AssessmentCaseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final name   = (client['name'] as String?)?.trim() ?? 'Unknown';
     final area   = (client['clinical_area'] as String?) ?? '';
-    final status =
-        (client['engagement_status'] as String?) ?? 'awaiting_intake';
     final ageRaw = client['age'];
     final age    = ageRaw is int
         ? ageRaw
         : (ageRaw is String ? int.tryParse(ageRaw) : null);
+    // Triage line — the referrer's own words. Already loaded by the
+    // screen's read('*'); no extra query.
+    final concern =
+        (client['primary_concern_verbatim'] as String?)?.trim() ?? '';
+    // Last touched — updated_at is already selected AND already the sort
+    // key, so this costs nothing.
+    final touchedRaw = client['updated_at'];
+    final touched = touchedRaw is String ? DateTime.tryParse(touchedRaw) : null;
     final cue = CueColorsResolved.of(context);
+
+    // clinical area · age · touched — the meta line under the concern.
+    final meta = <String>[
+      if (area.isNotEmpty) clinicalAreaLabel(area),
+      if (age != null && age > 0) 'age $age',
+      if (touched != null) 'touched ${cueRelativeDayLabel(touched)}',
+    ].join('  ·  ');
 
     return Material(
       color: Colors.transparent,
@@ -515,18 +569,26 @@ class _AssessmentCaseCard extends StatelessWidget {
                           fontWeight: FontWeight.w600,
                           color: cue.textPrimary),
                     ),
-                    const SizedBox(height: 4),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: [
-                        if (area.isNotEmpty)
-                          _badge(clinicalAreaLabel(area), color: cue.amber),
-                        _badge(_humanStatus(status), color: cue.textSecondary),
-                        if (age != null && age > 0)
-                          _badge('age $age', color: cue.textSecondary),
-                      ],
-                    ),
+                    if (concern.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        concern,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.dmSans(
+                            fontSize: 13,
+                            height: 1.35,
+                            color: cue.textPrimary.withValues(alpha: 0.78)),
+                      ),
+                    ],
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Text(
+                        meta,
+                        style: GoogleFonts.dmSans(
+                            fontSize: 12, color: cue.textSecondary),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -540,31 +602,4 @@ class _AssessmentCaseCard extends StatelessWidget {
     );
   }
 
-  Widget _badge(String text, {required Color color}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color:        color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.dmSans(
-            fontSize: 11, color: color, fontWeight: FontWeight.w500),
-      ),
-    );
-  }
-
-  String _humanStatus(String code) {
-    switch (code) {
-      case 'awaiting_intake':  return 'awaiting intake';
-      case 'in_assessment':    return 'in assessment';
-      case 'in_progress':      return 'in progress';
-      case 'report_pending':   return 'report pending';
-      case 'report_delivered': return 'report delivered';
-      case 'converted':        return 'converted to therapy';
-      case 'discharged':       return 'discharged';
-      default:                 return code.replaceAll('_', ' ');
-    }
-  }
 }
