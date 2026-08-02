@@ -20,7 +20,7 @@ AshaMilestoneLibrary realLibrary() => AshaMilestoneLibrary.fromJsonString(
 /// Fake ped persistence: same contract as PedLanguageSectionalStore,
 /// no Supabase. Seeds real band content via the service's own pure
 /// seedRowsForKeys, so the marks carry the genuine dataset rows.
-class FakePedStore implements SectionalCaptureStore<PedLanguageMark> {
+class FakePedStore implements SectionalCompletionCapableStore<PedLanguageMark> {
   final AshaAgeBand band;
   final AshaMilestoneLibrary library;
   final List<PedLanguageMark> serverRows = [];
@@ -236,7 +236,7 @@ void main() {
 
     test('completion fill and revert are absent ↔ null and always clear '
         'evidence', () {
-      final cfg = pedLanguageSectionalConfig(band);
+      final spec = pedLanguageSectionalConfig(band).completion!;
       final m = PedLanguageMark(
           id: 'x',
           section: 'speech',
@@ -245,10 +245,10 @@ void main() {
           example: null,
           status: null,
           evidence: null);
-      expect(cfg.isUnmarked(m), isTrue);
-      cfg.applyCompletionFill(m);
+      expect(spec.isUnmarked(m), isTrue);
+      spec.applyCompletionFill(m);
       expect(m.status, 'absent');
-      cfg.revertCompletionFill(m);
+      spec.revertCompletionFill(m);
       expect(m.status, isNull);
       expect(m.evidence, isNull);
     });

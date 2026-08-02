@@ -114,15 +114,17 @@ SectionalCaptureConfig<PedLanguageMark> pedLanguageSectionalConfig(
       for (final section in kAshaSections)
         for (final m in band.sections[section]!) (section, m.order),
     },
-    isUnmarked: (m) => m.status == null,
-    applyCompletionFill: (m) {
-      m.status = 'absent';
-      m.evidence = null;
-    },
-    revertCompletionFill: (m) {
-      m.status = null;
-      m.evidence = null;
-    },
+    completion: SectionalCompletionSpec<PedLanguageMark>(
+      isUnmarked: (m) => m.status == null,
+      applyCompletionFill: (m) {
+        m.status = 'absent';
+        m.evidence = null;
+      },
+      revertCompletionFill: (m) {
+        m.status = null;
+        m.evidence = null;
+      },
+    ),
   );
 }
 
@@ -356,7 +358,7 @@ class PedLanguageAssessmentService {
 /// SectionalCaptureStore adapter — the SQL half the controller drives.
 /// Constructed only in the ready world (after resolveParent gating).
 class PedLanguageSectionalStore
-    implements SectionalCaptureStore<PedLanguageMark> {
+    implements SectionalCompletionCapableStore<PedLanguageMark> {
   final String assessmentId;
   final AshaAgeBand band;
   final AshaMilestoneLibrary library;
