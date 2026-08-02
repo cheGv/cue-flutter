@@ -71,3 +71,8 @@ supabase/.temp/
 # RLS regression harness deps (test/rls — Node, not Flutter)
 test/rls/node_modules/
 test/rls/package-lock.json
+
+# Environment files — never commit; the example template is the exception
+.env
+.env.*
+!.env.example
