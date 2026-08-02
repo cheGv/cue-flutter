@@ -18,10 +18,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants/clinical_areas.dart';
 import '../models/format_template.dart';
+import '../protocols/protocol_manifest.dart';
 import '../repositories/format_templates_repository.dart';
-import '../services/cas_assessment_service.dart';
 import '../services/format_drafter_service.dart';
-import '../services/voice_assessment_service.dart';
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
 import '../widgets/assessment/ald_capture_section.dart';
@@ -61,10 +60,12 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   final _diagnosisCtrl = TextEditingController();
   final _diagCodesCtrl = TextEditingController();
 
-  // Step 3 (Piece 2) — "Draft in my format". protocol == clinical_area. Only
-  // these areas have an assessment reader wired today, so only they can produce
-  // a grounded draft; other areas show a "not available yet" message.
-  static const _draftableProtocols = {'voice', 'pediatric-cas'};
+  // Step 3 (Piece 2) — "Draft in my format". Draftability is now a MANIFEST
+  // lookup (lib/protocols/protocol_manifest.dart), answered from data before
+  // the tap rather than by a hardcoded set checked after it. The old
+  // _draftableProtocols set and the redundant _resolveAssessmentId switch
+  // (which encoded the same two protocols a second time) are both gone —
+  // the manifest entry carries its own assessment-id resolver.
   bool _drafting = false;
 
   @override
@@ -237,15 +238,13 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   /// editable surface (Piece 3, verified). App code only; no proxy/DB changes.
   Future<void> _draftInMyFormat() async {
     final clientId = _client['id'].toString();
-    final protocol = (_client['clinical_area'] as String?) ?? '';
 
-    // Guard: only voice + pediatric-cas have assessment readers today. Other
-    // areas (dysarthria / ALD / SSD / …) can't be drafted yet — say so plainly
-    // rather than crash or call the drafter with no reader behind it.
-    if (!_draftableProtocols.contains(protocol)) {
-      _toast("Report drafting isn't available for this assessment type yet.");
-      return;
-    }
+    // REASON 1 (no reader for this protocol) is answered by the manifest
+    // BEFORE the tap — the button is disabled and states why. This is the
+    // defensive floor, not the clinician-facing path.
+    final entry = _draftGate.entry;
+    if (entry == null) return;
+    final protocol = entry.reader!.protocol;
 
     final template = await _pickFormat();
     if (template == null) return; // cancelled, or no confirmed formats
@@ -253,9 +252,15 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
     if (!mounted) return;
     setState(() => _drafting = true);
     try {
-      final assessmentId = await _resolveAssessmentId(protocol, clientId);
+      // REASON 3 — the protocol CAN draft, but this client has no capture
+      // row yet. Distinct from reason 1: nothing is missing from the app,
+      // something is missing from the record. Never collapsed into the
+      // "not available for this assessment type" message.
+      final assessmentId =
+          await entry.reader!.resolveAssessmentId(clientId);
       if (assessmentId == null) {
-        _toast("Report drafting isn't available for this assessment type yet.");
+        _toast('Nothing captured yet — fill the capture surface above, '
+            'then draft.');
         return;
       }
       final draft = await FormatDrafterService().requestAssessmentDraft(
@@ -336,19 +341,39 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
   /// the same service the capture surface uses. Returns null for protocols with
   /// no reader. By report time the row exists (she's filled the capture
   /// surface), so loadOrCreate loads it rather than creating an empty one.
-  Future<String?> _resolveAssessmentId(String protocol, String clientId) async {
-    switch (protocol) {
-      case 'voice':
-        final a = await VoiceAssessmentService.instance
-            .loadOrCreate(clientId: clientId);
-        return a.id;
-      case 'pediatric-cas':
-        final a = await CasAssessmentService.instance
-            .loadOrCreate(clientId: clientId);
-        return a['id'] as String?;
-      default:
-        return null;
+  /// The manifest's pre-tap answer for this case: can it draft, and if not,
+  /// the plain reason. REASON 1 only — the two data-dependent reasons (no
+  /// confirmed format; nothing captured) are answered later, in their own
+  /// words, and are never folded into this one.
+  ({bool canDraft, String? reason, ProtocolManifestEntry? entry})
+      get _draftGate {
+    final area = _client['clinical_area'] as String? ?? '';
+    if (area.isEmpty) {
+      return (
+        canDraft: false,
+        reason: 'No clinical area set for this case.',
+        entry: null,
+      );
     }
+    final protocols = protocolsForArea(area);
+    if (protocols.isEmpty) {
+      return (
+        canDraft: false,
+        reason: 'No capture protocol for ${clinicalAreaLabel(area)} in '
+            'this build.',
+        entry: null,
+      );
+    }
+    final draftable = protocols.where((p) => p.isDraftable).toList();
+    if (draftable.isEmpty) {
+      return (
+        canDraft: false,
+        reason: 'This protocol captures to the record; it does not draft a '
+            'report yet.',
+        entry: null,
+      );
+    }
+    return (canDraft: true, reason: null, entry: draftable.first);
   }
 
   void _toast(String msg) {
@@ -676,26 +701,48 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
         ],
       );
     }
+    // Manifest-driven: when this protocol has no reader the button is
+    // DISABLED and the reason sits beside it — she learns before she taps,
+    // not after. (Step c moves the same fact up to capture entry, so this
+    // becomes a consistent echo rather than the first news.)
+    final gate = _draftGate;
+    final enabled = gate.canDraft;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: _draftInMyFormat,
-            icon: const Icon(Icons.auto_awesome, size: 16, color: _teal),
+            onPressed: enabled ? _draftInMyFormat : null,
+            icon: Icon(Icons.auto_awesome,
+                size: 16, color: enabled ? _teal : _inkGhost),
             label: Text('Draft in my format',
                 style: GoogleFonts.dmSans(
                     fontSize: 13,
-                    color: _teal,
+                    color: enabled ? _teal : _inkGhost,
                     fontWeight: FontWeight.w500)),
             style: OutlinedButton.styleFrom(
-              side: BorderSide(color: _teal.withValues(alpha: 0.45)),
+              side: BorderSide(
+                  color: enabled
+                      ? _teal.withValues(alpha: 0.45)
+                      : _line),
+              // Explicit — never inherit the active brightness default
+              // (polarity-4, CLAUDE.md).
+              foregroundColor: _teal,
+              disabledForegroundColor: _inkGhost,
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 8),
             ),
           ),
         ),
+        if (!enabled && gate.reason != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            gate.reason!,
+            style: GoogleFonts.dmSans(
+                fontSize: 12.5, color: _inkGhost, height: 1.4),
+          ),
+        ],
       ],
     );
   }
