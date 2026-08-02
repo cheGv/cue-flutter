@@ -30,6 +30,21 @@
 //      non-null DB default (e.g. a boolean defaulting to false) must be handled
 //      by the caller, which must exclude it unless it can prove the value was
 //      actually chosen. (See cas_assessment_reader.dart, sequence_order_errors.)
+//   4. SUPPRESSION IS NOT ONE MEANING (added 2026-08-02). What this function
+//      suppresses, it suppresses identically — but what that suppression MEANS
+//      downstream now depends on the field's declared FindingScale
+//      (assessment_envelope.dart):
+//        threeStatePresence -> suppressed means NOT CAPTURED. The field can
+//                              record an affirmative "absent", so its silence
+//                              is informative.
+//        openValue          -> suppressed means NOT WRITTEN. The field has no
+//                              absence vocabulary, so its silence says nothing
+//                              about the subject and MUST NOT be read as
+//                              absence.
+//      Nothing in the logic below changes: invariant 1 already preserves a
+//      stored "absent" as a real finding, which is exactly what a three-state
+//      protocol needs. The scale lives on the finding, not here, so this
+//      function stays value-only and protocol-blind.
 //
 // This rule is shared by every assessment reader (CAS, voice, ped, ALD) so the
 // guarantee lives in exactly one place.

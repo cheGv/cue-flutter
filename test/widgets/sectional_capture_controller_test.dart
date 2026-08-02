@@ -527,6 +527,76 @@ void main() {
     });
   });
 
+  group('completion anomaly — "stamped complete" must imply "no unmarked '
+      'rows"', () {
+    test('a clean bootstrap reports no anomaly', () async {
+      final store = FakeStore()
+        ..serverRows.addAll([
+          TestRow('a', 'speech', 1, 'present'),
+          TestRow('b', 'speech', 2, 'absent'),
+          TestRow('c', 'language', 1),
+        ])
+        ..completedAt['speech'] = DateTime(2026);
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+      expect(c.completionAnomalies, isEmpty);
+    });
+
+    test('a section stamped complete with an unmarked row SURFACES — it is '
+        'read as neither absent nor not-captured', () async {
+      // The partial-write case: the stamp landed, the fill did not.
+      final store = FakeStore()
+        ..serverRows.addAll([
+          TestRow('a', 'speech', 1, 'present'),
+          TestRow('b', 'speech', 2), // still NULL inside a done section
+          TestRow('c', 'language', 1),
+        ])
+        ..completedAt['speech'] = DateTime(2026);
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+
+      expect(c.completionAnomalies.length, 1);
+      expect(c.completionAnomalies.single.sectionId, 'speech');
+      expect(c.completionAnomalies.single.unmarkedRowIds, ['b']);
+      // The row itself is untouched — the controller reports, never repairs
+      // by guessing.
+      expect(c.rowsIn('speech').firstWhere((r) => r.id == 'b').status,
+          isNull);
+    });
+
+    test('an unmarked row in an INCOMPLETE section is ordinary, not an '
+        'anomaly', () async {
+      final store = FakeStore()
+        ..serverRows.addAll([
+          TestRow('a', 'speech', 1),
+          TestRow('b', 'speech', 2),
+          TestRow('c', 'language', 1),
+        ]);
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+      expect(c.completionAnomalies, isEmpty);
+    });
+
+    test('completing a section cleanly leaves no anomaly behind', () async {
+      final store = FakeStore();
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+      final r = await c.complete('speech');
+      expect(r.outcome, SectionalCompletionOutcome.completed);
+      expect(c.completionAnomalies, isEmpty);
+    });
+
+    test('a rolled-back completion leaves no anomaly either — the stamp was '
+        'reverted with the fill', () async {
+      final store = FakeStore()..failCompletion = true;
+      final c = SectionalCaptureController(config: config(), store: store);
+      await c.bootstrap();
+      final r = await c.complete('speech');
+      expect(r.outcome, SectionalCompletionOutcome.rolledBack);
+      expect(c.completionAnomalies, isEmpty);
+    });
+  });
+
   group('completion-less adopters (the open-ended shape, e.g. feeding)', () {
     late CoreOnlyStore store;
     late SectionalCaptureController<TestRow> c;
@@ -561,6 +631,14 @@ void main() {
     test('complete() without a spec is a LOUD wiring bug, not a silent '
         'no-op', () {
       expect(() => c.complete('speech'), throwsStateError);
+    });
+
+    test('CONFIRMS FEEDING IS UNAFFECTED: no completion spec means no '
+        'completion contract, so the anomaly check can never fire', () {
+      // Even though every fixture row is unmarked, an open-ended adopter
+      // has nothing to violate — there is no "stamped complete" state.
+      expect(c.rowsIn('speech').where((r) => r.status == null), isNotEmpty);
+      expect(c.completionAnomalies, isEmpty);
     });
 
     test('markedCount() without a spec is likewise loud', () {

@@ -107,6 +107,11 @@ class VoiceAssessmentReader {
         fieldLabel: label,
         value: v as Object,
         group: group,
+        // Voice records totals, hours, ratings and prose — nothing here has
+        // an absence vocabulary. A GRBAS 0 or a CAPE-V minimum is an
+        // affirmative "normal", not "not there"; and a blank field means
+        // she wrote nothing. See the FindingScale doc.
+        scale: FindingScale.openValue,
       ));
     }
 
@@ -191,6 +196,9 @@ class VoiceAssessmentReader {
         fieldLabel: label,
         value: value as Object,
         group: group,
+        // Narrative payload leaves — prose and ratings, no absence
+        // vocabulary anywhere in voice capture.
+        scale: FindingScale.openValue,
       ));
     }
   }

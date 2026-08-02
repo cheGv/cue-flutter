@@ -25,22 +25,33 @@ class CasAssessmentReader {
   // here, so they can never be mistaken for clinical findings.
   // None of these columns carry a DB default, so an untouched column is null
   // and the emptiness rule suppresses it cleanly.
-  static const List<(String column, String label, String group)> _findingFields = [
-    ('marker_inconsistent_errors', 'Inconsistent errors (ASHA consensus marker)', 'ASHA consensus markers'),
-    ('marker_disrupted_transitions', 'Disrupted lexical/phrasal transitions (ASHA consensus marker)', 'ASHA consensus markers'),
-    ('marker_inappropriate_prosody', 'Inappropriate prosody (ASHA consensus marker)', 'ASHA consensus markers'),
-    ('marker_inconsistent_notes', 'Inconsistent errors — notes', 'ASHA consensus markers'),
-    ('marker_transitions_notes', 'Disrupted transitions — notes', 'ASHA consensus markers'),
-    ('marker_prosody_notes', 'Inappropriate prosody — notes', 'ASHA consensus markers'),
-    ('oral_mech_exam', 'Oral mechanism examination', 'Oral mechanism & evidence'),
-    ('groping_searching', 'Groping / searching behaviour', 'Oral mechanism & evidence'),
-    ('vowel_errors', 'Vowel errors', 'Oral mechanism & evidence'),
-    ('receptive_expressive_gap', 'Receptive–expressive gap', 'Oral mechanism & evidence'),
-    ('consonant_inventory', 'Consonant inventory', 'Phonetic inventory'),
-    ('vowel_inventory', 'Vowel inventory', 'Phonetic inventory'),
-    ('syllable_shape_inventory', 'Syllable shape inventory', 'Phonetic inventory'),
-    ('age_months', 'Age (months)', 'Demographics'),
-    ('capture_notes', 'Capture notes', 'Notes'),
+  //
+  // SCALE (2026-08-02). CAS is a MIXED protocol and this list is where that
+  // fact lives. The ASHA markers and the differential-evidence fields are
+  // captured on the surface's shared 3-state scale — present / emerging /
+  // absent, canonical lowercase (cas_assessment_surface.dart:50) — so they
+  // CAN record an affirmative absence and their silence means not-captured.
+  // Everything else here is open prose or a number: the inventories, the
+  // oral-mech exam, capture notes, and every *_notes companion. A blank note
+  // means she wrote no note — never that the thing it describes was absent.
+  // Emptiness in a prose field is a fact about the field, not its subject.
+  static const List<(String column, String label, String group, FindingScale scale)>
+      _findingFields = [
+    ('marker_inconsistent_errors', 'Inconsistent errors (ASHA consensus marker)', 'ASHA consensus markers', FindingScale.threeStatePresence),
+    ('marker_disrupted_transitions', 'Disrupted lexical/phrasal transitions (ASHA consensus marker)', 'ASHA consensus markers', FindingScale.threeStatePresence),
+    ('marker_inappropriate_prosody', 'Inappropriate prosody (ASHA consensus marker)', 'ASHA consensus markers', FindingScale.threeStatePresence),
+    ('marker_inconsistent_notes', 'Inconsistent errors — notes', 'ASHA consensus markers', FindingScale.openValue),
+    ('marker_transitions_notes', 'Disrupted transitions — notes', 'ASHA consensus markers', FindingScale.openValue),
+    ('marker_prosody_notes', 'Inappropriate prosody — notes', 'ASHA consensus markers', FindingScale.openValue),
+    ('oral_mech_exam', 'Oral mechanism examination', 'Oral mechanism & evidence', FindingScale.openValue),
+    ('groping_searching', 'Groping / searching behaviour', 'Oral mechanism & evidence', FindingScale.threeStatePresence),
+    ('vowel_errors', 'Vowel errors', 'Oral mechanism & evidence', FindingScale.threeStatePresence),
+    ('receptive_expressive_gap', 'Receptive–expressive gap', 'Oral mechanism & evidence', FindingScale.threeStatePresence),
+    ('consonant_inventory', 'Consonant inventory', 'Phonetic inventory', FindingScale.openValue),
+    ('vowel_inventory', 'Vowel inventory', 'Phonetic inventory', FindingScale.openValue),
+    ('syllable_shape_inventory', 'Syllable shape inventory', 'Phonetic inventory', FindingScale.openValue),
+    ('age_months', 'Age (months)', 'Demographics', FindingScale.openValue),
+    ('capture_notes', 'Capture notes', 'Notes', FindingScale.openValue),
   ];
 
   /// Pure transform: rows in -> envelope out. Applies the emptiness rule to
@@ -55,17 +66,39 @@ class CasAssessmentReader {
 
     // ── Findings (parent flat columns) ──────────────────────────────────────
     final findings = <AssessmentFinding>[];
-    for (final (column, label, group) in _findingFields) {
+    // Coverage denominators, counted over threeStatePresence fields ONLY —
+    // prose has no meaningful denominator. Built alongside the findings so
+    // the two can never disagree.
+    final expectedByGroup = <String, int>{};
+    final recordedByGroup = <String, int>{};
+    for (final (column, label, group, scale) in _findingFields) {
+      if (scale == FindingScale.threeStatePresence) {
+        expectedByGroup[group] = (expectedByGroup[group] ?? 0) + 1;
+      }
       final value = assessment[column];
       if (!assessmentValueIsPresent(value)) continue; // THE EMPTINESS RULE
+      if (scale == FindingScale.threeStatePresence) {
+        recordedByGroup[group] = (recordedByGroup[group] ?? 0) + 1;
+      }
       findings.add(AssessmentFinding(
         sourceId: 'cas_assessments/$id/$column',
         sourceTable: 'cas_assessments',
         fieldLabel: label,
+        // Verbatim — 'emerging' is clinically distinct from both neighbours
+        // and is never rounded to either.
         value: value as Object,
         group: group,
+        scale: scale,
       ));
     }
+    final coverage = [
+      for (final entry in expectedByGroup.entries)
+        AssessmentCoverage(
+          group: entry.key,
+          expected: entry.value,
+          recorded: recordedByGroup[entry.key] ?? 0,
+        ),
+    ];
 
     // ── Measures (child rows) ───────────────────────────────────────────────
     final measures = <AssessmentMeasure>[];
@@ -119,6 +152,10 @@ class CasAssessmentReader {
       assessmentId: id,
       findings: findings,
       measures: measures,
+      coverage: coverage,
+      // CAS capture has no section-completion contract (no completed_at
+      // stamps), so the incomplete-fill anomaly class cannot arise here.
+      anomalies: const [],
     );
   }
 

@@ -173,6 +173,30 @@ abstract interface class SectionalCompletionCapableStore<R>
   });
 }
 
+/// A section whose completion stamp is set while rows in it are STILL
+/// unmarked — the partial-write class this primitive exists to prevent
+/// (the completion write landed on the parent but not on every row, or
+/// landed before a row save that then failed).
+///
+/// It lives HERE, not in any surface, because "stamped complete implies
+/// no unmarked rows" is the completion contract itself — every
+/// completion-capable adopter inherits the check instead of re-earning
+/// the bug. Adopters with no SectionalCompletionSpec (feeding) have no
+/// completion contract and therefore never produce one.
+///
+/// The reader that meets such a row must not interpret it: NOT as
+/// 'absent' (that fabricates a clinical claim the SLP never made) and
+/// NOT as not-captured (that hides a write failure). It surfaces.
+class SectionalCompletionAnomaly {
+  final String sectionId;
+  final List<String> unmarkedRowIds;
+
+  const SectionalCompletionAnomaly({
+    required this.sectionId,
+    required this.unmarkedRowIds,
+  });
+}
+
 enum SectionalCompletionOutcome {
   /// Persisted; the current section advanced.
   completed,
@@ -216,6 +240,7 @@ class SectionalCaptureController<R> extends ChangeNotifier {
   final Map<String, DateTime?> _completedAt = {};
   final Set<Future<void>> _pending = {};
   final Set<String> _dirtyRowIds = {};
+  List<SectionalCompletionAnomaly> _anomalies = const [];
 
   /// rowId → the latest persist closure seen for that row. Retained so
   /// retryDirty() can re-run it (closures read the row's CURRENT state
@@ -230,6 +255,14 @@ class SectionalCaptureController<R> extends ChangeNotifier {
 
   bool get bootstrapped => _bootstrapped;
   bool get completing => _completing;
+
+  /// Sections stamped complete that still hold unmarked rows — see
+  /// [SectionalCompletionAnomaly]. Recomputed on every bootstrap and after
+  /// each completion; always empty for adopters with no completion spec.
+  /// A surface renders this as a repair affordance; a reader emits it as
+  /// an envelope anomaly rather than guessing what the row meant.
+  List<SectionalCompletionAnomaly> get completionAnomalies =>
+      List.unmodifiable(_anomalies);
   int get pendingSaveCount => _pending.length;
   Set<String> get dirtyRowIds => Set.unmodifiable(_dirtyRowIds);
 
@@ -298,8 +331,34 @@ class SectionalCaptureController<R> extends ChangeNotifier {
       _currentIndex = firstOpen < 0 ? 0 : firstOpen;
     }
 
+    _recomputeAnomalies();
     _bootstrapped = true;
     _notify();
+  }
+
+  /// "Stamped complete" must imply "no unmarked rows". Where it doesn't,
+  /// the completion fill did not finish — surfaced, never interpreted.
+  /// No completion spec (feeding) means no completion contract, so there
+  /// is nothing this can violate: the list stays empty.
+  void _recomputeAnomalies() {
+    final spec = config.completion;
+    if (spec == null) {
+      _anomalies = const [];
+      return;
+    }
+    final found = <SectionalCompletionAnomaly>[];
+    for (final section in config.sectionIds) {
+      if (!isCompleted(section)) continue;
+      final unmarked = rowsIn(section)
+          .where(spec.isUnmarked)
+          .map(config.rowId)
+          .toList();
+      if (unmarked.isNotEmpty) {
+        found.add(SectionalCompletionAnomaly(
+            sectionId: section, unmarkedRowIds: unmarked));
+      }
+    }
+    _anomalies = List.unmodifiable(found);
   }
 
   // ── The in-flight save queue + dirty set ──────────────────────────
@@ -438,6 +497,10 @@ class SectionalCaptureController<R> extends ChangeNotifier {
           sectionId: sectionId,
           unmarkedRowIds: [for (final r in flipped) config.rowId(r)],
         );
+        // The fill just landed; re-derive so a section that completed
+        // cleanly cannot leave a stale anomaly behind (and so one that
+        // somehow did not is visible immediately, not next bootstrap).
+        _recomputeAnomalies();
         return const SectionalCompletionResult._(
             SectionalCompletionOutcome.completed);
       } catch (e) {
@@ -449,6 +512,7 @@ class SectionalCaptureController<R> extends ChangeNotifier {
         }
         _completedAt[sectionId] = null;
         _currentIndex = indexBefore;
+        _recomputeAnomalies();
         _notify();
         return SectionalCompletionResult._(
             SectionalCompletionOutcome.rolledBack,
