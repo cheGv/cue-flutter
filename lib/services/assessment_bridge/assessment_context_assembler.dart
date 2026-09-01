@@ -22,6 +22,33 @@ import 'cas_assessment_reader.dart';
 import 'ped_language_assessment_reader.dart';
 import 'voice_assessment_reader.dart';
 
+/// Refusal to assemble a draft payload from a DEFECTIVE record.
+///
+/// Thrown by [AssessmentContextAssembler.assembleFromEnvelope] whenever the
+/// reader found an [AssessmentAnomaly]. See the class doc for why the refusal
+/// lives here and not only in the pre-tap draft gate.
+///
+/// [clinicianMessage] is the anomaly's own sentence, which readers write to be
+/// clinician-facing and actionable ("Speech is marked done but 2 milestones are
+/// unmarked."). The draft path already catches and surfaces it.
+class AssessmentRecordDefectException implements Exception {
+  final List<AssessmentAnomaly> anomalies;
+
+  const AssessmentRecordDefectException(this.anomalies);
+
+  String get clinicianMessage {
+    if (anomalies.isEmpty) return 'This record has a defect.';
+    final first = anomalies.first.detail;
+    if (anomalies.length == 1) return first;
+    final more = anomalies.length - 1;
+    return '$first (and $more other '
+        '${more == 1 ? 'problem' : 'problems'} in this record.)';
+  }
+
+  @override
+  String toString() => clinicianMessage;
+}
+
 class AssessmentContextAssembler {
   AssessmentContextAssembler({ClientChartStateRepository? chartStateRepository})
       : _chartStateRepo = chartStateRepository;
@@ -49,10 +76,31 @@ class AssessmentContextAssembler {
   /// (ClientChartState.toJson() shape), produce the canonical_data bundle.
   /// No I/O; no mutation — embeds envelope.toJson() verbatim under `assessment`.
   /// This is the gate-tested core.
+  ///
+  /// REFUSES on a defective record (added 2026-08-02). Throws
+  /// [AssessmentRecordDefectException] when the envelope carries anomalies.
+  ///
+  /// Why here. Until now nothing in lib/ read envelope.anomalies at all: the
+  /// draft gate refuses on SectionalCompletionAnomaly from the LIVE capture
+  /// controller, which is a different type from a different source and is
+  /// empty whenever the surface was never mounted or its bootstrap threw. So
+  /// every defect only the READER can see — an absence with no declaration, a
+  /// norm-provenance disagreement, an out-of-vocabulary value — reached the
+  /// drafter unchallenged. The gate stays the right place for the pre-tap,
+  /// clinician-facing refusal; this is the structural backstop, on the one
+  /// path every draft must cross.
+  ///
+  /// It also closes a second hole: an anomaly's detail sentence used to be
+  /// embedded in canonical_data and POSTed to the drafter as sourced material,
+  /// against the envelope's own "the REPORT never mentions it". A payload that
+  /// is never built cannot carry it.
   Map<String, dynamic> assembleFromEnvelope({
     required AssessmentEnvelope envelope,
     required Map<String, dynamic> clientMeta,
   }) {
+    if (envelope.hasAnomalies) {
+      throw AssessmentRecordDefectException(envelope.anomalies);
+    }
     return <String, dynamic>{
       'client_meta': clientMeta,
       for (final k in _therapyOnlyKeys) k: const <dynamic>[],

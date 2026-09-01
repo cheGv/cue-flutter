@@ -20,6 +20,7 @@ import '../constants/clinical_areas.dart';
 import '../models/format_template.dart';
 import '../protocols/draft_gate.dart';
 import '../repositories/format_templates_repository.dart';
+import '../services/assessment_bridge/assessment_context_assembler.dart';
 import '../services/format_drafter_service.dart';
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
@@ -279,6 +280,12 @@ class _AssessmentCaseScreenState extends State<AssessmentCaseScreen> {
       // The editable surface in LOAD mode — the proven Piece 3 render path.
       Navigator.of(context)
           .pushNamed('/clients/$clientId/draft-report/view/${draft.id}');
+    } on AssessmentRecordDefectException catch (e) {
+      // REASON 4 at report time. The pre-tap gate catches the defects the
+      // live capture controller can see; this catches the ones only the
+      // reader can — including a record whose surface was never mounted in
+      // this session. Her own sentence, not a stack trace.
+      if (mounted) _toast(e.clinicianMessage);
     } catch (e) {
       if (mounted) _toast('Could not draft the report: $e');
     } finally {

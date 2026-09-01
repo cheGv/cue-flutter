@@ -114,6 +114,12 @@ class PedLanguageAssessmentReader {
     final expected = <String, int>{};
     final recorded = <String, int>{};
 
+    /// Rows grouped by section, kept so the completion checks below can look
+    /// at the ROWS themselves (their status and creation time) rather than
+    /// only at counts. A count cannot tell an unfinished fill from a
+    /// milestone that did not exist yet.
+    final rowsBySection = <String, List<Map<String, dynamic>>>{};
+
     // Provenance is collected ONLY from rows that actually produce a finding
     // — see the norm-statement block below for why an unmarked row must not
     // vote on the caveat.
@@ -128,6 +134,7 @@ class PedLanguageAssessmentReader {
 
       // Every seeded row is one thing the instrument asks — recorded or not.
       expected[section] = (expected[section] ?? 0) + 1;
+      (rowsBySection[section] ??= []).add(row);
 
       final rawStatus = row['status'];
       // THE EMPTINESS RULE. A NULL status is not-yet-captured, and it NEVER
@@ -206,8 +213,9 @@ class PedLanguageAssessmentReader {
       final group = _sectionLabels[section] ?? section;
       final exp = expected[section] ?? 0;
       final rec = recorded[section] ?? 0;
-      final declared =
-          assessmentValueIsPresent(assessment['${section}_completed_at']);
+      final rawStamp = assessment['${section}_completed_at'];
+      final declared = assessmentValueIsPresent(rawStamp);
+      final stamp = declared ? _time(rawStamp) : null;
 
       coverage.add(AssessmentCoverage(
         group: group,
@@ -216,19 +224,62 @@ class PedLanguageAssessmentReader {
         declaredComplete: declared,
       ));
 
-      if (declared && rec < exp) {
-        // The record contradicts itself: she declared the section done, which
-        // should have filled every unmarked row with an explicit 'absent', yet
-        // rows are still unmarked. Reading those NULLs as absent would
-        // fabricate judgements; reading them as not-captured would hide a
-        // failed write. Neither — report it.
-        final missing = exp - rec;
-        anomalies.add(AssessmentAnomaly(
-          sourceId: 'ped_language_assessments/$id/$section',
-          kind: 'incomplete_completion_fill',
-          detail: '$group is marked done but $missing '
-              '${missing == 1 ? 'milestone is' : 'milestones are'} unmarked.',
-        ));
+      if (declared) {
+        // Unmarked rows that EXISTED when she pressed Done. A row seeded
+        // afterwards (the controller's self-heal, once the dataset gains a
+        // milestone) is not an unfinished fill — it is a question she has
+        // never been shown, and calling it a failed write steers her at the
+        // one repair that would write 'absent' for it. Coverage still counts
+        // it, so the record stays honest about what is unanswered.
+        //
+        // FAILS TOWARD REPORTING: the stamp is CLIENT-generated while
+        // created_at is a server default, so a skewed clock could misorder
+        // them. A row is excluded only when both timestamps parse AND it is
+        // strictly newer; anything ambiguous still counts as a defect.
+        final missing = rowsBySection[section]!
+            .where((r) => !assessmentValueIsPresent(r['status']))
+            .where((r) => !_seededAfter(r, stamp))
+            .length;
+        if (missing > 0) {
+          // The record contradicts itself: she declared the section done,
+          // which should have filled every unmarked row with an explicit
+          // 'absent', yet rows are still unmarked. Reading those NULLs as
+          // absent would fabricate judgements; reading them as not-captured
+          // would hide a failed write. Neither — report it.
+          anomalies.add(AssessmentAnomaly(
+            sourceId: 'ped_language_assessments/$id/$section',
+            kind: 'incomplete_completion_fill',
+            detail: '$group is marked done but $missing '
+                '${missing == 1 ? 'milestone is' : 'milestones are'} unmarked.',
+          ));
+        }
+      } else {
+        // THE MIRROR DEFECT, and the one that over-reports. 'absent' is only
+        // ever writable once a section is declared done — by the completion
+        // fill, or by a tap on an already-completed section. So an 'absent'
+        // row in a section with NO stamp means the row write landed and the
+        // declaration did not.
+        //
+        // It is reachable and it is not rare: completeSection issues the row
+        // update and the parent stamp as two separate non-transactional
+        // calls, and when the second fails the controller reverts only its
+        // in-memory state — no compensating write is ever issued. The rows
+        // stay 'absent' forever, after the clinician was told the save
+        // failed. Left unflagged, they read as N affirmative "not yet doing
+        // this" judgements about a child that she never declared.
+        final orphaned = rowsBySection[section]!
+            .where((r) => _text(r['status']) == 'absent')
+            .length;
+        if (orphaned > 0) {
+          anomalies.add(AssessmentAnomaly(
+            sourceId: 'ped_language_assessments/$id/$section',
+            kind: 'absence_without_declaration',
+            detail: '$group holds $orphaned '
+                '${orphaned == 1 ? 'milestone' : 'milestones'} recorded as '
+                'absent, but the section was never marked done. Re-run Done '
+                'for that section to confirm the record.',
+          ));
+        }
       }
     }
 
@@ -346,6 +397,31 @@ class PedLanguageAssessmentReader {
   }
 
   String _text(Object? v) => v == null ? '' : v.toString().trim();
+
+  /// A timestamp column, or null when absent or unparseable. Never throws —
+  /// an unreadable timestamp must not take a report path down.
+  DateTime? _time(Object? v) {
+    if (v is DateTime) return v;
+    final s = _text(v);
+    return s.isEmpty ? null : DateTime.tryParse(s);
+  }
+
+  /// True only when this row demonstrably came into existence AFTER the
+  /// section was declared done.
+  ///
+  /// Deliberately conservative, because the two clocks differ: the stamp is
+  /// written by the client (DateTime.now() inside completeSection) and
+  /// created_at by the server (now() default). If either value is missing or
+  /// unparseable, or the row is not strictly newer, the answer is false — so
+  /// an ambiguous row is treated as one that should have been filled, and a
+  /// real defect is reported rather than silently excused. A server-side
+  /// completion stamp would remove the ambiguity entirely.
+  bool _seededAfter(Map<String, dynamic> row, DateTime? stamp) {
+    if (stamp == null) return false;
+    final created = _time(row['created_at']);
+    if (created == null) return false;
+    return created.isAfter(stamp);
+  }
 
   int _order(Object? v) {
     if (v is int) return v;

@@ -7,8 +7,8 @@
 // three-step progress header. Each milestone is a tappable card — tap
 // marks it PRESENT (multi-select); a visible "Emerging" chip carries
 // the middle state; once marked, a visible Observed | Parent-reported
-// toggle records the evidence basis (default Observed — she is in
-// session). "Done" advances the section and turns every still-unmarked
+// toggle records the evidence basis — with NO default (see _tapCard).
+// "Done" advances the section and turns every still-unmarked
 // row into an explicit 'absent' — unselected only becomes a clinical
 // record when the SLP declares the section done, never before.
 //
@@ -227,6 +227,23 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
   /// Tap on the card body. Before the section is declared done, toggles
   /// present ↔ not-yet-captured. After, toggles present ↔ absent — the
   /// null state no longer exists once the section is a declared record.
+  /// NO EVIDENCE DEFAULT (2026-08-02). This used to run
+  /// `m.evidence ??= 'observed'` on the marking tap. That made 'observed'
+  /// a pre-selected default rather than something she asserted, so a
+  /// milestone marked present on a parent's account persisted as
+  /// clinician-observed — and the reader promotes that to a typed "the
+  /// clinician saw it herself" claim, licensing a drafted report to say
+  /// "observed in session" about an event that never happened.
+  ///
+  /// Marking now leaves evidence_source NULL until she chooses. The
+  /// reader already models that as provenance-not-recorded, its third
+  /// state. The DB CHECK permits null on any status, so nothing else
+  /// needed changing.
+  ///
+  /// If a default is ever argued for again on UX grounds, it must be the
+  /// WEAKER claim (parent_reported), never the stronger one: over-stating
+  /// how a finding was obtained is the one direction that fabricates.
+  /// An existing choice IS preserved when toggling present <-> emerging.
   void _tapCard(PedLanguageMark m) {
     final completed = _controller!.isCompleted(m.section);
     setState(() {
@@ -235,7 +252,6 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
         m.evidence = null;
       } else {
         m.status = 'present';
-        m.evidence ??= 'observed';
       }
     });
     _save(m);
@@ -251,7 +267,6 @@ class _PedLanguageCaptureSurfaceState extends State<PedLanguageCaptureSurface> {
         m.evidence = null;
       } else {
         m.status = 'emerging';
-        m.evidence ??= 'observed';
       }
     });
     _save(m);

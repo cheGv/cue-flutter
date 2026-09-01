@@ -367,12 +367,16 @@ void main() {
 
     test('but once she MARKS that row, the record really does span two '
         'versions and the anomaly returns', () {
+      // Speech is declared done here on purpose: an 'absent' row is only
+      // reachable through a completion, so leaving it undeclared would be a
+      // fixture modelling a record the app cannot produce — and would now
+      // (correctly) trip absence_without_declaration instead.
       final env = readIt([
         row(id: 'r1', section: 'speech', order: 1, status: 'present',
             evidence: 'observed', version: '1.0.0'),
         row(id: 'r2', section: 'speech', order: 2, status: 'absent',
             version: '1.1.0'),
-      ]);
+      ], done: {'speech'});
       expect(env.normStatement, isNull);
       expect(env.anomalies.single.kind, 'norm_provenance_disagreement');
     });

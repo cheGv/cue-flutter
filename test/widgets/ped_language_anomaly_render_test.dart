@@ -82,12 +82,21 @@ class _FakePedLanguageService implements PedLanguageAssessmentService {
     }
   }
 
+  /// Every persisted mark, in order — so a test can assert what the tap
+  /// actually WROTE, not merely what the screen shows.
+  final List<({String rowId, String? status, String? evidence})> writes = [];
+
   @override
   Future<void> updateMilestone({
     required String rowId,
     required String? status,
     required String? evidenceSource,
-  }) async {}
+  }) async {
+    writes.add((rowId: rowId, status: status, evidence: evidenceSource));
+    final r = rows.firstWhere((r) => r['id'] == rowId);
+    r['status'] = status;
+    r['evidence_source'] = evidenceSource;
+  }
 
   @override
   Future<void> completeSection({
@@ -232,5 +241,72 @@ void main() {
     expect(find.textContaining('Speech is marked done'), findsOneWidget);
     expect(find.textContaining('Could not repair the section'),
         findsOneWidget);
+  });
+
+  mainProvenanceDefault();
+}
+
+/// Review defect G: 'observed' used to be written by the marking tap itself
+/// (`m.evidence ??= 'observed'`), which turned a pre-selected UI default into
+/// a typed "the clinician saw it herself" clinical claim. A milestone she
+/// marked on a parent's account persisted as clinician-observed, and the
+/// reader promoted that to provenance: observed — licensing a drafted report
+/// to say "observed in session" about an event that never happened.
+///
+/// The rule now: marking leaves evidence_source NULL until she chooses.
+void mainProvenanceDefault() {
+  group('G — marking writes no provenance', () {
+    testWidgets('tapping a card to PRESENT persists status only, with a null '
+        'evidence source', (tester) async {
+      final svc = _FakePedLanguageService(
+        bandId: '2_to_3y',
+        completedSections: const {},
+        rows: await bandRows(leaveUnmarked: {
+          'speech-1', 'speech-2', 'speech-3',
+        }),
+      );
+      await tester.pumpWidget(host(
+          PedLanguageCaptureSurface(clientId: 'c-1', service: svc)));
+      await tester.pumpAndSettle();
+
+      // The first milestone card of the open (speech) section.
+      final card = find.text(svc.rows
+          .firstWhere((r) => r['id'] == 'speech-1')['milestone_text'] as String);
+      expect(card, findsOneWidget);
+      await tester.tap(card);
+      await tester.pumpAndSettle();
+
+      expect(svc.writes, hasLength(1));
+      expect(svc.writes.single.status, 'present');
+      expect(svc.writes.single.evidence, isNull,
+          reason: 'a default here would claim she saw it herself');
+      expect(svc.rows.firstWhere((r) => r['id'] == 'speech-1')
+          ['evidence_source'], isNull);
+    });
+
+    testWidgets('she can still CHOOSE a source, and choosing persists it',
+        (tester) async {
+      final svc = _FakePedLanguageService(
+        bandId: '2_to_3y',
+        completedSections: const {},
+        rows: await bandRows(leaveUnmarked: {
+          'speech-1', 'speech-2', 'speech-3',
+        }),
+      );
+      await tester.pumpWidget(host(
+          PedLanguageCaptureSurface(clientId: 'c-1', service: svc)));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(svc.rows
+          .firstWhere((r) => r['id'] == 'speech-1')['milestone_text'] as String));
+      await tester.pumpAndSettle();
+      // The toggle appears once marked; neither side is pre-selected.
+      await tester.tap(find.text('Parent-reported').first);
+      await tester.pumpAndSettle();
+
+      expect(svc.writes.last.evidence, 'parent_reported');
+      expect(svc.rows.firstWhere((r) => r['id'] == 'speech-1')
+          ['evidence_source'], 'parent_reported');
+    });
   });
 }
