@@ -48,8 +48,10 @@ import 'package:flutter/widgets.dart';
 
 import '../models/assessment_envelope.dart';
 import '../services/assessment_bridge/cas_assessment_reader.dart';
+import '../services/assessment_bridge/ped_language_assessment_reader.dart';
 import '../services/assessment_bridge/voice_assessment_reader.dart';
 import '../services/cas_assessment_service.dart';
+import '../services/ped_language_assessment_service.dart';
 import '../services/voice_assessment_service.dart';
 import '../widgets/assessment/ald_capture_section.dart';
 import '../widgets/assessment/cas_assessment_surface.dart';
@@ -170,6 +172,20 @@ Future<String?> _resolveCasAssessmentId(String clientId) async {
   return a['id'] as String?;
 }
 
+Future<AssessmentEnvelope> _readPedLanguage(String assessmentId) =>
+    PedLanguageAssessmentReader().readById(assessmentId);
+
+/// Returns null when the gate could not produce a record at all — no usable
+/// age on the client, or an age outside the dataset's birth-5 coverage. Those
+/// are real states, not failures to paper over: with no assessment row there
+/// is nothing to draft from, and the caller's null check is where that gets
+/// said honestly.
+Future<String?> _resolvePedLanguageAssessmentId(String clientId) async {
+  final b = await PedLanguageAssessmentService.instance
+      .resolveParent(clientId: clientId);
+  return b.assessment?['id'] as String?;
+}
+
 // ── The manifest ───────────────────────────────────────────────────────
 
 const List<ProtocolManifestEntry> kProtocolManifest = [
@@ -218,6 +234,11 @@ const List<ProtocolManifestEntry> kProtocolManifest = [
     clinicalArea: 'pediatric-language',
     surfaceStatus: ProtocolSurfaceStatus.shipped,
     buildSurface: _buildPedLanguageSurface,
+    reader: AssessmentReaderBinding(
+      protocol: 'pediatric-language',
+      read: _readPedLanguage,
+      resolveAssessmentId: _resolvePedLanguageAssessmentId,
+    ),
   ),
   ProtocolManifestEntry(
     code: 'ssd-screen',

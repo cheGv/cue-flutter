@@ -19,6 +19,7 @@
 import '../../models/assessment_envelope.dart';
 import '../../repositories/client_chart_state_repository.dart';
 import 'cas_assessment_reader.dart';
+import 'ped_language_assessment_reader.dart';
 import 'voice_assessment_reader.dart';
 
 class AssessmentContextAssembler {
@@ -75,6 +76,19 @@ class AssessmentContextAssembler {
     );
   }
 
+  /// Every protocol this binary can actually turn into an envelope.
+  ///
+  /// Public because the protocol manifest advertises draftability to the
+  /// clinician BEFORE she taps, and the two must not be able to disagree —
+  /// a manifest entry naming a protocol missing from here would offer a draft
+  /// that throws UnsupportedError halfway through. The manifest test asserts
+  /// the containment; this set is what it asserts against.
+  static const Set<String> supportedProtocols = {
+    CasAssessmentReader.protocol, // 'pediatric-cas'
+    VoiceAssessmentReader.protocol, // 'voice'
+    PedLanguageAssessmentReader.protocol, // 'pediatric-language'
+  };
+
   // Protocol -> reader. Structured so ped-dysarthria / ALD slot in here when
   // their readers land (no real captured data for them yet).
   Future<AssessmentEnvelope> _readEnvelope(String protocol, String assessmentId) {
@@ -83,12 +97,14 @@ class AssessmentContextAssembler {
         return CasAssessmentReader().readById(assessmentId);
       case VoiceAssessmentReader.protocol: // 'voice'
         return VoiceAssessmentReader().readById(assessmentId);
+      case PedLanguageAssessmentReader.protocol: // 'pediatric-language'
+        return PedLanguageAssessmentReader().readById(assessmentId);
       // case 'pediatric-dysarthria': return PedDysarthriaAssessmentReader().readById(assessmentId);
       // case 'adult-language-cognitive': return AldAssessmentReader().readById(assessmentId);
       default:
         throw UnsupportedError(
           'No assessment reader for protocol "$protocol" yet '
-          '(supported: ${CasAssessmentReader.protocol}, ${VoiceAssessmentReader.protocol}).',
+          '(supported: ${supportedProtocols.join(', ')}).',
         );
     }
   }

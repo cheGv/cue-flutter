@@ -11,6 +11,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cue/protocols/draft_gate.dart';
+import 'package:cue/protocols/protocol_manifest.dart';
 import 'package:cue/widgets/assessment/sectional_capture.dart';
 
 const _labels = {
@@ -19,10 +20,40 @@ const _labels = {
   'literacy': 'Literacy',
 };
 
+/// An area with a capture surface but NO reader — the input that produces
+/// DraftRefusal.noReader.
+///
+/// This used to be 'pediatric-language', until its reader landed on
+/// 2026-08-02 and these tests went red. That was the suite working: the gate
+/// really does read the manifest. Guarded below so the next reader to land
+/// fails with an explanatory message rather than a bare enum mismatch.
+const _readerlessArea = 'pediatric-dysarthria';
+
 SectionalCompletionAnomaly anomaly(String section, List<String> rows) =>
     SectionalCompletionAnomaly(sectionId: section, unmarkedRowIds: rows);
 
 void main() {
+  group('the fixtures these tests depend on', () {
+    test('the readerless exemplar really has a surface and really has no '
+        'reader — if this fails, a reader landed and the noReader cases '
+        'below need a new exemplar', () {
+      final entry = protocolsForArea(_readerlessArea);
+      expect(entry, isNotEmpty,
+          reason: '$_readerlessArea must still have a capture surface');
+      expect(entry.any((p) => p.isDraftable), isFalse,
+          reason: '$_readerlessArea gained a reader; pick another '
+              'readerless area for _readerlessArea');
+    });
+
+    test('pediatric-language now drafts — the reader landed 2026-08-02', () {
+      final d = evaluateDraftGate(
+          clinicalArea: 'pediatric-language', anomalies: const []);
+      expect(d.canDraft, isTrue);
+      expect(d.refusal, isNull);
+      expect(d.entry?.code, 'ped-language');
+    });
+  });
+
   group('reason 4 — record anomaly', () {
     test('refuses, names the section, states the count, offers repair', () {
       final d = evaluateDraftGate(
@@ -83,17 +114,17 @@ void main() {
 
     test('PRECEDENCE: the anomaly wins over "no reader", because it is the '
         'one she can act on', () {
-      // pediatric-language has a surface but NO reader — reason 1 would
-      // otherwise fire and mask the defect entirely.
+      // The exemplar has a surface but NO reader — reason 1 would otherwise
+      // fire and mask the defect entirely.
       final withAnomaly = evaluateDraftGate(
-        clinicalArea: 'pediatric-language',
+        clinicalArea: _readerlessArea,
         anomalies: [anomaly('speech', ['a'])],
         sectionLabels: _labels,
       );
       expect(withAnomaly.refusal, DraftRefusal.recordAnomaly);
 
       final without = evaluateDraftGate(
-        clinicalArea: 'pediatric-language',
+        clinicalArea: _readerlessArea,
         anomalies: const [],
       );
       expect(without.refusal, DraftRefusal.noReader);
@@ -117,9 +148,9 @@ void main() {
       final noProtocol =
           evaluateDraftGate(clinicalArea: 'fluency', anomalies: const []);
       final noReader = evaluateDraftGate(
-          clinicalArea: 'pediatric-language', anomalies: const []);
+          clinicalArea: _readerlessArea, anomalies: const []);
       final anomalous = evaluateDraftGate(
-        clinicalArea: 'pediatric-language',
+        clinicalArea: _readerlessArea,
         anomalies: [anomaly('speech', ['a'])],
         sectionLabels: _labels,
       );

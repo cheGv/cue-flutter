@@ -55,6 +55,22 @@
 // therefore carries [AssessmentCoverage] — expected vs recorded — so the
 // denominator is data, not inference. openValue groups carry no coverage:
 // there is no meaningful denominator for "notes she might have written".
+//
+// ── PROVENANCE AND NORMS (added 2026-08-02, with the first row-shaped reader) ─
+//
+// Two more things a protocol may know that the shape above could not carry.
+// Both are OPTIONAL and default to "this protocol does not model it", so the
+// two flat-column readers are unchanged:
+//
+//   [FindingProvenance] — did the clinician SEE this, or was she TOLD it?
+//     Ped-language records that per milestone. A null provenance means the
+//     protocol has no such slot; it NEVER means "we don't know" — that is a
+//     named state of its own.
+//
+//   [AssessmentNormStatement] — which reference set the instrument's wording
+//     came from, and which dataset version stamped it. Carried as a typed
+//     envelope field rather than prose inside a note, so a drafter cannot
+//     quietly drop it while still producing a document.
 
 import 'package:flutter/foundation.dart';
 
@@ -73,6 +89,32 @@ enum FindingScale {
   openValue,
 }
 
+/// How the clinician came to know a finding, for protocols that record it.
+///
+/// The states are kept apart because collapsing any pair overstates the
+/// record. In particular [notRecorded] must NEVER render as [observed]: an
+/// affirmative milestone with no stored source is a gap in the record, and
+/// printing "observed in session" for it invents a clinical event.
+enum FindingProvenance {
+  /// The clinician saw it herself.
+  observed,
+
+  /// A caregiver reported it. Clinically weaker than [observed], and the
+  /// difference belongs in the report.
+  parentReported,
+
+  /// The finding is affirmative but carries NO stored source. This state is
+  /// reachable: the ped-language CHECK constraint only forbids a source on a
+  /// negative row, so an affirmative row with a null source is legal even
+  /// though today's capture UI never writes one. Surfaced, never guessed at.
+  notRecorded,
+
+  /// Provenance does not apply to this finding — the row records an absence,
+  /// and "who told you it wasn't there" is not a question the instrument
+  /// asks. Structurally empty, so not a gap.
+  notApplicable,
+}
+
 @immutable
 class AssessmentFinding {
   final String sourceId; // e.g. "cas_assessments/<row-id>/<field>"
@@ -85,6 +127,12 @@ class AssessmentFinding {
   /// finding's ABSENCE would have meant.
   final FindingScale scale;
 
+  /// Null means the protocol has NO provenance concept, so nothing is
+  /// missing. It is deliberately NOT the same as
+  /// [FindingProvenance.notRecorded], which says the slot exists and is
+  /// empty. Optional so the flat-column readers stay untouched.
+  final FindingProvenance? provenance;
+
   const AssessmentFinding({
     required this.sourceId,
     required this.sourceTable,
@@ -92,8 +140,12 @@ class AssessmentFinding {
     required this.value,
     required this.group,
     required this.scale,
+    this.provenance,
   });
 
+  /// The key is always present, even when null — "this protocol does not
+  /// model provenance" is a fact worth stating, and inferring it from a
+  /// missing key is the same mistake the emptiness rule forbids elsewhere.
   Map<String, dynamic> toJson() => {
         'source_id': sourceId,
         'source_table': sourceTable,
@@ -101,6 +153,7 @@ class AssessmentFinding {
         'value': value,
         'group': group,
         'scale': scale.name,
+        'provenance': provenance?.name,
       };
 }
 
@@ -143,10 +196,23 @@ class AssessmentCoverage {
   /// How many of those carried a recorded value (present/emerging/absent).
   final int recorded;
 
+  /// Whether the clinician DECLARED this group finished, for protocols that
+  /// have a completion contract (ped-language stamps a *_completed_at per
+  /// section). Null means the protocol has no such contract, and completion
+  /// can only be inferred from [recorded] vs [expected] — which is exactly
+  /// the inference this field exists to make unnecessary.
+  ///
+  /// It is deliberately independent of [isComplete]. A group can be fully
+  /// recorded but never declared (she is still working), and a group can be
+  /// declared but under-recorded — which is a DEFECT, reported as an
+  /// [AssessmentAnomaly], never quietly reconciled.
+  final bool? declaredComplete;
+
   const AssessmentCoverage({
     required this.group,
     required this.expected,
     required this.recorded,
+    this.declaredComplete,
   });
 
   /// Fields on the three-state scale the clinician has not yet marked.
@@ -158,6 +224,53 @@ class AssessmentCoverage {
         'group': group,
         'expected': expected,
         'recorded': recorded,
+        'declared_complete': declaredComplete,
+      };
+}
+
+/// Which reference set an instrument's wording came from, and which parsed
+/// dataset version stamped the record.
+///
+/// TYPED, not prose. The caveat that ASHA milestones inform judgement rather
+/// than diagnose is a property OF THE INSTRUMENT, and a report built from
+/// milestone findings that omits it overstates what the instrument is. Giving
+/// it a field of its own means a drafter has to actively ignore a named
+/// envelope member to lose it, instead of merely failing to notice a sentence
+/// inside a notes blob.
+///
+/// ENFORCEMENT — what is actually true today, stated exactly (corrected
+/// 2026-08-02, having first been written here overstated):
+///
+///   IS enforced: a reader emits this only when every contributing row agrees
+///   on both values. Disagreement yields no statement and an
+///   [AssessmentAnomaly] instead, so a reader can never pick a winner.
+///
+///   IS NOT enforced: nothing consumes [AssessmentEnvelope.anomalies]. The
+///   draft gate refuses on SectionalCompletionAnomaly from the live capture
+///   controller — a different type from a different source — so a defect the
+///   READER finds at report time (norm disagreement, an out-of-vocabulary
+///   value) blocks nothing today. Nor does anything assert that a drafted
+///   document actually rendered this statement.
+///
+/// Both missing halves are named rather than implied, because the difference
+/// between "a reader cannot pick a winner" and "a bad record cannot be
+/// drafted" is exactly the sort of gap a confident comment can paper over.
+@immutable
+class AssessmentNormStatement {
+  /// The reference sentence, verbatim from the record (never re-worded).
+  final String reference;
+
+  /// The parsed dataset version that stamped the rows, e.g. "1.0.0".
+  final String libraryVersion;
+
+  const AssessmentNormStatement({
+    required this.reference,
+    required this.libraryVersion,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'reference': reference,
+        'library_version': libraryVersion,
       };
 }
 
@@ -212,6 +325,10 @@ class AssessmentEnvelope {
   /// Non-empty means the record is defective — see [AssessmentAnomaly].
   final List<AssessmentAnomaly> anomalies;
 
+  /// The instrument's norm reference, when the protocol records one. Null for
+  /// protocols whose wording carries no reference set (CAS, voice).
+  final AssessmentNormStatement? normStatement;
+
   const AssessmentEnvelope({
     required this.protocol,
     required this.assessmentId,
@@ -219,6 +336,7 @@ class AssessmentEnvelope {
     this.measures = const [],
     this.coverage = const [],
     this.anomalies = const [],
+    this.normStatement,
   });
 
   bool get isEmpty => findings.isEmpty && measures.isEmpty;
@@ -234,5 +352,6 @@ class AssessmentEnvelope {
         'measures': measures.map((m) => m.toJson()).toList(),
         'coverage': coverage.map((c) => c.toJson()).toList(),
         'anomalies': anomalies.map((a) => a.toJson()).toList(),
+        'norm_statement': normStatement?.toJson(),
       };
 }

@@ -16,7 +16,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cue/constants/clinical_areas.dart';
 import 'package:cue/protocols/protocol_manifest.dart';
+import 'package:cue/services/assessment_bridge/assessment_context_assembler.dart';
 import 'package:cue/services/assessment_bridge/cas_assessment_reader.dart';
+import 'package:cue/services/assessment_bridge/ped_language_assessment_reader.dart';
 import 'package:cue/services/assessment_bridge/voice_assessment_reader.dart';
 import 'package:cue/widgets/assessment/ald_capture_section.dart';
 import 'package:cue/widgets/assessment/cas_assessment_surface.dart';
@@ -84,6 +86,7 @@ void main() {
       final supported = {
         CasAssessmentReader.protocol,
         VoiceAssessmentReader.protocol,
+        PedLanguageAssessmentReader.protocol,
       };
       final advertised = {
         for (final p in kProtocolManifest)
@@ -92,17 +95,42 @@ void main() {
       expect(advertised, supported);
     });
 
+    test('the ASSEMBLER can dispatch every protocol the manifest advertises',
+        () {
+      // The group above is named for this failure, but until now it only
+      // compared the manifest against a set written by hand in this file —
+      // so a manifest entry whose protocol was missing from the assembler's
+      // switch would have passed here and thrown UnsupportedError at report
+      // time, after the clinician tapped Draft. This asserts against the
+      // assembler itself.
+      final advertised = {
+        for (final p in kProtocolManifest)
+          if (p.isDraftable) p.reader!.protocol,
+      };
+      expect(
+        advertised.difference(AssessmentContextAssembler.supportedProtocols),
+        isEmpty,
+        reason: 'the manifest offers a draft the assembler cannot produce',
+      );
+    });
+
     test('isDraftable is exactly reader != null', () {
       for (final p in kProtocolManifest) {
         expect(p.isDraftable, p.reader != null, reason: p.code);
       }
     });
 
-    test('the four capture-only protocols are honestly marked', () {
-      for (final code in ['ped-dysarthria', 'ald', 'ped-language',
-          'ssd-screen']) {
+    test('the three remaining capture-only protocols are honestly marked', () {
+      // ped-language left this list on 2026-08-02 when its reader landed.
+      for (final code in ['ped-dysarthria', 'ald', 'ssd-screen']) {
         expect(protocolByCode(code)!.isDraftable, isFalse, reason: code);
       }
+    });
+
+    test('ped-language draws its whole binding from real references', () {
+      final entry = protocolByCode('ped-language')!;
+      expect(entry.isDraftable, isTrue);
+      expect(entry.reader!.protocol, PedLanguageAssessmentReader.protocol);
     });
   });
 
