@@ -371,32 +371,31 @@ class PedLanguageAssessmentService {
     }).eq('id', rowId);
   }
 
-  /// The completion write: the rows the SLP left unmarked — the
-  /// EXPLICIT id list the controller computed from her screen after
+  /// The completion write, ATOMIC (2026-09-05, review defect A): the rows the
+  /// SLP left unmarked — the EXPLICIT id list the controller computed after
   /// draining every in-flight save — become 'absent', and the parent's
-  /// completion stamp is set. Never a server-side status-IS-NULL
-  /// filter.
+  /// <section>_completed_at stamp is set, in ONE Postgres transaction via
+  /// complete_ped_language_section. Both land or neither does.
+  ///
+  /// This used to be two separate non-transactional PostgREST calls; a failure
+  /// between them left rows stamped 'absent' (a positive clinical claim the SLP
+  /// never made) with no parent stamp, while the controller reverted only its
+  /// in-memory state — so screen and record diverged. With the RPC a failed
+  /// completion changes nothing, which makes the controller's memory-only
+  /// revert correct. The row predicate is unchanged (this assessment + the
+  /// explicit id list, never a server-side status-IS-NULL filter). The reader's
+  /// absence_without_declaration anomaly stays as belt-and-braces for any
+  /// record written before this fix.
   Future<void> completeSection({
     required String assessmentId,
     required String section,
     required List<String> unmarkedRowIds,
   }) async {
-    final nowIso = DateTime.now().toUtc().toIso8601String();
-    if (unmarkedRowIds.isNotEmpty) {
-      await _sb
-          .from('ped_language_milestones')
-          .update({
-            'status':          'absent',
-            'evidence_source': null,
-            'updated_at':      nowIso,
-          })
-          .eq('ped_language_assessment_id', assessmentId)
-          .inFilter('id', unmarkedRowIds);
-    }
-    await _sb.from('ped_language_assessments').update({
-      '${section}_completed_at': nowIso,
-      'updated_at':              nowIso,
-    }).eq('id', assessmentId);
+    await _sb.rpc('complete_ped_language_section', params: {
+      'p_assessment_id':    assessmentId,
+      'p_section':          section,
+      'p_unmarked_row_ids': unmarkedRowIds,
+    });
   }
 }
 
