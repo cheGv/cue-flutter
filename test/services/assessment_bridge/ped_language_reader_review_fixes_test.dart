@@ -11,7 +11,9 @@
 //       not an unfinished fill. The reader half only; the controller half
 //       needs PedLanguageMark to carry created_at and is NOT fixed.
 //   D — a defective record must not become a draft payload.
-//   G — marking present must not write a provenance value.
+//   G — marking present must not write a provenance value. Pinned as a WIDGET
+//       test in test/widgets/ped_language_anomaly_render_test.dart (it needs
+//       the capture surface); this file is the pure reader/assembler half.
 
 import 'package:flutter_test/flutter_test.dart';
 

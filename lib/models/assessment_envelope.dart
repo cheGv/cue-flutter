@@ -245,12 +245,18 @@ class AssessmentCoverage {
 ///   on both values. Disagreement yields no statement and an
 ///   [AssessmentAnomaly] instead, so a reader can never pick a winner.
 ///
-///   IS NOT enforced: nothing consumes [AssessmentEnvelope.anomalies]. The
-///   draft gate refuses on SectionalCompletionAnomaly from the live capture
-///   controller — a different type from a different source — so a defect the
-///   READER finds at report time (norm disagreement, an out-of-vocabulary
-///   value) blocks nothing today. Nor does anything assert that a drafted
-///   document actually rendered this statement.
+///   NOW enforced too (corrected 2026-09-03): [AssessmentContextAssembler]
+///   .assembleFromEnvelope throws [AssessmentRecordDefectException] whenever
+///   [AssessmentEnvelope.hasAnomalies], on the one path every draft crosses
+///   (FormatDrafterService -> the assembler, surfaced by the case-screen
+///   catch). So a defect only the READER finds at report time — norm
+///   disagreement, an out-of-vocabulary value, an absence with no declaration
+///   — now blocks the draft. The pre-tap draft gate still refuses SEPARATELY
+///   on the live controller's SectionalCompletionAnomaly (a different type
+///   from a different source, empty whenever the surface never mounted).
+///
+///   STILL NOT enforced: nothing asserts that a drafted document actually
+///   rendered this norm statement.
 ///
 /// Both missing halves are named rather than implied, because the difference
 /// between "a reader cannot pick a winner" and "a bad record cannot be
@@ -281,11 +287,13 @@ class AssessmentNormStatement {
 /// as absent (it would fabricate a claim) NOR as not-captured (it would hide a
 /// write failure). The reader emits this instead and guesses nothing.
 ///
-/// Consumer policy, deliberately NOT the reader's business: the draft gate
-/// refuses while any anomaly is present, names the section, and offers repair.
-/// The proxy is never called and the REPORT never mentions it — a clinical
-/// document read by parents and schools is the wrong place for an engineering
-/// defect notice.
+/// Consumer policy, deliberately NOT the reader's business — TWO consumers,
+/// different jobs (corrected 2026-09-03): the pre-tap draft gate refuses on
+/// the live controller's SectionalCompletionAnomaly, naming the section and
+/// offering repair; and [AssessmentContextAssembler] refuses structurally on
+/// these envelope anomalies before any payload is built. The proxy is never
+/// called and the REPORT never mentions it — a clinical document read by
+/// parents and schools is the wrong place for an engineering defect notice.
 @immutable
 class AssessmentAnomaly {
   /// Stable path to the affected thing, e.g.
