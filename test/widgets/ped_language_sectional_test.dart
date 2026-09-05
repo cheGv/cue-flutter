@@ -64,7 +64,7 @@ class FakePedStore implements SectionalCompletionCapableStore<PedLanguageMark> {
   }
 
   @override
-  Future<void> persistCompletion({
+  Future<DateTime?> persistCompletion({
     required String sectionId,
     required List<String> unmarkedRowIds,
   }) async {
@@ -72,7 +72,11 @@ class FakePedStore implements SectionalCompletionCapableStore<PedLanguageMark> {
     if (holdCompletion != null) await holdCompletion!.future;
     if (failCompletion) throw StateError('completion write failed');
     lastUnmarkedRowIds = unmarkedRowIds;
-    completedAt[sectionId] = DateTime.now();
+    // The "server" stamp the write recorded, handed back like the real
+    // store does (it re-reads the parent after the atomic RPC).
+    final stamp = DateTime.now();
+    completedAt[sectionId] = stamp;
+    return stamp;
   }
 }
 

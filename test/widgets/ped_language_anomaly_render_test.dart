@@ -99,7 +99,7 @@ class _FakePedLanguageService implements PedLanguageAssessmentService {
   }
 
   @override
-  Future<void> completeSection({
+  Future<DateTime?> completeSection({
     required String assessmentId,
     required String section,
     required List<String> unmarkedRowIds,
@@ -112,6 +112,9 @@ class _FakePedLanguageService implements PedLanguageAssessmentService {
       rows.firstWhere((r) => r['id'] == id)['status'] = 'absent';
     }
     completedSections.add(section);
+    // Like the real RPC: the stamp AS RECORDED, set once — the same value
+    // loadAssessmentRow reports, so a repair never moves it.
+    return DateTime.parse('2026-08-01T00:00:00Z');
   }
 }
 
@@ -119,6 +122,9 @@ class _FakePedLanguageService implements PedLanguageAssessmentService {
 /// every row marked 'present' unless listed in [leaveUnmarked].
 Future<List<Map<String, dynamic>>> bandRows({
   Set<String> leaveUnmarked = const {},
+  /// Optional server created_at per row id (ISO-8601). Rows not listed
+  /// carry none — the real store reads that as unknown → pre-existing.
+  Map<String, String> createdAtFor = const {},
 }) async {
   final lib = await AshaMilestoneLibrary.load();
   final band = lib.bandById('2_to_3y')!;
@@ -134,6 +140,7 @@ Future<List<Map<String, dynamic>>> bandRows({
         'example_text': m.example,
         'status': leaveUnmarked.contains(id) ? null : 'present',
         'evidence_source': leaveUnmarked.contains(id) ? null : 'observed',
+        if (createdAtFor.containsKey(id)) 'created_at': createdAtFor[id],
       });
     }
   }
@@ -244,6 +251,91 @@ void main() {
   });
 
   mainProvenanceDefault();
+  mainPostDeclarationRows();
+}
+
+/// Review defect C, controller half, through the REAL PedLanguageSectionalStore:
+/// a row seeded AFTER a section was declared done (the self-heal, once the
+/// dataset gains a milestone) is a question she was never shown — not a
+/// failed fill — and must raise no banner. The reader already discriminated
+/// by timestamp; the controller was blind and raised a false alarm, and
+/// false alarms teach her to ignore the real one. Server clock both sides:
+/// the fake's stamp is '2026-08-01T00:00:00Z' (what loadAssessmentRow
+/// returns); created_at is what the row carries.
+void mainPostDeclarationRows() {
+  group('C — a row seeded after declaration is not a failed fill', () {
+    testWidgets('a row created AFTER the stamp raises NO banner',
+        (tester) async {
+      final svc = _FakePedLanguageService(
+        bandId: '2_to_3y',
+        completedSections: {'speech'},
+        rows: await bandRows(
+          leaveUnmarked: {'speech-2'},
+          createdAtFor: {'speech-2': '2026-09-20T08:00:00Z'}, // after the stamp
+        ),
+      );
+      await tester.pumpWidget(host(
+          PedLanguageCaptureSurface(clientId: 'c-1', service: svc)));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('marked done'), findsNothing);
+      expect(find.widgetWithText(TextButton, 'Repair'), findsNothing);
+    });
+
+    testWidgets('a row created BEFORE the stamp is still the real failed-fill '
+        'case — banner stays', (tester) async {
+      final svc = _FakePedLanguageService(
+        bandId: '2_to_3y',
+        completedSections: {'speech'},
+        rows: await bandRows(
+          leaveUnmarked: {'speech-2'},
+          createdAtFor: {'speech-2': '2026-07-01T08:00:00Z'}, // before the stamp
+        ),
+      );
+      await tester.pumpWidget(host(
+          PedLanguageCaptureSurface(clientId: 'c-1', service: svc)));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Speech is marked done'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Repair'), findsOneWidget);
+    });
+
+    testWidgets('tapping Repair with a post-declaration row present repairs '
+        'ONLY the failed-fill row — the never-shown row stays unmarked',
+        (tester) async {
+      final svc = _FakePedLanguageService(
+        bandId: '2_to_3y',
+        completedSections: {'speech'},
+        rows: await bandRows(
+          leaveUnmarked: {'speech-2', 'speech-3'},
+          createdAtFor: {
+            'speech-2': '2026-07-01T08:00:00Z', // before: the real failed fill
+            'speech-3': '2026-09-20T08:00:00Z', // after: self-heal, never shown
+          },
+        ),
+      );
+      await tester.pumpWidget(host(
+          PedLanguageCaptureSurface(clientId: 'c-1', service: svc)));
+      await tester.pumpAndSettle();
+      // The banner counts exactly one — the row that existed at declaration.
+      expect(find.textContaining('1 milestone in it never saved'),
+          findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Repair'));
+      await tester.pumpAndSettle();
+
+      expect(svc.completeCalls, 1);
+      expect(svc.lastUnmarkedRowIds, ['speech-2'],
+          reason: 'exactly the banner\'s row — never the post-declaration one');
+      expect(svc.rows.firstWhere((r) => r['id'] == 'speech-2')['status'],
+          'absent');
+      expect(svc.rows.firstWhere((r) => r['id'] == 'speech-3')['status'],
+          isNull,
+          reason: 'absent here would be a clinical claim about a question '
+              'never asked');
+      expect(find.textContaining('marked done'), findsNothing);
+    });
+  });
 }
 
 /// Review defect G: 'observed' used to be written by the marking tap itself

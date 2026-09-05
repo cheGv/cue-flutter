@@ -232,10 +232,20 @@ class PedLanguageAssessmentReader {
         // one repair that would write 'absent' for it. Coverage still counts
         // it, so the record stays honest about what is unanswered.
         //
-        // FAILS TOWARD REPORTING: the stamp is CLIENT-generated while
-        // created_at is a server default, so a skewed clock could misorder
-        // them. A row is excluded only when both timestamps parse AND it is
-        // strictly newer; anything ambiguous still counts as a defect.
+        // FAILS TOWARD REPORTING for every record the server stamped: since
+        // the atomic completion RPC both timestamps are the server's (the
+        // stamp is now() inside the function, set once; created_at is a now()
+        // default), so they compare like with like, and a row is excluded
+        // only when both parse AND it is strictly newer — equal, older, or
+        // unparseable still counts. What "strictly newer" cannot defend is a
+        // LEGACY record stamped by a CLIENT clock. Behind the server, it can
+        // precede created_at for rows that existed at declaration and excuse
+        // a genuine failed fill; ahead of it, it can post-date a self-heal
+        // row seeded just after the declaration and count it, so Repair
+        // would write 'absent' on a question never shown. Known residual,
+        // shared with the capture controller; vacuous today — verified, not
+        // assumed: the sandbox holds zero ped-language rows, so nothing
+        // predates the server-stamped RPC.
         final missing = rowsBySection[section]!
             .where((r) => !assessmentValueIsPresent(r['status']))
             .where((r) => !_seededAfter(r, stamp))
@@ -409,13 +419,22 @@ class PedLanguageAssessmentReader {
   /// True only when this row demonstrably came into existence AFTER the
   /// section was declared done.
   ///
-  /// Deliberately conservative, because the two clocks differ: the stamp is
-  /// written by the client (DateTime.now() inside completeSection) and
-  /// created_at by the server (now() default). If either value is missing or
-  /// unparseable, or the row is not strictly newer, the answer is false — so
-  /// an ambiguous row is treated as one that should have been filled, and a
-  /// real defect is reported rather than silently excused. A server-side
-  /// completion stamp would remove the ambiguity entirely.
+  /// Deliberately conservative. Since the atomic completion RPC the stamp is
+  /// server now(), set once — the same clock as created_at's now() default —
+  /// so for every server-stamped record the comparison is exact, and it
+  /// fails toward reporting: if either value is missing or unparseable, or
+  /// the row is not strictly newer, the answer is false and the row counts.
+  ///
+  /// Stated honestly, what "strictly newer" cannot defend: a LEGACY record
+  /// stamped by a CLIENT clock. Behind the server, that stamp can precede
+  /// created_at for rows that existed at the declaration and excuse a genuine
+  /// failed fill; ahead of it, it can post-date a self-heal row seeded just
+  /// after the declaration and count it, so a Repair would write 'absent' on
+  /// a question never shown. A known residual shared with the capture
+  /// controller (SectionalCaptureController._seededAfterDeclaration, the
+  /// identical rule); vacuous today — verified, not assumed: the sandbox
+  /// holds zero ped-language rows, so nothing predates the server-stamped
+  /// RPC.
   bool _seededAfter(Map<String, dynamic> row, DateTime? stamp) {
     if (stamp == null) return false;
     final created = _time(row['created_at']);

@@ -18,7 +18,10 @@ class TestRow {
   final int order;
   String? status; // null = unmarked (not yet captured)
 
-  TestRow(this.id, this.section, this.order, [this.status]);
+  /// Server creation time; null = unknown (treated as pre-existing).
+  final DateTime? createdAt;
+
+  TestRow(this.id, this.section, this.order, [this.status, this.createdAt]);
 }
 
 typedef SeedKey = (String, int);
@@ -63,8 +66,14 @@ class FakeStore implements SectionalCompletionCapableStore<TestRow> {
     }
   }
 
+  /// The stamp the "database" records on a successful completion and hands
+  /// back — a fixed SERVER-side value, deliberately not DateTime.now(), so a
+  /// test can prove the controller adopted the store's clock rather than
+  /// its own.
+  DateTime? serverStamp = DateTime.utc(2026, 9, 6, 12);
+
   @override
-  Future<void> persistCompletion({
+  Future<DateTime?> persistCompletion({
     required String sectionId,
     required List<String> unmarkedRowIds,
   }) async {
@@ -73,7 +82,8 @@ class FakeStore implements SectionalCompletionCapableStore<TestRow> {
     if (failCompletion) throw StateError('completion write failed');
     lastCompletedSection = sectionId;
     lastUnmarkedRowIds = unmarkedRowIds;
-    completedAt[sectionId] = DateTime.now();
+    completedAt[sectionId] = serverStamp;
+    return serverStamp;
   }
 }
 
@@ -89,6 +99,7 @@ SectionalCaptureConfig<TestRow> config() => SectionalCaptureConfig<TestRow>(
       },
       completion: SectionalCompletionSpec<TestRow>(
         isUnmarked: (r) => r.status == null,
+        createdAt: (r) => r.createdAt,
         applyCompletionFill: (r) => r.status = 'absent',
         revertCompletionFill: (r) => r.status = null,
       ),
@@ -392,6 +403,201 @@ void main() {
 
     test('unknown section id is a wiring bug and throws', () {
       expect(() => c.complete('nope'), throwsArgumentError);
+    });
+  });
+
+  // ── Review defect C, controller half: created_at discrimination ────────
+  // A row seeded AFTER a section was declared done (the self-heal, once the
+  // dataset gains a milestone) is a question she was never shown — not a
+  // failed fill. Mirrors the reader's _seededAfter and FAILS TOWARD
+  // REPORTING: only a row STRICTLY newer than the stamp is excused; null,
+  // equal, older, or no accessor at all still count as a defect.
+  group('completion anomalies discriminate by created_at', () {
+    final stamp = DateTime.utc(2026, 8, 1);
+    final before = DateTime.utc(2026, 7, 1);
+    final after = DateTime.utc(2026, 9, 20);
+
+    Future<SectionalCaptureController<TestRow>> bootWith(
+      FakeStore store,
+      List<TestRow> rows, {
+      SectionalCaptureConfig<TestRow>? cfg,
+    }) async {
+      store.serverRows.addAll(rows);
+      final c = SectionalCaptureController(config: cfg ?? config(), store: store);
+      await c.bootstrap();
+      return c;
+    }
+
+    test('a row created AFTER the stamp is NOT a failed fill — no anomaly',
+        () async {
+      final c = await bootWith(FakeStore()..completedAt['speech'] = stamp, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2, null, after), // self-heal, post-declaration
+        TestRow('c', 'language', 1),
+      ]);
+      expect(c.completionAnomalies, isEmpty,
+          reason: 'flagging it steers her at a repair that writes absent '
+              'for a question never asked');
+    });
+
+    test('a row created BEFORE the stamp is still flagged — the real case',
+        () async {
+      final c = await bootWith(FakeStore()..completedAt['speech'] = stamp, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2, null, before),
+        TestRow('c', 'language', 1),
+      ]);
+      expect(c.completionAnomalies.single.sectionId, 'speech');
+      expect(c.completionAnomalies.single.unmarkedRowIds, ['b']);
+    });
+
+    test('EQUAL to the stamp is not "strictly newer" — flagged '
+        '(fails toward reporting)', () async {
+      final c = await bootWith(FakeStore()..completedAt['speech'] = stamp, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2, null, stamp),
+        TestRow('c', 'language', 1),
+      ]);
+      expect(c.completionAnomalies.single.unmarkedRowIds, ['b']);
+    });
+
+    test('a NULL created_at is treated as pre-existing — flagged '
+        '(fails toward reporting)', () async {
+      final c = await bootWith(FakeStore()..completedAt['speech'] = stamp, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2), // unknown creation time
+        TestRow('c', 'language', 1),
+      ]);
+      expect(c.completionAnomalies.single.unmarkedRowIds, ['b']);
+    });
+
+    test('a mixed section lists ONLY the rows that existed at declaration',
+        () async {
+      final c = await bootWith(FakeStore()..completedAt['speech'] = stamp, [
+        TestRow('a', 'speech', 1, null, before), // counts
+        TestRow('b', 'speech', 2, null, after), // does not
+        TestRow('c', 'language', 1),
+      ]);
+      expect(c.completionAnomalies.single.unmarkedRowIds, ['a']);
+    });
+
+    test('an adopter with NO createdAt accessor keeps the old behaviour: '
+        'every unmarked row in a stamped section counts', () async {
+      final noAccessor = SectionalCaptureConfig<TestRow>(
+        sectionIds: const ['speech', 'language'],
+        rowId: (r) => r.id,
+        sectionOf: (r) => r.section,
+        seedKey: (r) => (r.section, r.order),
+        expectedSeedKeys: const {('speech', 1), ('speech', 2), ('language', 1)},
+        completion: SectionalCompletionSpec<TestRow>(
+          isUnmarked: (r) => r.status == null,
+          applyCompletionFill: (r) => r.status = 'absent',
+          revertCompletionFill: (r) => r.status = null,
+        ),
+      );
+      final c = await bootWith(
+        FakeStore()..completedAt['speech'] = stamp,
+        [
+          TestRow('a', 'speech', 1, 'present'),
+          TestRow('b', 'speech', 2, null, after), // newer, but no way to know
+          TestRow('c', 'language', 1),
+        ],
+        cfg: noAccessor,
+      );
+      expect(c.completionAnomalies.single.unmarkedRowIds, ['b']);
+    });
+
+    test('after complete(), the held stamp is the SERVER value the store '
+        'returned — not a client clock', () async {
+      final store = FakeStore()..serverStamp = DateTime.utc(2026, 9, 6, 15, 30);
+      final c = await bootWith(store, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2),
+        TestRow('c', 'language', 1),
+      ]);
+      final r = await c.complete('speech');
+      expect(r.outcome, SectionalCompletionOutcome.completed);
+      expect(c.completedAtFor('speech'), DateTime.utc(2026, 9, 6, 15, 30),
+          reason: 'the optimistic DateTime.now() placeholder must be replaced '
+              'by the stamp the database actually recorded');
+    });
+
+    test('a store that returns no stamp keeps the placeholder (still done)',
+        () async {
+      final store = FakeStore()..serverStamp = null;
+      final c = await bootWith(store, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2),
+        TestRow('c', 'language', 1),
+      ]);
+      final r = await c.complete('speech');
+      expect(r.outcome, SectionalCompletionOutcome.completed);
+      expect(c.isCompleted('speech'), isTrue);
+      expect(c.completedAtFor('speech'), isNotNull);
+    });
+
+    test('a FAILED completion leaves no stamp at all — the placeholder is '
+        'reverted', () async {
+      final store = FakeStore()..failCompletion = true;
+      final c = await bootWith(store, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2),
+        TestRow('c', 'language', 1),
+      ]);
+      final r = await c.complete('speech');
+      expect(r.outcome, SectionalCompletionOutcome.rolledBack);
+      expect(c.completedAtFor('speech'), isNull);
+    });
+
+    // The repair path must apply the SAME exclusion as the anomaly check —
+    // otherwise the banner counts one row and Repair writes 'absent' onto two,
+    // fabricating a judgement about a milestone she was never shown.
+    test('repairCompletion repairs ONLY the rows that existed at declaration '
+        '— a post-declaration row is left unmarked for her to answer',
+        () async {
+      final store = FakeStore()
+        ..completedAt['speech'] = stamp
+        ..serverStamp = stamp; // set-once: the DB keeps the ORIGINAL stamp
+      final c = await bootWith(store, [
+        TestRow('a', 'speech', 1, null, before), // the real failed fill
+        TestRow('b', 'speech', 2, null, after), // self-heal, never shown
+        TestRow('c', 'language', 1),
+      ]);
+      expect(c.completionAnomalies.single.unmarkedRowIds, ['a']);
+
+      final r = await c.repairCompletion('speech');
+
+      expect(r.outcome, SectionalCompletionOutcome.completed);
+      expect(store.lastUnmarkedRowIds, ['a'],
+          reason: 'the RPC must be handed exactly the rows the banner named');
+      expect(store.serverRows.firstWhere((x) => x.id == 'a').status, 'absent');
+      expect(store.serverRows.firstWhere((x) => x.id == 'b').status, isNull,
+          reason: 'absent here would be a clinical claim about a question '
+              'never asked');
+      expect(c.completedAtFor('speech'), stamp,
+          reason: 'a repair does not re-declare — the stamp is set once');
+      expect(c.completionAnomalies, isEmpty,
+          reason: 'b stays excused because the stamp did not move past it');
+    });
+
+    test('repair when the only unmarked rows are post-declaration is a no-op '
+        '— no write at all', () async {
+      final store = FakeStore()
+        ..completedAt['speech'] = stamp
+        ..serverStamp = stamp;
+      final c = await bootWith(store, [
+        TestRow('a', 'speech', 1, 'present'),
+        TestRow('b', 'speech', 2, null, after),
+        TestRow('c', 'language', 1),
+      ]);
+      expect(c.completionAnomalies, isEmpty);
+
+      final r = await c.repairCompletion('speech');
+
+      expect(r.outcome, SectionalCompletionOutcome.alreadyCompleted);
+      expect(store.calls.where((x) => x.startsWith('complete(')), isEmpty,
+          reason: 'nothing to repair — b must not be filled');
+      expect(store.serverRows.firstWhere((x) => x.id == 'b').status, isNull);
     });
   });
 

@@ -86,6 +86,13 @@ class PedLanguageMark {
   String? status;   // present | emerging | absent | null (not yet captured)
   String? evidence; // observed | parent_reported | null
 
+  /// The row's SERVER creation time (ped_language_milestones.created_at, a
+  /// DB now() default). Lets the controller tell a row seeded AFTER a
+  /// section was declared done (self-heal) from a failed completion fill.
+  /// Null only when the source row carried none — read as unknown, which
+  /// the controller treats as pre-existing (fails toward reporting).
+  final DateTime? createdAt;
+
   PedLanguageMark({
     required this.id,
     required this.section,
@@ -94,6 +101,7 @@ class PedLanguageMark {
     required this.example,
     required this.status,
     required this.evidence,
+    this.createdAt,
   });
 }
 
@@ -116,6 +124,9 @@ SectionalCaptureConfig<PedLanguageMark> pedLanguageSectionalConfig(
     },
     completion: SectionalCompletionSpec<PedLanguageMark>(
       isUnmarked: (m) => m.status == null,
+      // Server created_at, so a self-heal row seeded after the section was
+      // declared done is not flagged as a failed fill (review defect C).
+      createdAt: (m) => m.createdAt,
       applyCompletionFill: (m) {
         m.status = 'absent';
         m.evidence = null;
@@ -126,6 +137,19 @@ SectionalCaptureConfig<PedLanguageMark> pedLanguageSectionalConfig(
       },
     ),
   );
+}
+
+/// A timestamptz value as the server sent it (PostgREST ISO-8601 with offset),
+/// or null when absent or unparseable. Never throws. Used for the RPC's
+/// returned stamp and for each row's created_at, so both sides of the
+/// post-declaration comparison parse the server clock the same way. The
+/// PARENT's own completion stamps in load() deliberately keep the throwing
+/// DateTime.parse: a malformed declaration must fail bootstrap loudly rather
+/// than quietly read as "not declared".
+DateTime? _time(Object? v) {
+  if (v is DateTime) return v;
+  final s = v?.toString().trim() ?? '';
+  return s.isEmpty ? null : DateTime.tryParse(s);
 }
 
 class PedLanguageAssessmentService {
@@ -386,16 +410,24 @@ class PedLanguageAssessmentService {
   /// explicit id list, never a server-side status-IS-NULL filter). The reader's
   /// absence_without_declaration anomaly stays as belt-and-braces for any
   /// record written before this fix.
-  Future<void> completeSection({
+  ///
+  /// Returns the section's stamp AS THE SERVER RECORDED IT, from the same
+  /// transaction: now() on a fresh declaration, the ORIGINAL stamp on a repair
+  /// (set once — a repair never re-declares). One round trip, so there is no
+  /// second read whose failure could masquerade as a failed write. Against a
+  /// not-yet-upgraded (void) function the result is null, which the
+  /// controller reads as "stamp not supplied" and keeps its placeholder.
+  Future<DateTime?> completeSection({
     required String assessmentId,
     required String section,
     required List<String> unmarkedRowIds,
   }) async {
-    await _sb.rpc('complete_ped_language_section', params: {
+    final result = await _sb.rpc('complete_ped_language_section', params: {
       'p_assessment_id':    assessmentId,
       'p_section':          section,
       'p_unmarked_row_ids': unmarkedRowIds,
     });
+    return _time(result);
   }
 }
 
@@ -430,6 +462,7 @@ class PedLanguageSectionalStore
           example:  r['example_text'] as String?,
           status:   r['status'] as String?,
           evidence: r['evidence_source'] as String?,
+          createdAt: _time(r['created_at']),
         ),
     ];
     // Dataset order — the section column is text, so a server-side
@@ -459,10 +492,15 @@ class PedLanguageSectionalStore
   }
 
   @override
-  Future<void> persistCompletion({
+  Future<DateTime?> persistCompletion({
     required String sectionId,
     required List<String> unmarkedRowIds,
   }) {
+    // ONE request. The RPC returns the stamp the server recorded in the same
+    // transaction, so the controller compares server clock to server clock
+    // (created_at) with no second read whose failure could be mistaken for a
+    // failed write. If the RPC itself throws, nothing was written, and the
+    // controller's rollback is exactly right.
     return _service.completeSection(
       assessmentId: assessmentId,
       section: sectionId,

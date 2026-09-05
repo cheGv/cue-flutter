@@ -93,10 +93,24 @@ class SectionalCompletionSpec<R> {
   /// … and reverted on a failed completion (ped_language: status = null).
   final void Function(R) revertCompletionFill;
 
+  /// The row's SERVER creation time (the store's created_at, a DB now()
+  /// default), or null when unknown. Used to tell a row seeded AFTER a
+  /// section was declared done — the self-heal, once the dataset gains a
+  /// milestone; a question she was never shown — from a genuine failed
+  /// fill. Null accessor = the adopter does not discriminate: every unmarked
+  /// row in a stamped section counts, exactly as before this existed.
+  ///
+  /// Both clocks are the server's: created_at is a DB default and, since the
+  /// atomic completion RPC, so is the completion stamp. The controller keeps
+  /// that stamp server-side too (see complete()), so the comparison is like
+  /// with like.
+  final DateTime? Function(R)? createdAt;
+
   const SectionalCompletionSpec({
     required this.isUnmarked,
     required this.applyCompletionFill,
     required this.revertCompletionFill,
+    this.createdAt,
   });
 }
 
@@ -167,7 +181,13 @@ abstract interface class SectionalCompletionCapableStore<R>
   /// The completion write. unmarkedRowIds is the EXPLICIT id list
   /// computed from screen state — a store must never substitute a
   /// server-side status-IS-NULL filter for it.
-  Future<void> persistCompletion({
+  ///
+  /// Returns the section's completion stamp AS THE DATABASE RECORDED IT
+  /// (server clock), or null if the store cannot supply one. The controller
+  /// replaces its optimistic client placeholder with this value, so the
+  /// created_at discrimination in the anomaly check compares server time to
+  /// server time — never a client clock against a DB default.
+  Future<DateTime?> persistCompletion({
     required String sectionId,
     required List<String> unmarkedRowIds,
   });
@@ -271,6 +291,11 @@ class SectionalCaptureController<R> extends ChangeNotifier {
 
   bool isCompleted(String sectionId) => _completedAt[sectionId] != null;
 
+  /// The completion stamp as currently held: the SERVER value from load()
+  /// or from a persisted completion (see complete()); null when the
+  /// section is not declared done.
+  DateTime? completedAtFor(String sectionId) => _completedAt[sectionId];
+
   bool get allCompleted =>
       config.sectionIds.isNotEmpty && config.sectionIds.every(isCompleted);
 
@@ -340,6 +365,14 @@ class SectionalCaptureController<R> extends ChangeNotifier {
   /// the completion fill did not finish — surfaced, never interpreted.
   /// No completion spec (feeding) means no completion contract, so there
   /// is nothing this can violate: the list stays empty.
+  ///
+  /// One exclusion (review defect C, controller half): an unmarked row that
+  /// demonstrably came into existence AFTER the stamp is not an unfinished
+  /// fill — it is a row the self-heal seeded once the dataset grew, a
+  /// question she has never been shown. Flagging it would raise a false
+  /// banner whose only repair writes 'absent' for something never asked,
+  /// and false alarms teach her to ignore the real one. The reader makes
+  /// the same exclusion; this is the half that drives the repair UI.
   void _recomputeAnomalies() {
     final spec = config.completion;
     if (spec == null) {
@@ -348,9 +381,11 @@ class SectionalCaptureController<R> extends ChangeNotifier {
     }
     final found = <SectionalCompletionAnomaly>[];
     for (final section in config.sectionIds) {
-      if (!isCompleted(section)) continue;
+      final stamp = _completedAt[section];
+      if (stamp == null) continue;
       final unmarked = rowsIn(section)
           .where(spec.isUnmarked)
+          .where((r) => !_seededAfterDeclaration(spec, r, stamp))
           .map(config.rowId)
           .toList();
       if (unmarked.isNotEmpty) {
@@ -359,6 +394,38 @@ class SectionalCaptureController<R> extends ChangeNotifier {
       }
     }
     _anomalies = List.unmodifiable(found);
+  }
+
+  /// True only when [row] demonstrably came into existence AFTER [stamp].
+  ///
+  /// FAILS TOWARD REPORTING, exactly as the reader's `_seededAfter`: the row
+  /// is excused only when the adopter supplies a created_at accessor, the
+  /// value is present, AND it is STRICTLY newer than the stamp. A missing
+  /// accessor, a null created_at, an equal timestamp, or an older one all
+  /// return false — the row is treated as one that should have been filled
+  /// and a real defect is reported rather than silently excused.
+  ///
+  /// Both values are server clock: created_at is a DB now() default, and the
+  /// stamp is either loaded from the DB or replaced with the server value the
+  /// store returned from persistCompletion. (A store that cannot supply one —
+  /// a not-yet-upgraded void RPC — leaves the client placeholder for the
+  /// session; the next bootstrap replaces it from the DB, and in-session no
+  /// unmarked row survives a fill to be compared against it.) That is what
+  /// makes "strictly newer" exact. What it cannot defend is a LEGACY record
+  /// stamped by a CLIENT clock: behind the server, such a stamp can precede
+  /// created_at for rows that existed at the declaration and excuse a genuine
+  /// failed fill; ahead of it, it can post-date a self-heal row seeded just
+  /// after the declaration and count it, so a Repair would write 'absent' on
+  /// a question never shown. A known residual shared with the reader; vacuous
+  /// today — verified, not assumed: the sandbox holds zero ped-language rows,
+  /// so nothing predates the server-stamped RPC.
+  bool _seededAfterDeclaration(
+      SectionalCompletionSpec<R> spec, R row, DateTime stamp) {
+    final readCreated = spec.createdAt;
+    if (readCreated == null) return false;
+    final created = readCreated(row);
+    if (created == null) return false;
+    return created.isAfter(stamp);
   }
 
   // ── The in-flight save queue + dirty set ──────────────────────────
@@ -477,7 +544,24 @@ class SectionalCaptureController<R> extends ChangeNotifier {
             SectionalCompletionOutcome.refusedDirty,
             dirtyRowIds: dirtyHere);
       }
-      final flipped = rowsIn(sectionId).where(spec.isUnmarked).toList();
+      final stamp = _completedAt[sectionId];
+      if (stamp == null) {
+        // The stamp was lost during the drain (a concurrent rollback); there
+        // is no declaration left to repair against — that is complete()'s job.
+        return const SectionalCompletionResult._(
+            SectionalCompletionOutcome.alreadyCompleted);
+      }
+      // Repair EXACTLY what the banner named: the rows that existed at the
+      // declaration and never got filled. A row seeded AFTER it (the
+      // self-heal, once the dataset grew) is excluded from the anomaly for a
+      // reason — it is a question she has never been shown — and filling it
+      // here would write 'absent' for something never asked, under a banner
+      // that did not even count it. Same rule as _recomputeAnomalies, same
+      // stamp; the two lists must never diverge.
+      final flipped = rowsIn(sectionId)
+          .where(spec.isUnmarked)
+          .where((r) => !_seededAfterDeclaration(spec, r, stamp))
+          .toList();
       if (flipped.isEmpty) {
         // Nothing to repair — recompute so a stale banner clears.
         _recomputeAnomalies();
@@ -490,10 +574,13 @@ class SectionalCaptureController<R> extends ChangeNotifier {
       _recomputeAnomalies();
       _notify();
       try {
-        await completionStore.persistCompletion(
+        final serverStamp = await completionStore.persistCompletion(
           sectionId: sectionId,
           unmarkedRowIds: [for (final r in flipped) config.rowId(r)],
         );
+        // Same clock rule as complete(): hold the server stamp the repair
+        // write actually recorded, not whatever was cached.
+        _completedAt[sectionId] = serverStamp ?? _completedAt[sectionId];
         _recomputeAnomalies();
         return const SectionalCompletionResult._(
             SectionalCompletionOutcome.completed);
@@ -573,10 +660,17 @@ class SectionalCaptureController<R> extends ChangeNotifier {
       }
       _notify();
       try {
-        await completionStore.persistCompletion(
+        final serverStamp = await completionStore.persistCompletion(
           sectionId: sectionId,
           unmarkedRowIds: [for (final r in flipped) config.rowId(r)],
         );
+        // The DB is the clock. The DateTime.now() above was a client
+        // PLACEHOLDER so the section reads done while the write is in
+        // flight; the store hands back the SERVER stamp the write actually
+        // recorded (now() inside the atomic RPC) — the same clock as every
+        // row's created_at — so the discrimination below compares like with
+        // like. A store that cannot supply one keeps the placeholder.
+        _completedAt[sectionId] = serverStamp ?? _completedAt[sectionId];
         // The fill just landed; re-derive so a section that completed
         // cleanly cannot leave a stale anomaly behind (and so one that
         // somehow did not is visible immediately, not next bootstrap).
