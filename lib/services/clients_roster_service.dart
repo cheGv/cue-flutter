@@ -172,7 +172,9 @@ class ClientsRosterService {
         .isFilter('deleted_at', null)
         // Phase 4.0.7.29 Stage 2A: exclude draft sessions of trial cases from
         // the Inbox worklist AND the Clients action-line draft count.
-        .eq('clients.is_trial_case', false);
+        .eq('clients.is_trial_case', false)
+        // Delete affordances Step 3: and of soft-deleted clients.
+        .isFilter('clients.deleted_at', null);
 
     final out = <DraftSessionEntry>[];
     for (final r in rows as List) {

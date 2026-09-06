@@ -28,6 +28,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/asha_milestone_library.dart';
 import '../widgets/assessment/sectional_capture.dart';
+import 'clients_query.dart';
 
 /// Why resolveParent could not produce a capture-ready assessment.
 enum PedLanguageBootstrapState {
@@ -223,6 +224,9 @@ class PedLanguageAssessmentService {
   /// row loading and per-key seed self-heal are the
   /// SectionalCaptureController's bootstrap, the one and only path.
   Future<PedLanguageBootstrap> resolveParent({required String clientId}) async {
+    // Delete affordances Step 3: a soft-deleted client is refused by id,
+    // before the existing-assessment branch (which never read clients).
+    await ClientsQuery(client: _sb).requireLiveClient(clientId);
     final library = await AshaMilestoneLibrary.load();
 
     // An existing assessment wins outright — its band_key is locked and

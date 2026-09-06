@@ -21,6 +21,11 @@ class ArchiveDialogResult {
   final String? reason;
   const ArchiveDialogResult._(this.confirmed, this.reason);
   static const cancelled = ArchiveDialogResult._(false, null);
+
+  /// A confirmed result with [reason] — what the dialog returns on the
+  /// coral button. Public so orchestrators can be tested with closures.
+  const ArchiveDialogResult.confirmedWith(String? reason)
+      : this._(true, reason);
 }
 
 Future<ArchiveDialogResult> showArchiveDialog({
@@ -29,6 +34,9 @@ Future<ArchiveDialogResult> showArchiveDialog({
   required String body,
   required List<String> reasons,
   bool reasonRequired = false,
+  /// The confirm button's word. 'Archive' for goals/sessions; the client
+  /// soft delete passes 'Delete' — same shape, its own vocabulary.
+  String confirmLabel = 'Archive',
 }) async {
   String? selectedReason;
   final freeTextCtrl = TextEditingController();
@@ -110,7 +118,7 @@ Future<ArchiveDialogResult> showArchiveDialog({
                             ctx, ArchiveDialogResult._(true, reason));
                       }
                     : null,
-                child: const Text('Archive'),
+                child: Text(confirmLabel),
               ),
             ],
           );

@@ -23,6 +23,7 @@
 // authenticated user when one is present.
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'clients_query.dart';
 
 class CasAssessmentService {
   CasAssessmentService._();
@@ -54,6 +55,8 @@ class CasAssessmentService {
   /// Returns the most recent cas_assessments row for a client, or
   /// creates a fresh one if none exists.
   Future<Map<String, dynamic>> loadOrCreate({required String clientId}) async {
+    // Delete affordances Step 3: a soft-deleted client is refused by id.
+    await ClientsQuery(client: _sb).requireLiveClient(clientId);
     final existing = await _sb
         .from('cas_assessments')
         .select()

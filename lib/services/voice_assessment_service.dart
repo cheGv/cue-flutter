@@ -8,6 +8,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/voice_assessment.dart';
+import 'clients_query.dart';
 
 class VoiceAssessmentService {
   VoiceAssessmentService._();
@@ -22,6 +23,8 @@ class VoiceAssessmentService {
     required String clientId,
     String? visitId,
   }) async {
+    // Delete affordances Step 3: a soft-deleted client is refused by id.
+    await ClientsQuery(client: _sb).requireLiveClient(clientId);
     final existing = await _sb
         .from('voice_assessments')
         .select()

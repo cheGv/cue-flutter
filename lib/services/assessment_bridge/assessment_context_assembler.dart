@@ -18,6 +18,7 @@
 
 import '../../models/assessment_envelope.dart';
 import '../../repositories/client_chart_state_repository.dart';
+import '../clients_query.dart';
 import 'cas_assessment_reader.dart';
 import 'ped_language_assessment_reader.dart';
 import 'voice_assessment_reader.dart';
@@ -115,6 +116,9 @@ class AssessmentContextAssembler {
     required String protocol,
     required String assessmentId,
   }) async {
+    // Delete affordances Step 3: a soft-deleted client's assessment must not
+    // be drafted from, even when the caller already holds both ids.
+    await ClientsQuery().requireLiveClient(clientId);
     final envelope = await _readEnvelope(protocol, assessmentId);
     final repo = _chartStateRepo ?? ClientChartStateRepository();
     final chartState = await repo.loadForClient(clientId);

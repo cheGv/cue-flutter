@@ -217,7 +217,10 @@ class _TodayScreenState extends State<TodayScreen> {
             .select('*, clients!inner(*)')
             .eq('clinician_id', uid)
             .eq('session_date', today)
-            .eq('clients.is_trial_case', false),
+            .eq('clients.is_trial_case', false)
+            // Delete affordances Step 3: a soft-deleted client never renders
+            // a Today card or fires a brief, even if still on the roster.
+            .isFilter('clients.deleted_at', null),
         // Yesterday undocumented
         _supabase
             .from('daily_roster')
@@ -225,7 +228,8 @@ class _TodayScreenState extends State<TodayScreen> {
             .eq('clinician_id', uid)
             .eq('session_date', yesterday)
             .eq('session_documented', false)
-            .eq('clients.is_trial_case', false),
+            .eq('clients.is_trial_case', false)
+            .isFilter('clients.deleted_at', null),
         // Full active caseload for bottom-sheet picker
         // Phase 4.0.7.29 Stage 2A: picker source gated — a trial case can never
         // be selected into daily_roster (the cascade into briefs / Today / AI).

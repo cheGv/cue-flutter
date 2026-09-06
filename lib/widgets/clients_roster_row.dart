@@ -19,12 +19,17 @@ class ClientsRosterRow extends StatelessWidget {
   final bool isLast;
   final VoidCallback onTap;
 
+  /// Delete affordances Step 3 — when set, the row grows a kebab whose one
+  /// item is the RECOVERABLE delete ("Delete", never "Archive").
+  final VoidCallback? onDelete;
+
   const ClientsRosterRow({
     super.key,
     required this.entry,
     required this.isMobile,
     required this.isLast,
     required this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -52,6 +57,33 @@ class ClientsRosterRow extends StatelessWidget {
               Expanded(child: _left(text, palette)),
               const SizedBox(width: 16),
               SizedBox(width: 100, child: _right(text, palette)),
+              if (onDelete != null) ...[
+                const SizedBox(width: 4),
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: PopupMenuButton<String>(
+                    tooltip: 'More',
+                    iconSize: 18,
+                    padding: EdgeInsets.zero,
+                    icon: Icon(Icons.more_horiz,
+                        size: 18, color: text.meta.color),
+                    onSelected: (value) {
+                      if (value == 'delete') onDelete!();
+                    },
+                    itemBuilder: (ctx) => [
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Text(
+                          'Delete',
+                          style: TextStyle(
+                              color: Theme.of(ctx).colorScheme.error),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),

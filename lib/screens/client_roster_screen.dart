@@ -20,6 +20,7 @@ import 'package:flutter/material.dart';
 import '../animation/cue_motion.dart';
 import '../config/app_config.dart' show kShowDevAffordances;
 import '../constants/app_routes.dart';
+import '../services/client_delete_service.dart';
 import '../services/clients_roster_service.dart';
 import '../theme/cue_text_styles.dart';
 import '../widgets/app_layout.dart';
@@ -141,6 +142,32 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
       ),
     );
     if (mounted) _load();
+  }
+
+  // Delete affordances Step 3 — the RECOVERABLE delete, from the row's
+  // kebab: deleted_at + deleted_by + delete_reason, then an Undo.
+  Future<void> _deleteClient(ClientRosterEntry e) async {
+    final outcome =
+        await deleteClientWithDialog(context: context, client: e.rawRow);
+    if (!mounted) return;
+    switch (outcome.kind) {
+      case ClientSoftDeleteOutcomeKind.cancelled:
+        return;
+      case ClientSoftDeleteOutcomeKind.deleted:
+        _load();
+        showClientDeletedUndo(
+          context,
+          message: 'Client deleted. It can be restored.',
+          onUndo: () => ClientDeleteService().restore(e.id),
+          onSettled: () {
+            if (mounted) _load();
+          },
+        );
+      case ClientSoftDeleteOutcomeKind.refusedTrial:
+      case ClientSoftDeleteOutcomeKind.failed:
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(outcome.message!)));
+    }
   }
 
   Future<void> _openAddClient() async {
@@ -330,6 +357,7 @@ class _ClientRosterScreenState extends State<ClientRosterScreen> {
             isMobile: isMobile,
             isLast: i == rows.length - 1,
             onTap: () => _openClient(rows[i]),
+            onDelete: () => _deleteClient(rows[i]),
           ),
         ),
     ];

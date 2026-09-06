@@ -122,7 +122,7 @@ class TodayWidgetsService {
     try {
       final rows = await _sb
           .from('sessions')
-          .select('date, soap_note, notes, clients(is_trial_case)')
+          .select('date, soap_note, notes, clients(is_trial_case, deleted_at)')
           .eq('user_id', uid)
           .gte('date', mondayIso)
           .lte('date', fridayIso)
@@ -137,8 +137,12 @@ class TodayWidgetsService {
         final r = Map<String, dynamic>.from(raw as Map);
         // Phase 4.0.7.29 Stage 2A: skip sessions belonging to a trial case so
         // a trial run never inflates the real week-pulse productivity counts.
+        // Delete affordances Step 3: a soft-deleted client's sessions too.
         final c = r['clients'] as Map?;
-        if (c != null && c['is_trial_case'] == true) continue;
+        if (c != null &&
+            (c['is_trial_case'] == true || c['deleted_at'] != null)) {
+          continue;
+        }
         final dateStr = r['date'] as String?;
         if (dateStr == null) continue;
         final dt = DateTime.tryParse(dateStr);
@@ -185,7 +189,7 @@ class TodayWidgetsService {
       final rows = await _sb
           .from('sessions')
           .select('id, date, created_at, soap_note, notes, client_id, '
-                  'clients(name, is_trial_case)')
+                  'clients(name, is_trial_case, deleted_at)')
           .eq('user_id', uid)
           .gte('date', sevenDaysAgoIso)
           .isFilter('deleted_at', null)
@@ -202,7 +206,11 @@ class TodayWidgetsService {
 
         final client = r['clients'] as Map?;
         // Phase 4.0.7.29 Stage 2A: skip pending notes belonging to a trial case.
-        if (client != null && client['is_trial_case'] == true) continue;
+        // Delete affordances Step 3: and to a soft-deleted client.
+        if (client != null &&
+            (client['is_trial_case'] == true || client['deleted_at'] != null)) {
+          continue;
+        }
         final clientName = client?['name']?.toString() ?? 'Unknown';
 
         final dateStr = r['date'] as String?;
@@ -243,6 +251,7 @@ class TodayWidgetsService {
           .eq('user_id', uid)
           .eq('status', 'active')
           .eq('clients.is_trial_case', false) // Stage 2A: no trial cases
+          .isFilter('clients.deleted_at', null) // Step 3: no deleted clients
           .order('updated_at', ascending: false)
           .limit(limit);
 
@@ -276,6 +285,7 @@ class TodayWidgetsService {
           .eq('clinician_id', uid)
           .eq('session_date', tomorrowIso)
           .eq('clients.is_trial_case', false) // Stage 2A: no trial cases
+          .isFilter('clients.deleted_at', null) // Step 3: no deleted clients
           .order('id', ascending: true);
 
       final list = (rows as List)
@@ -316,6 +326,7 @@ class TodayWidgetsService {
           .eq('user_id', uid)
           .eq('status', 'active')
           .eq('clients.is_trial_case', false) // Stage 2A: no trial cases
+          .isFilter('clients.deleted_at', null) // Step 3: no deleted clients
           .order('updated_at', ascending: true)
           .limit(1);
 

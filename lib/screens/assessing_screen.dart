@@ -16,6 +16,7 @@ import '../constants/clinical_areas.dart';
 import '../services/clients_roster_service.dart' show cueRelativeDayLabel;
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
+import '../services/client_delete_service.dart';
 import '../services/clients_query.dart';
 import '../services/trial_run_delete_service.dart';
 import '../widgets/clients_roster_filter_chips.dart';
@@ -277,6 +278,35 @@ class _AssessingScreenState extends State<AssessingScreen> {
     if (mounted) await _loadTrials();
   }
 
+  // Delete affordances Step 3 — the RECOVERABLE delete for a real case:
+  // deleted_at + deleted_by + delete_reason, then an Undo. Never for a
+  // trial run (that is the permanent path below); the service refuses
+  // one at two layers regardless of what surfaced this.
+  Future<void> _deleteCase(Map<String, dynamic> client) async {
+    final outcome =
+        await deleteClientWithDialog(context: context, client: client);
+    if (!mounted) return;
+    switch (outcome.kind) {
+      case ClientSoftDeleteOutcomeKind.cancelled:
+        return;
+      case ClientSoftDeleteOutcomeKind.deleted:
+        final id = client['id'].toString();
+        setState(() => _cases.removeWhere((r) => r['id'] == client['id']));
+        showClientDeletedUndo(
+          context,
+          message: 'Assessment case deleted. It can be restored.',
+          onUndo: () => ClientDeleteService().restore(id),
+          onSettled: () {
+            if (mounted) _load();
+          },
+        );
+      case ClientSoftDeleteOutcomeKind.refusedTrial:
+      case ClientSoftDeleteOutcomeKind.failed:
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(outcome.message!)));
+    }
+  }
+
   // Delete affordances Step 2 — the one irreversible action in the app.
   // Gated on is_trial_case the way _convertToTherapy gates (refuses in the
   // handler regardless of what surfaced it); the card only grows the kebab
@@ -359,12 +389,12 @@ class _AssessingScreenState extends State<AssessingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (var i = 0; i < visible.length; i++) ...[
-                      // No onDeleteTrial here: real cases never get the
-                      // permanent-delete kebab (Step 3 gives them the
-                      // recoverable path).
+                      // onDelete (recoverable) here, never onDeleteTrial:
+                      // a real case has no permanent-delete path.
                       AssessmentCaseCard(
                         client: visible[i],
                         onTap: () => _openCase(visible[i]),
+                        onDelete: () => _deleteCase(visible[i]),
                       ),
                       if (i != visible.length - 1)
                         const SizedBox(height: 10),
@@ -562,11 +592,16 @@ class AssessmentCaseCard extends StatelessWidget {
   /// — the same predicate the handler and the service refuse on.
   final VoidCallback? onDeleteTrial;
 
+  /// Real cases only: the RECOVERABLE delete (Step 3). A trial run ignores
+  /// it even if passed — it only ever gets [onDeleteTrial].
+  final VoidCallback? onDelete;
+
   const AssessmentCaseCard({
     super.key,
     required this.client,
     required this.onTap,
     this.onDeleteTrial,
+    this.onDelete,
   });
 
   @override
@@ -586,6 +621,13 @@ class AssessmentCaseCard extends StatelessWidget {
     final touchedRaw = client['updated_at'];
     final touched = touchedRaw is String ? DateTime.tryParse(touchedRaw) : null;
     final cue = CueColorsResolved.of(context);
+
+    // Two callbacks, one kebab, never the same item for both kinds of row:
+    // a trial run only ever gets the permanent delete, a real case only
+    // ever gets the recoverable one. The other callback is ignored.
+    final trial = isTrialRun(client);
+    final VoidCallback? menuAction = trial ? onDeleteTrial : onDelete;
+    final menuLabel = trial ? 'Delete permanently' : 'Delete';
 
     // clinical area · age · touched — the meta line under the concern.
     final meta = <String>[
@@ -643,7 +685,7 @@ class AssessmentCaseCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              if (onDeleteTrial != null && isTrialRun(client))
+              if (menuAction != null)
                 SizedBox(
                   width: 28,
                   height: 28,
@@ -654,13 +696,13 @@ class AssessmentCaseCard extends StatelessWidget {
                     icon: Icon(Icons.more_horiz,
                         size: 18, color: cue.textSecondary),
                     onSelected: (value) {
-                      if (value == 'delete') onDeleteTrial!();
+                      if (value == 'delete') menuAction();
                     },
                     itemBuilder: (_) => [
                       PopupMenuItem<String>(
                         value: 'delete',
                         child: Text(
-                          'Delete permanently',
+                          menuLabel,
                           style: TextStyle(color: cue.coral),
                         ),
                       ),

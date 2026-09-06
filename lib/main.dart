@@ -398,6 +398,13 @@ class _ReportDeepLinkLoaderState extends State<_ReportDeepLinkLoader> {
             .read('name')
             .eq('id', clientId)
             .maybeSingle();
+        // Delete affordances Step 3: the gate returning nothing means the
+        // client is soft-deleted (or a trial run) — its sessions are not
+        // reachable by deep link either. Deleted means deleted.
+        if (client == null) {
+          if (mounted) setState(() => _error = 'Client not found.');
+          return;
+        }
       }
       if (!mounted) return;
       setState(() {

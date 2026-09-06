@@ -13,6 +13,7 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/ped_dysarthria_assessment.dart';
+import 'clients_query.dart';
 
 class PedDysarthriaAssessmentService {
   PedDysarthriaAssessmentService._();
@@ -26,6 +27,8 @@ class PedDysarthriaAssessmentService {
     required String clientId,
     String? visitId,
   }) async {
+    // Delete affordances Step 3: a soft-deleted client is refused by id.
+    await ClientsQuery(client: _sb).requireLiveClient(clientId);
     final existing = await _sb
         .from('ped_dysarthria_assessments')
         .select()

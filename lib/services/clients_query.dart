@@ -26,11 +26,67 @@
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Whether a client may be opened. Only [live] lets a loader proceed.
+enum ClientLiveness { live, deleted, missing }
+
+/// The client exists but was soft-deleted (clients.deleted_at set).
+/// Deleted means deleted, not hidden from lists: every capture loader
+/// refuses with this, even when the caller holds the client's id.
+class ClientDeletedException implements Exception {
+  final String clientId;
+  const ClientDeletedException(this.clientId);
+  @override
+  String toString() =>
+      'This client was deleted. Restore it to open its records.';
+}
+
+/// No such client for this clinician (never existed, or not hers — RLS
+/// makes those indistinguishable, deliberately).
+class ClientNotFoundException implements Exception {
+  final String clientId;
+  const ClientNotFoundException(this.clientId);
+  @override
+  String toString() => 'This client could not be found.';
+}
+
 class ClientsQuery {
   ClientsQuery({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+
+  /// Pure: the decision [requireLiveClient] makes on the row it read.
+  static ClientLiveness livenessOf(Map<String, dynamic>? row) {
+    if (row == null) return ClientLiveness.missing;
+    return row['deleted_at'] == null
+        ? ClientLiveness.live
+        : ClientLiveness.deleted;
+  }
+
+  /// Delete affordances Step 3 — the by-id gate that closes the hole the
+  /// audit found: [read] filters LISTS, but the capture loaders key on
+  /// client_id and never consulted deleted_at, so a soft-deleted client's
+  /// assessments stayed reachable by id or deep link. Every capture parent
+  /// loader (loadOrCreate / resolveParent) and the draft assembler call
+  /// this FIRST and let it throw.
+  ///
+  /// Trial runs pass (the trial surface uses the same loaders); a row of
+  /// another clinician reads as missing under RLS.
+  Future<void> requireLiveClient(String clientId) async {
+    final row = await _client
+        .from('clients')
+        .select('id, deleted_at')
+        .eq('id', clientId)
+        .maybeSingle();
+    switch (livenessOf(row)) {
+      case ClientLiveness.live:
+        return;
+      case ClientLiveness.deleted:
+        throw ClientDeletedException(clientId);
+      case ClientLiveness.missing:
+        throw ClientNotFoundException(clientId);
+    }
+  }
 
   /// Base read of `clients`, scoped to NON-deleted, NON-trial rows by default.
   ///
