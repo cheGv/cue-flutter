@@ -350,7 +350,7 @@ begin
   perform set_config('role','none',true), set_config('request.jwt.claims','',true);
   delete from public.cas_session_progress where id=c_prog;
   delete from public.cas_progress_brief where stg_id in (c_stg, c_stg2);
-  delete from public.ped_language_assessments where id=c_pl;
+  -- ped_language_assessments now cascades from clients (migration 20260906120000_ped_language_client_fk_cascade), so the client delete below removes it and its milestones; the zero-residue check proves the cascade.
   delete from public.feeding_assessments where id=c_fd;
   delete from public.ssd_assessments where id=c_ssd;
   delete from public.cas_assessments where id=c_cas;
