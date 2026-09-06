@@ -17,8 +17,10 @@ import '../services/clients_roster_service.dart' show cueRelativeDayLabel;
 import '../theme/cue_color_scheme.dart';
 import '../widgets/app_layout.dart';
 import '../services/clients_query.dart';
+import '../services/trial_run_delete_service.dart';
 import '../widgets/clients_roster_filter_chips.dart';
 import '../widgets/clients_roster_search_bar.dart';
+import '../widgets/trial_run_delete_dialog.dart';
 // 4.0.7.27c-split — assessment intake split out of AddClientScreen
 // (which is now therapy-only). NewAssessmentCaseScreen is the slim
 // 10-field intake; control reaches it via the '/new-assessment' named
@@ -275,6 +277,36 @@ class _AssessingScreenState extends State<AssessingScreen> {
     if (mounted) await _loadTrials();
   }
 
+  // Delete affordances Step 2 — the one irreversible action in the app.
+  // Gated on is_trial_case the way _convertToTherapy gates (refuses in the
+  // handler regardless of what surfaced it); the card only grows the kebab
+  // for trial rows, and the service refuses again server-side. Permanent
+  // copy, no Undo — see trial_run_delete_service.dart for the layering.
+  Future<void> _deleteTrial(Map<String, dynamic> client) async {
+    final name = (client['name'] as String?)?.trim() ?? 'this trial run';
+    final outcome = await runTrialRunDelete(
+      client: client,
+      confirm: () => showTrialRunDeleteDialog(context: context, name: name),
+      execute: (id) => TrialRunDeleteService().delete(id),
+    );
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    switch (outcome.kind) {
+      case TrialRunDeleteOutcomeKind.cancelled:
+        return;
+      case TrialRunDeleteOutcomeKind.deleted:
+        setState(() =>
+            _trialCases.removeWhere((r) => r['id'] == client['id']));
+        messenger.showSnackBar(
+          const SnackBar(content: Text('Trial run deleted.')),
+        );
+        await _loadTrials();
+      case TrialRunDeleteOutcomeKind.refusedNotTrial:
+      case TrialRunDeleteOutcomeKind.failed:
+        messenger.showSnackBar(SnackBar(content: Text(outcome.message!)));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final visible = _visibleCases;
@@ -327,7 +359,10 @@ class _AssessingScreenState extends State<AssessingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     for (var i = 0; i < visible.length; i++) ...[
-                      _AssessmentCaseCard(
+                      // No onDeleteTrial here: real cases never get the
+                      // permanent-delete kebab (Step 3 gives them the
+                      // recoverable path).
+                      AssessmentCaseCard(
                         client: visible[i],
                         onTap: () => _openCase(visible[i]),
                       ),
@@ -442,9 +477,10 @@ class _AssessingScreenState extends State<AssessingScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               for (var i = 0; i < _trialCases.length; i++) ...[
-                _AssessmentCaseCard(
+                AssessmentCaseCard(
                   client: _trialCases[i],
                   onTap: () => _openTrial(_trialCases[i]),
+                  onDeleteTrial: () => _deleteTrial(_trialCases[i]),
                 ),
                 if (i != _trialCases.length - 1)
                   const SizedBox(height: 10),
@@ -513,11 +549,25 @@ class _AssessingScreenState extends State<AssessingScreen> {
   }
 }
 
-class _AssessmentCaseCard extends StatelessWidget {
+/// One row of either list. Public (2026-09-06) so the trial-run delete gate
+/// can be tested as the widget the clinician sees, not as a predicate in
+/// isolation; it still reads nothing from Supabase.
+class AssessmentCaseCard extends StatelessWidget {
   final Map<String, dynamic> client;
   final VoidCallback onTap;
 
-  const _AssessmentCaseCard({required this.client, required this.onTap});
+  /// Trial runs only. When set AND [client] is a trial run, the card grows
+  /// a kebab whose single item deletes the trial run permanently. The real
+  /// list never passes it, and a real row ignores it even if it were passed
+  /// — the same predicate the handler and the service refuse on.
+  final VoidCallback? onDeleteTrial;
+
+  const AssessmentCaseCard({
+    super.key,
+    required this.client,
+    required this.onTap,
+    this.onDeleteTrial,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -593,6 +643,30 @@ class _AssessmentCaseCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
+              if (onDeleteTrial != null && isTrialRun(client))
+                SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: PopupMenuButton<String>(
+                    tooltip: 'More',
+                    iconSize: 18,
+                    padding: EdgeInsets.zero,
+                    icon: Icon(Icons.more_horiz,
+                        size: 18, color: cue.textSecondary),
+                    onSelected: (value) {
+                      if (value == 'delete') onDeleteTrial!();
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Text(
+                          'Delete permanently',
+                          style: TextStyle(color: cue.coral),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               Icon(Icons.chevron_right_rounded,
                   color: cue.textSecondary.withValues(alpha: 0.7)),
             ],
