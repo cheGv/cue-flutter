@@ -631,14 +631,32 @@ class _TodayScreenState extends State<TodayScreen> {
     await _load();
   }
 
+  /// Swipe-to-remove a roster slot. The row leaves the list SYNCHRONOUSLY —
+  /// a dismissed Dismissible must be out of the tree in the same frame (the
+  /// old code removed it only after the await, leaving a dismissed widget in
+  /// the tree across the async gap) — and the delete follows. If the delete
+  /// fails, the row goes back exactly where it was and the failure is said
+  /// out loud: the screen must never show a slot as gone while the record
+  /// still holds it. No confirmation — a roster slot is not a record.
   Future<void> _removeFromRoster(String rosterId) async {
+    final idx =
+        _rosterRows.indexWhere((r) => r['id'].toString() == rosterId);
+    if (idx < 0) return;
+    final removed = _rosterRows[idx];
+    setState(() {
+      _rosterRows.removeAt(idx);
+    });
     try {
       await _supabase.from('daily_roster').delete().eq('id', rosterId);
-    } catch (_) {}
-    if (mounted) {
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _rosterRows.removeWhere((r) => r['id'].toString() == rosterId);
+        final at = idx < _rosterRows.length ? idx : _rosterRows.length;
+        _rosterRows.insert(at, removed);
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not remove from roster (put back): $e')),
+      );
     }
   }
 
