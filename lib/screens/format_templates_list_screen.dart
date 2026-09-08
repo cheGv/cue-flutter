@@ -39,7 +39,13 @@ class _FormatTemplatesListScreenState extends State<FormatTemplatesListScreen> {
     _future = _repo.listForUser();
   }
 
-  void _reload() => setState(() => _future = _repo.listForUser());
+  // Block body, not an arrow: the arrow's value would be the repository's
+  // Future and setState asserts on a callback that returns one.
+  void _reload() {
+    setState(() {
+      _future = _repo.listForUser();
+    });
+  }
 
   Future<void> _openNew() async {
     await Navigator.of(context).pushNamed('/settings/formats/new');

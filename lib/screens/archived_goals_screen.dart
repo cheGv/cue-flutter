@@ -80,7 +80,13 @@ class _ArchivedGoalsScreenState extends State<ArchivedGoalsScreen> {
   }
 
   void _reload() {
-    if (mounted) setState(() => _future = _load());
+    if (!mounted) return;
+    // Block body, not an arrow: the arrow's value would be _load()'s Future
+    // and setState asserts on a callback that returns one — which made
+    // every restore throw right after it succeeded (debug builds).
+    setState(() {
+      _future = _load();
+    });
   }
 
   /// First name only, with any trailing "(age)" parenthetical stripped —
