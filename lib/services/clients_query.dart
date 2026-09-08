@@ -55,6 +55,20 @@ class ClientsQuery {
 
   final SupabaseClient _client;
 
+  /// Delete affordances Step 4 — the ONE read that wants soft-deleted rows:
+  /// the restore list. Newest deletion first. Trial runs are excluded even
+  /// here (they are hard-deleted, never soft; a stray flag must not offer a
+  /// "restore" that would re-admit one to the real lists).
+  PostgrestTransformBuilder<List<Map<String, dynamic>>> readDeleted(
+      String columns) {
+    return _client
+        .from('clients')
+        .select(columns)
+        .not('deleted_at', 'is', null)
+        .eq('is_trial_case', false)
+        .order('deleted_at', ascending: false);
+  }
+
   /// Pure: the decision [requireLiveClient] makes on the row it read.
   static ClientLiveness livenessOf(Map<String, dynamic>? row) {
     if (row == null) return ClientLiveness.missing;

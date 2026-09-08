@@ -16,4 +16,9 @@ class AppRoutes {
   // the Inbox screen read from the same draft-session query in
   // ClientsRosterService.listDraftSessions().
   static const String inbox = '/inbox';
+
+  // Delete affordances Step 4 — the restore list for soft-deleted clients
+  // and assessment cases. Reached from Settings → "Deleted clients"; the
+  // shell pushes this named route, main.dart resolves it.
+  static const String deletedClients = '/settings/deleted';
 }

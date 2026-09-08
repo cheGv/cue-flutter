@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_layout.dart';
 
-// TODO(phase-4.0.7.x): Add "Restore archived clients/sessions" surface.
-//   Soft-delete shipped in 4.0.7.10 (clients.deleted_at, sessions.deleted_at
-//   /deleted_by/delete_reason). Each archived row remains in the database
-//   with the timestamp; this screen needs a section that lists them and
-//   provides a single-tap restore that nulls deleted_at. Sessions need to
-//   surface delete_reason for context in the restore picker.
+// Restore surfaces (the TODO that sat here since soft delete shipped in
+// 4.0.7.10):
+//   • CLIENTS / ASSESSMENT CASES — DONE (delete affordances Step 4,
+//     2026-09-08): Settings → "Deleted clients" → /settings/deleted
+//     (deleted_clients_screen.dart) lists what was deleted, when, and the
+//     reason, and restores through ClientDeleteService.restore — the same
+//     call the Undo snackbar makes.
+//   • SESSIONS — NOT built. sessions has the same deleted_at / deleted_by /
+//     delete_reason trio (session_archive_service.dart) and NO restore
+//     path at all; a restore needs restoreSession in that service, a
+//     listArchivedForClient on SessionsRepository, a per-client list
+//     mirroring deleted_clients_screen.dart, and a client-liveness check
+//     so a session cannot resurface under a soft-deleted client.
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});

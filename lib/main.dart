@@ -22,6 +22,8 @@ import 'screens/new_assessment_case_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/session_capture_screen.dart';
 import 'screens/settings/settings_shell.dart';
+import 'screens/deleted_clients_screen.dart';
+import 'constants/app_routes.dart';
 import 'screens/format_templates_list_screen.dart';
 import 'screens/format_template_upload_screen.dart';
 import 'screens/format_draft_initiate_screen.dart';
@@ -690,6 +692,14 @@ class CueApp extends StatelessWidget {
               builder: (_) => FormatTemplateUploadScreen(
                 templateId: uri.queryParameters['id'],
               ),
+            );
+          }
+          // ── Delete affordances Step 4 — restore list for soft-deleted ──
+          // clients / assessment cases (Settings → Deleted clients).
+          if (uri.path == AppRoutes.deletedClients) {
+            return MaterialPageRoute(
+              settings: settings,
+              builder: (_) => const DeletedClientsScreen(),
             );
           }
           if (uri.path == '/profile') {

@@ -8,6 +8,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../constants/app_routes.dart';
 import '../../theme/cue_color_scheme.dart';
 import 'settings_card.dart';
 
@@ -43,6 +44,9 @@ const List<SettingsNavItem> kSettingsNavItems = [
   SettingsNavItem(key: 'privacy',       label: 'Privacy & Consent',        group: SettingsGroup.whatsProtected),
   SettingsNavItem(key: 'security',      label: 'Security',                 group: SettingsGroup.whatsProtected),
   SettingsNavItem(key: 'audit',         label: 'Audit Log',                group: SettingsGroup.whatsProtected),
+  // Delete affordances Step 4 — the durable way back after the Undo
+  // snackbar is gone. Lives at its own route like Report formats.
+  SettingsNavItem(key: 'deleted',       label: 'Deleted clients',          group: SettingsGroup.whatsProtected, route: AppRoutes.deletedClients),
   SettingsNavItem(key: 'billing',       label: 'Billing',                  group: SettingsGroup.whatsProtected),
   SettingsNavItem(key: 'legal',         label: 'Legal & Help',             group: SettingsGroup.whatsProtected),
 ];
